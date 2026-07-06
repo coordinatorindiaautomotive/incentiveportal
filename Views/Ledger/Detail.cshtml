@@ -1,0 +1,407 @@
+﻿@model IncentivePortal.Models.SsIncentive
+@{
+    ViewData["Title"] = "Ledger Record Details";
+    var monthNames = new[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    var monthLabel = Model.Month > 0 && Model.Month <= 12 ? monthNames[Model.Month - 1] : "Historical";
+    var formattedPeriod = Model.Month == 0 ? $"FY {Model.Year}" : $"{monthLabel} {Model.Year}";
+    var ledgerRef = $"IL-{Model.Year}-{Model.Month:D2}-{Model.PartyCode}";
+}
+
+<div class="container-fluid py-4" style="max-width: 1200px;">
+    <!-- Back Navigation & Title -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+        <a href="@Url.Action("Index", "Ledger")" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 fw-semibold" style="border-radius: 8px; padding: 8px 16px; font-size: 0.9rem;">
+            <i class="fa-solid fa-arrow-left-long"></i> Back to Master Ledger
+        </a>
+        
+        <div class="d-flex align-items-center gap-3">
+            @if ((User.IsInRole("Super Admin") || User.IsInRole("HO Finance")) && (Model.PaymentStatus == "Pending" || Model.PaymentStatus == "Credit Party"))
+            {
+                <button type="button" class="btn btn-warning fw-bold d-inline-flex align-items-center gap-2 text-dark" data-bs-toggle="modal" data-bs-target="#overrideModal" style="border-radius: 8px; padding: 8px 16px; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);">
+                    <i class="fa-solid fa-user-pen"></i> Override Calculation
+                </button>
+            }
+            <span class="badge bg-primary-light text-primary font-monospace px-3 py-2 fw-bold" style="font-size: 0.9rem; border-radius: 8px;">
+                <i class="fa-solid fa-hashtag me-1"></i> @ledgerRef
+            </span>
+        </div>
+    </div>
+
+    <!-- Premium Temporal Insight Box (3-Date Tracking Statement) -->
+    <div class="panel mb-4 text-white" style="border-radius: 14px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); padding: 24px;">
+        <div class="d-flex align-items-start gap-3">
+            <div class="bg-primary d-flex align-items-center justify-content-center" style="width: 52px; height: 52px; border-radius: 12px; background: rgba(30, 64, 175, 0.15) !important;">
+                <i class="fa-solid fa-calendar-days text-primary fa-xl"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h5 class="fw-bold mb-1" style="letter-spacing: 0.5px; font-size: 1.1rem; color: #f8fafc;">Temporal Incentive Description</h5>
+                <p class="mb-0 text-slate-300 fw-semibold text-primary-light" style="font-size: 1.05rem; opacity: 0.95; color: #60a5fa !important;">
+                    <i class="fa-solid fa-circle-info me-2 text-primary"></i> @ViewBag.TemporalDescription
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="row g-4">
+        <!-- LEFT: Core Financials -->
+        <div class="col-lg-8">
+            <!-- Metric Card Group -->
+            <div class="card border-0 shadow-sm mb-4" style="border-radius: 14px; overflow: hidden; background: #ffffff;">
+                <div class="card-header bg-white py-3 px-4 border-bottom border-light">
+                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2" style="font-size: 1.05rem;">
+                        <i class="fa-solid fa-receipt text-primary"></i> Financial Metric Breakdown
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        <!-- Sales Value -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-secondary d-block small fw-bold mb-1">NET RETAIL SALES</span>
+                                <h3 class="fw-extrabold mb-0 text-dark" style="font-size: 1.45rem;">
+                                    ₹@Model.SaleValue.ToString("N2", new System.Globalization.CultureInfo("en-IN"))
+                                </h3>
+                            </div>
+                        </div>
+                        <!-- On-Bill Discount -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-secondary d-block small fw-bold mb-1">ON-BILL DISCOUNT</span>
+                                <h3 class="fw-extrabold mb-0 text-danger" style="font-size: 1.45rem;">
+                                    ₹@Model.OnBillDiscount.ToString("N2", new System.Globalization.CultureInfo("en-IN"))
+                                </h3>
+                            </div>
+                        </div>
+                        <!-- Achievement % -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-secondary d-block small fw-bold mb-1">ACHIEVEMENT RATIO</span>
+                                <h3 class="fw-extrabold mb-0 text-primary" style="font-size: 1.45rem;">
+                                    @Model.AchievementPercent.ToString("F1")%
+                                </h3>
+                            </div>
+                        </div>
+
+                        <!-- Slab Info -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3" style="background: rgba(15, 23, 42, 0.02); border: 1px dashed rgba(15, 23, 42, 0.1);">
+                                <span class="text-secondary d-block small fw-bold mb-1">SLAB APPLIED</span>
+                                <span class="badge bg-secondary text-dark fw-bold px-2 py-1 mt-1" style="font-size: 0.82rem;">
+                                    @((Model.SlabPercent * 100).ToString("0.##"))%
+                                </span>
+                                <span class="d-block small text-muted mt-1 font-monospace">Scheme: Slab-based</span>
+                            </div>
+                        </div>
+                        <!-- TDS Details -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3" style="background: rgba(15, 23, 42, 0.02); border: 1px dashed rgba(15, 23, 42, 0.1);">
+                                <span class="text-secondary d-block small fw-bold mb-1">TDS APPLIED</span>
+                                <h4 class="fw-bold mb-0 text-muted" style="font-size: 1.15rem;">
+                                    ₹@Model.TdsAmount.ToString("N2", new System.Globalization.CultureInfo("en-IN"))
+                                </h4>
+                                <span class="badge bg-warning-light text-warning fw-bold px-2 py-1 mt-1" style="font-size: 0.72rem;">
+                                    @((Model.GrossIncentive > 0 ? Math.Round((Model.TdsAmount / Model.GrossIncentive) * 100m, 2) : 0m))% TDS Rate
+                                </span>
+                            </div>
+                        </div>
+                        <!-- Status Details -->
+                        <div class="col-md-6 col-lg-4">
+                            <div class="p-3 rounded-3" style="background: rgba(15, 23, 42, 0.02); border: 1px dashed rgba(15, 23, 42, 0.1);">
+                                <span class="text-secondary d-block small fw-bold mb-1">APPROVAL STATUS</span>
+                                <h4 class="fw-extrabold mb-0 text-dark" style="font-size: 1.2rem;">
+                                    @Model.Status
+                                </h4>
+                                @if (Model.Status == "Posted")
+                                {
+                                    <span class="badge bg-success-light text-success fw-bold px-2 py-1 mt-1" style="font-size: 0.72rem;">
+                                        <i class="fa-solid fa-circle-check me-1"></i> Posted to Accounts
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning-light text-warning fw-bold px-2 py-1 mt-1" style="font-size: 0.72rem;">
+                                        <i class="fa-solid fa-clock me-1"></i> Awaiting Action
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gross vs Net Hero Display -->
+                    @{
+                        var isPaid = Model.PaymentStatus == "Paid" || Model.PaymentStatus == "Success" || Model.PaymentStatus == "Reconciled";
+                        var colClass = isPaid ? "col-md-4" : "col-md-6";
+                    }
+                    <div class="row mt-4 pt-3 border-top border-light align-items-center">
+                        <div class="@colClass mb-3 mb-md-0">
+                            <div class="d-flex align-items-center gap-3">
+                                <div>
+                                    <span class="text-secondary d-block small fw-bold">GROSS ACCRUED INCENTIVE</span>
+                                    <span class="fw-bold text-dark font-monospace" style="font-size: 1.6rem;">
+                                        ₹@Model.GrossIncentive.ToString("N2", new System.Globalization.CultureInfo("en-IN"))
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="@colClass mb-3 mb-md-0">
+                            <div class="p-3 text-end text-md-end text-start rounded-3" style="background: rgba(13, 82, 214, 0.04); border: 1px solid rgba(13, 82, 214, 0.12);">
+                                <span class="text-primary d-block small fw-bold">ELIGIBLE FOR INCENTIVE</span>
+                                <span class="fw-extrabold text-primary font-monospace" style="font-size: 1.8rem; letter-spacing: -0.5px;">
+                                    ₹@Model.NetTransferAmount.ToString("N2", new System.Globalization.CultureInfo("en-IN"))
+                                </span>
+                            </div>
+                        </div>
+                        @if (isPaid)
+                        {
+                            <div class="@colClass">
+                                <div class="p-3 text-end text-md-end text-start rounded-3" style="background: rgba(22, 163, 74, 0.04); border: 1px solid rgba(22, 163, 74, 0.12);">
+                                    <span class="text-success d-block small fw-bold">TRANSFERRED AMOUNT</span>
+                                    <span class="fw-extrabold text-success font-monospace" style="font-size: 1.8rem; letter-spacing: -0.5px;">
+                                        ₹@Model.TransferredAmount.ToString("N2", new System.Globalization.CultureInfo("en-IN"))
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Trail & Remarks -->
+            <div class="card border-0 shadow-sm" style="border-radius: 14px; overflow: hidden; background: #ffffff;">
+                <div class="card-header bg-white py-3 px-4 border-bottom border-light">
+                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2" style="font-size: 1.05rem;">
+                        <i class="fa-solid fa-clock-rotate-left text-primary"></i> Change Logs & Correction Remarks
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-4">
+                        <label class="small fw-bold text-secondary d-block mb-1">MANDATORY REASON / CORRECTION REMARKS</label>
+                        <div class="p-3 bg-light rounded-3 border-start border-primary border-4 text-dark" style="font-size: 0.95rem; font-style: @(string.IsNullOrEmpty(Model.Remarks) ? "italic" : "normal");">
+                            @(Model.Remarks ?? "No change reason / remarks provided.")
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <div class="p-3 bg-light rounded-3 small">
+                                <span class="text-muted d-block mb-1">Record Created At</span>
+                                <span class="fw-bold text-dark"><i class="fa-regular fa-clock me-1"></i> @Model.CreatedAt.ToString("dd-MMM-yyyy HH:mm:ss")</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="p-3 bg-light rounded-3 small">
+                                <span class="text-muted d-block mb-1">Uploaded By</span>
+                                <span class="fw-bold text-dark"><i class="fa-solid fa-user-shield me-1"></i> @Model.CreatedBy</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Parties, Entities & Status -->
+        <div class="col-lg-4">
+            <!-- Party Profile Info Card -->
+            <div class="card border-0 shadow-sm mb-4" style="border-radius: 14px; overflow: hidden; background: #ffffff;">
+                <div class="card-header bg-white py-3 px-4 border-bottom border-light">
+                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2" style="font-size: 1.05rem;">
+                        <i class="fa-solid fa-store text-primary"></i> Party Profile
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="text-center pb-3 border-bottom border-light mb-3">
+                        <div class="party-avatar mx-auto mb-2 d-flex align-items-center justify-content-center bg-primary text-white fw-bold" style="width: 60px; height: 60px; border-radius: 50%; font-size: 1.4rem;">
+                            @Model.PartyCode.Substring(0, Math.Min(2, Model.PartyCode.Length))
+                        </div>
+                        <h6 class="fw-bold mb-0 text-dark" style="font-size: 1.05rem;">@Model.PartyName</h6>
+                        <span class="badge bg-secondary text-dark fw-bold font-monospace px-2 py-1 mt-2" style="font-size: 0.8rem;">@Model.PartyCode</span>
+                    </div>
+
+                    <div class="d-flex flex-column gap-3 small">
+                        <!-- Employee / Representative -->
+                        <div>
+                            <span class="text-secondary fw-semibold d-block mb-1">Branch Employee Rep:</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bg-light p-2 rounded text-dark fw-bold d-inline-flex align-items-center gap-2 w-100">
+                                    <i class="fa-solid fa-id-card-clip text-primary"></i>
+                                    <div>
+                                        <span class="d-block">@ViewBag.EmployeeName</span>
+                                        <span class="d-block text-muted small font-monospace" style="font-size:0.75rem;">Code: @ViewBag.EmployeeCode</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Period Category -->
+                        <div>
+                            <span class="text-secondary fw-semibold d-block mb-1">Business Period:</span>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="fw-bold text-dark">@formattedPeriod</span>
+                                <span class="badge bg-primary text-white" style="font-size:0.7rem;">@((Model.Month == 0) ? "Annual Historical" : "Monthly Intake")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment State Card -->
+            <div class="card border-0 shadow-sm" style="border-radius: 14px; overflow: hidden; background: #ffffff;">
+                <div class="card-header bg-white py-3 px-4 border-bottom border-light">
+                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2" style="font-size: 1.05rem;">
+                        <i class="fa-solid fa-credit-card text-primary"></i> Payment Status & Settlement
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="text-center p-3 mb-4 rounded-3" style="background: @(Model.PaymentStatus == "Paid" ? "rgba(22, 163, 74, 0.05)" : Model.PaymentStatus == "Hold" ? "rgba(239, 68, 68, 0.05)" : "rgba(245, 158, 11, 0.05)"); border: 1px solid @(Model.PaymentStatus == "Paid" ? "rgba(22, 163, 74, 0.15)" : Model.PaymentStatus == "Hold" ? "rgba(239, 68, 68, 0.15)" : "rgba(245, 158, 11, 0.15)");">
+                        <span class="small text-secondary d-block fw-bold mb-1">CURRENT STATUS</span>
+                        <span class="status-badge @(Model.PaymentStatus == "Paid" ? "success" : Model.PaymentStatus == "Hold" ? "neutral" : "warning") px-3 py-1 fw-bold fs-6">
+                            @Model.PaymentStatus
+                        </span>
+                    </div>
+
+                    <div class="d-flex flex-column gap-3 small">
+                        <!-- UTR Number -->
+                        <div>
+                            <span class="text-secondary fw-semibold d-block mb-1">UTR / Transaction Reference:</span>
+                            <span class="font-monospace fw-bold text-dark bg-light p-2 rounded d-block border" style="font-size: 0.95rem;">
+                                <i class="fa-solid fa-receipt text-secondary me-2"></i> @(Model.UTRNumber ?? "N/A - Settlement Pending")
+                            </span>
+                        </div>
+
+                        <!-- Payment Date -->
+                        <div>
+                            <span class="text-secondary fw-semibold d-block mb-1">Settled / Payment Date:</span>
+                            <span class="fw-bold text-dark">
+                                <i class="fa-regular fa-calendar-check text-primary me-2"></i>
+                                @(Model.PaymentDate.HasValue ? Model.PaymentDate.Value.ToString("dd-MMM-yyyy") : "Not Disbursed")
+                            </span>
+                        </div>
+
+                        <!-- Import Batch ID -->
+                        <div>
+                            <span class="text-secondary fw-semibold d-block mb-1">Import Batch Metadata:</span>
+                            <div class="d-flex align-items-center justify-content-between p-2 rounded bg-light border">
+                                <span class="font-monospace small text-muted">ID: @Model.ImportLogId</span>
+                                <span class="badge bg-secondary-light text-dark fw-bold font-monospace">v@(Model.ImportLog?.VersionNumber ?? 1)</span>
+                            </div>
+                            <span class="d-block small text-muted font-monospace mt-1" style="font-size: 0.72rem; word-break: break-all;">File: @(Model.ImportLog?.FileName ?? "System-Generated")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Override Calculation Modal -->
+<div class="modal fade" id="overrideModal" tabindex="-1" aria-labelledby="overrideModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden; background: #ffffff;">
+            <div class="modal-header bg-warning text-dark py-3 px-4">
+                <h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="overrideModalLabel">
+                    <i class="fa-solid fa-user-pen"></i> Admin Decided Calculation Override
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="override-form" method="post" action="@Url.Action("OverrideCalculation", "Ledger")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body p-4 text-dark">
+                    <p class="text-muted small">You are overriding the system-calculated incentive amount for <strong>@Model.PartyName (@Model.PartyCode)</strong> for the period <strong>@formattedPeriod</strong>.</p>
+                    
+                    <div class="mb-3 p-3 bg-light rounded-3 d-flex justify-content-between">
+                        <div>
+                            <span class="small text-muted d-block">Current Gross Incentive</span>
+                            <strong class="text-dark">₹@Model.GrossIncentive.ToString("N0")</strong>
+                        </div>
+                        <div class="text-end">
+                            <span class="small text-muted d-block">Current Eligible for Incentive</span>
+                            <strong class="text-success">₹@Model.NetTransferAmount.ToString("N0")</strong>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="grossOverride" class="form-label small fw-bold text-secondary">New Gross Decided Incentive (₹):</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0"><i class="fa-solid fa-indian-rupee-sign text-secondary"></i></span>
+                            <input type="number" class="form-control border-start-0 ps-1 corp-input" id="grossOverride" name="grossOverride" min="0" step="1" placeholder="Enter custom amount" required value="@Math.Round(Model.GrossIncentive)" style="font-weight: 600; font-size: 1.1rem;" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="remarks" class="form-label small fw-bold text-secondary">Mandatory Correction Remarks:</label>
+                        <textarea class="form-control corp-input" id="remarks" name="remarks" rows="3" placeholder="Provide justification / reason for manual override..." required style="font-size: 0.9rem;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light p-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal" style="border-radius: 8px;">Cancel</button>
+                    <button type="submit" class="btn btn-warning fw-bold text-dark" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);">
+                        <i class="fa-solid fa-circle-check"></i> Apply Override
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    $('#override-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        var form = $(this);
+        var actionUrl = form.attr('action');
+        var formData = form.serialize();
+
+        Swal.fire({
+            title: 'Applying Override...',
+            text: 'Recalculating TDS deductions, updating outstanding adjustments, and committing the new incentive state...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: actionUrl,
+            type: 'POST',
+            data: formData,
+            success: function(r) {
+                Swal.close();
+                if (r.ok) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Override Committed',
+                        text: r.message,
+                        confirmButtonColor: 'var(--primary)'
+                    }).then(() => {
+                        window.location.href = '@Url.Action("Detail", "Ledger")/' + r.newLedgerId;
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Execution Failed',
+                        text: r.message,
+                        confirmButtonColor: 'var(--primary)'
+                    });
+                }
+            },
+            error: function(xhr) {
+                Swal.close();
+                var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error applying override.";
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Override Failed',
+                    text: msg,
+                    confirmButtonColor: 'var(--primary)'
+                });
+            }
+        });
+    });
+});
+</script>
+}
+
+

@@ -1,0 +1,156 @@
+﻿@model List<IncentivePortal.Models.CashPeriodControl>
+@using IncentivePortal.Models
+@{
+    ViewData["Title"] = "Period Controls";
+    string MonthName(int m) => m == 0 ? "Full Year" : new DateTime(2000, m, 1).ToString("MMMM");
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" style="border-radius:8px;font-size:.875rem;">
+        <i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:.5px;">Cash Management</div>
+        <h2 style="font-size:1.5rem;font-weight:700;color:var(--ink);margin:0;">
+            <i class="fa-solid fa-calendar-check me-2" style="color:#6366f1;"></i>Period Controls
+        </h2>
+        <p class="text-muted mb-0" style="font-size:.82rem;">Month-end closing, locking, and financial year control</p>
+    </div>
+</div>
+
+<!-- Warning Banner -->
+<div class="d-flex align-items-start gap-3 mb-4 p-3" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:8px;">
+    <i class="fa-solid fa-triangle-exclamation mt-1" style="color:#d97706;"></i>
+    <div style="font-size:.84rem;color:#92400e;">
+        <strong>Important:</strong> Closing or locking a period prevents all modifications to transactions within that period.
+        Period locking requires Super Admin authorization. Closed periods can be reopened with approval; Locked periods are permanent.
+    </div>
+</div>
+
+<!-- Period List -->
+<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:28px;">
+    @foreach (var p in Model)
+    {
+        var (statusColor, statusBg, statusIcon) = p.Status switch {
+            "Open"   => ("#22c55e", "rgba(34,197,94,.12)", "fa-lock-open"),
+            "Closed" => ("#d97706", "rgba(245,158,11,.12)", "fa-lock"),
+            "Locked" => ("#ef4444", "rgba(239,68,68,.12)", "fa-lock"),
+            _ => ("#94a3b8", "#f1f5f9", "fa-question")
+        };
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 24px;display:flex;align-items:center;gap:16px;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+            <div style="width:12px;height:12px;border-radius:50%;background:@statusColor;flex-shrink:0;"></div>
+            <div style="width:42px;height:42px;border-radius:50%;background:@statusBg;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fa-solid @statusIcon" style="color:@statusColor;font-size:1rem;"></i>
+            </div>
+            <div style="flex:1;">
+                <div style="font-size:.95rem;font-weight:700;color:var(--ink);">
+                    @MonthName(p.ControlMonth) @p.ControlYear
+                </div>
+                <div style="font-size:.78rem;color:#94a3b8;margin-top:2px;">
+                    @if (p.Status == "Open")
+                    {
+                        <span>Currently open for transactions</span>
+                    }
+                    else if (p.ClosedAt.HasValue)
+                    {
+                        <span>@p.Status by @(p.ClosedBy ?? "—") on @p.ClosedAt.Value.ToString("dd MMM yyyy HH:mm")</span>
+                    }
+                </div>
+            </div>
+            <span style="background:@statusBg;color:@statusColor;padding:4px 14px;border-radius:20px;font-size:.75rem;font-weight:700;letter-spacing:.3px;">
+                @p.Status.ToUpper()
+            </span>
+            <div class="d-flex gap-2">
+                @if (p.Status == "Open")
+                {
+                    <form method="post" action="/CashManagement/ClosePeriod" style="display:inline;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="year" value="@p.ControlYear">
+                        <input type="hidden" name="month" value="@p.ControlMonth">
+                        <button type="submit" class="btn btn-sm btn-warning" style="border-radius:8px;font-weight:600;font-size:.82rem;"
+                                onclick="return confirm('Close @MonthName(p.ControlMonth) @p.ControlYear? All transactions will become read-only.')">
+                            <i class="fa-solid fa-lock me-1"></i>Close Period
+                        </button>
+                    </form>
+                }
+                @if (p.Status == "Closed")
+                {
+                    <form method="post" action="/CashManagement/LockPeriod" style="display:inline;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="year" value="@p.ControlYear">
+                        <input type="hidden" name="month" value="@p.ControlMonth">
+                        <button type="submit" class="btn btn-sm btn-danger" style="border-radius:8px;font-weight:600;font-size:.82rem;"
+                                onclick="return confirm('Permanently LOCK @MonthName(p.ControlMonth) @p.ControlYear? This cannot be undone without Super Admin.')">
+                            <i class="fa-solid fa-lock me-1"></i>Lock Permanently
+                        </button>
+                    </form>
+                }
+                @if (p.Status == "Locked")
+                {
+                    <button class="btn btn-sm btn-outline-secondary" style="border-radius:8px;font-weight:600;font-size:.82rem;"
+                            onclick="Swal.fire({title:'Locked Period',text:'This period is permanently locked. Contact Super Admin for an unlock request.',icon:'info',confirmButtonColor:'var(--primary)'})">
+                        <i class="fa-solid fa-eye me-1"></i>Info
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Configuration Panel -->
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+    <div style="padding:16px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:10px;">
+        <i class="fa-solid fa-sliders" style="color:#6366f1;"></i>
+        <span style="font-size:.92rem;font-weight:700;color:var(--ink);">Period Configuration</span>
+    </div>
+    <div style="padding:20px 24px;">
+        @{
+            var configs = new[] {
+                ("Auto Close Day", "Automatically initiate close N days after month-end", "5 days", "7 days", "10 days", "Manual Only"),
+                ("Backdated Entry Limit", "Maximum days allowed for backdated entries", "3 days", "7 days", "15 days", "30 days"),
+                ("Data Retention", "Retain audit logs for compliance", "5 years", "7 years", "10 years", ""),
+            };
+        }
+        @foreach (var (label, desc, o1, o2, o3, o4) in configs)
+        {
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #f1f5f9;">
+                <div>
+                    <div style="font-size:.88rem;font-weight:600;color:var(--ink);">@label</div>
+                    <div style="font-size:.78rem;color:#94a3b8;margin-top:2px;">@desc</div>
+                </div>
+                <select class="form-select form-select-sm" style="width:140px;border-radius:8px;">
+                    <option>@o1</option><option>@o2</option><option>@o3</option>
+                    @if (!string.IsNullOrEmpty(o4)) { <option>@o4</option> }
+                </select>
+            </div>
+        }
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #f1f5f9;">
+            <div>
+                <div style="font-size:.88rem;font-weight:600;color:var(--ink);">Dual Authorization Required</div>
+                <div style="font-size:.78rem;color:#94a3b8;">Closing requires HO Finance Manager + Super Admin sign-off</div>
+            </div>
+            <div onclick="this.classList.toggle('toggle-on')" class="toggle-switch toggle-on"
+                 style="width:44px;height:24px;border-radius:12px;background:#22c55e;position:relative;cursor:pointer;transition:all .2s;">
+                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:calc(100% - 21px);transition:left .2s;"></div>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;">
+            <div>
+                <div style="font-size:.88rem;font-weight:600;color:var(--ink);">Reopen with Approval</div>
+                <div style="font-size:.78rem;color:#94a3b8;">Allow closed (not locked) periods to be reopened with justification</div>
+            </div>
+            <div onclick="this.classList.toggle('toggle-on')" class="toggle-switch toggle-on"
+                 style="width:44px;height:24px;border-radius:12px;background:#22c55e;position:relative;cursor:pointer;transition:all .2s;">
+                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:calc(100% - 21px);transition:left .2s;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+

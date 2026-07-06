@@ -1,0 +1,240 @@
+@{
+    ViewData["Title"] = "ThessBuddy AI Center";
+    var forecasts = (ViewBag.Forecasts as List<dynamic>) ?? new List<dynamic>();
+    var totalOutstanding = (decimal)(ViewBag.TotalOutstanding ?? 0m);
+    var riskyOutstanding = (decimal)(ViewBag.RiskyOutstanding ?? 0m);
+    var riskPercentage = (decimal)(ViewBag.RiskPercentage ?? 0m);
+    var deadStock = (ViewBag.DeadStock as List<dynamic>) ?? new List<dynamic>();
+    var reorders = (ViewBag.Reorders as List<dynamic>) ?? new List<dynamic>();
+    var branchHealth = (ViewBag.BranchHealth as List<dynamic>) ?? new List<dynamic>();
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Block -->
+    <div class="card p-3 mb-4 border-0 shadow-sm" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 class="mb-1 text-primary fw-bold" style="font-family:'Inter',sans-serif;"><i class="fa-solid fa-robot me-2"></i> ThessBuddy AI Center</h4>
+                <p class="text-muted small mb-0">Your Intelligent Business Companion. Running regressions, predictive analysis, and natural language copilot chat.</p>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-primary btn-sm bg-primary border-0" onclick="$('#copilotChatCard').addClass('active-glow')"><i class="fa-solid fa-comments me-1"></i> Open AI Copilot</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Stats Bar -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-4 text-center text-white" style="background: linear-gradient(135deg, #001b3d 0%, #0059bb 100%);">
+                <div class="small opacity-75 mb-1">AI Engine Health Status</div>
+                <h2 class="fw-bold mb-0">OPTIMAL</h2>
+                <div class="small opacity-75 mt-2">Active algorithms: 4 Regressions</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-4 text-center text-white" style="background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);">
+                <div class="small opacity-75 mb-1">Risky Outstanding Ratio</div>
+                <h2 class="fw-bold mb-0">@riskPercentage%</h2>
+                <div class="small opacity-75 mt-2">₹@riskyOutstanding.ToString("N2") overdue > 30 days</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-4 text-center text-white" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">
+                <div class="small opacity-75 mb-1">Smart Reorder Recommendations</div>
+                <h2 class="fw-bold mb-0">3 Parts Alert</h2>
+                <div class="small opacity-75 mt-2">Safety stock levels breached</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="row g-4 mb-4">
+        <!-- Sales & Payout Forecasting (Left) -->
+        <div class="col-xl-8">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <h5 class="fw-bold text-secondary mb-3"><i class="fa-solid fa-chart-line text-primary me-1"></i> Sales & Demand Forecast (Next 3 Months)</h5>
+                <p class="text-muted small">Simulated regressions calculated against historic sales aggregates. Factoring in regional distributor schemes.</p>
+                
+                <div class="table-responsive mb-4">
+                    <table class="table table-hover align-middle custom-table">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th>Target Period</th>
+                                <th>Predicted Distribution Invoices (₹)</th>
+                                <th>MoM Trend Confidence Score</th>
+                                <th>Confidence Indicator</th>
+                            </tr>
+                        </thead>
+                        <tbody class="small">
+                            @foreach (dynamic f in forecasts)
+                            {
+                                <tr>
+                                    <td class="fw-bold text-dark">@f.Month</td>
+                                    <td class="fw-bold text-primary">₹@f.PredictedSales.ToString("N2")</td>
+                                    <td>@f.ConfidenceScore%</td>
+                                    <td>
+                                        <div class="progress" style="height:6px; max-width: 150px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: @(f.ConfidenceScore)%"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Heuristic Chart simulation using CSS Grid bars -->
+                <div class="bg-light p-4 rounded text-center">
+                    <div class="small text-muted mb-3">AI Sales Forecast Visual Projection</div>
+                    <div class="d-flex justify-content-center align-items-end gap-5" style="height: 180px;">
+                        @foreach (dynamic f in forecasts)
+                        {
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="bg-primary rounded-top" style="width: 48px; height: 120px; opacity:0.85; transition: height 0.3s; background: linear-gradient(to top, var(--primary) 0%, var(--secondary) 100%) !important;"></div>
+                                <div class="small fw-bold text-dark mt-2">@f.Month</div>
+                                <div class="small text-muted" style="font-size: 0.7rem;">₹@(((decimal)f.PredictedSales / 100000m).ToString("F1"))L</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Copilot Chat panel (Right) -->
+        <div class="col-xl-4">
+            <div class="card border-0 shadow-sm p-4 h-100 d-flex flex-column" id="copilotChatCard" style="border:1px solid var(--line-2) !important; border-radius:14px; background: rgba(255,255,255,0.95);">
+                <div class="d-flex align-items-center gap-2 mb-3 border-bottom pb-2">
+                    <i class="fa-solid fa-robot text-primary fs-4"></i>
+                    <div>
+                        <h6 class="mb-0 fw-bold text-primary" style="font-family:'Inter',sans-serif;">ThessBuddy Copilot</h6>
+                        <span class="small text-muted" style="font-size:0.7rem;">Your Intelligent Business Companion</span>
+                    </div>
+                </div>
+
+                <!-- Chat Messages Scroll Container -->
+                <div class="chat-messages flex-grow-1 scrollbar mb-3 p-2 bg-light rounded" id="copilotChatBody" style="max-height: 300px; min-height: 250px; overflow-y: auto;">
+                    <div class="message-bot p-2 mb-2 bg-white rounded border small text-secondary">
+                        Hello! I am **ThessBuddy Copilot**, your distribution assistant. Ask me questions about branches, outstandings, dead stock, or specific dealers.
+                    </div>
+                </div>
+
+                <!-- Chat input -->
+                <form id="copilotForm" class="input-group input-group-sm">
+                    <input type="text" class="form-control border-primary" id="copilotInput" placeholder="Ask ThessBuddy..." required autocomplete="off" />
+                    <button type="submit" class="btn btn-primary bg-primary border-0"><i class="fa-solid fa-paper-plane"></i></button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Dead Stock Analysis (Left) -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <h5 class="fw-bold text-secondary mb-3"><i class="fa-solid fa-box-open text-warning me-1"></i> Dead Stock / Slow Moving Items</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle custom-table">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th>Category</th>
+                                <th>Last Sale</th>
+                                <th>Inactive Days</th>
+                                <th>Holding Cost</th>
+                                <th>AI Recommendation</th>
+                            </tr>
+                        </thead>
+                        <tbody class="small">
+                            @foreach (dynamic d in deadStock)
+                            {
+                                <tr>
+                                    <td class="fw-bold">@d.CategoryCode - @d.CategoryName</td>
+                                    <td>@d.LastSaleDate</td>
+                                    <td class="text-danger fw-bold">@d.DaysSinceLastMovement Days</td>
+                                    <td class="text-dark fw-bold">₹@d.EstimatedHoldingCost.ToString("N2")</td>
+                                    <td class="text-muted" style="font-size:0.75rem;">@d.ActionRecommendation</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Smart Reorder Parameters (Right) -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <h5 class="fw-bold text-secondary mb-3"><i class="fa-solid fa-arrows-spin text-success me-1"></i> Smart Reorder Thresholds</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle custom-table">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th>Part No</th>
+                                <th>Current Stock</th>
+                                <th>Safety Stock</th>
+                                <th>Stockout Risk</th>
+                                <th>Reorder Qty</th>
+                                <th>Recommended Vendor</th>
+                            </tr>
+                        </thead>
+                        <tbody class="small">
+                            @foreach (dynamic r in reorders)
+                            {
+                                <tr>
+                                    <td class="fw-bold text-dark">@r.PartNo <br/><span class="small text-muted" style="font-size:0.7rem;">@r.Description</span></td>
+                                    <td class="text-danger fw-bold">@r.CurrentStock Units</td>
+                                    <td>@r.SafetyStock</td>
+                                    <td class="text-danger fw-bold">@r.PredictedStockoutDays Days</td>
+                                    <td class="text-success fw-bold">@r.RecommendedReorderQty Units</td>
+                                    <td>@r.Vendor</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#copilotForm').on('submit', function(e) {
+                e.preventDefault();
+                const input = $('#copilotInput');
+                const query = input.val().trim();
+                if (!query) return;
+
+                // Add user message
+                const chatBody = $('#copilotChatBody');
+                chatBody.append(`<div class="message-user p-2 mb-2 bg-primary text-white rounded text-end small ms-auto" style="max-width: 80%;">${query}</div>`);
+                input.val('');
+                chatBody.scrollTop(chatBody[0].scrollHeight);
+
+                // Fetch AI reply
+                $.ajax({
+                    url: '/AiCenter/CopilotChat',
+                    method: 'POST',
+                    data: { message: query },
+                    success: function(res) {
+                        // format response with markdown linebreaks and bold
+                        let formattedReply = res.reply
+                            .replace(/\n/g, '<br/>')
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/### (.*?)\n/g, '<strong>$1</strong><br/>')
+                            .replace(/- (.*?)\n/g, '&bull; $1<br/>');
+
+                        chatBody.append(`<div class="message-bot p-2 mb-2 bg-white rounded border small text-secondary">${formattedReply}</div>`);
+                        chatBody.scrollTop(chatBody[0].scrollHeight);
+                    },
+                    error: function() {
+                        chatBody.append(`<div class="message-bot p-2 mb-2 bg-white rounded border small text-danger">Failed to connect to ThessBuddy AI Engine. Please check local server status.</div>`);
+                        chatBody.scrollTop(chatBody[0].scrollHeight);
+                    }
+                });
+            });
+        });
+    </script>
+}
+

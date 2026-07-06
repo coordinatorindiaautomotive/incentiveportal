@@ -1,0 +1,679 @@
+﻿@using IncentivePortal.Models
+@{
+    ViewData["Title"] = "Data Manager — Incentive Data Purge & Review";
+    var branches = (List<Branch>)ViewBag.Branches;
+    var parties  = (IEnumerable<dynamic>)ViewBag.Parties;
+}
+
+<style>
+    /* â”€â”€ Data Manager Custom Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .dm-shell {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 24px;
+        align-items: start;
+    }
+    @@media (max-width: 1100px) {
+        .dm-shell { grid-template-columns: 1fr; }
+        .dm-filter-panel { position: relative; top: 0 !important; margin-bottom: 24px; }
+    }
+
+    .dm-filter-panel {
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        position: sticky;
+        top: 80px;
+    }
+    .dm-filter-header {
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid var(--line);
+    }
+    .dm-filter-header h2 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0;
+        color: var(--dark);
+    }
+    .dm-filter-body {
+        padding: 20px 24px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .dm-field label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--muted);
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+        display: block;
+    }
+    .dm-field select,
+    .dm-field input {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1.5px solid var(--line);
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: var(--dark);
+        background: #fafbfc;
+        transition: border 0.15s, box-shadow 0.15s;
+    }
+    .dm-field select:focus,
+    .dm-field input:focus {
+        outline: none;
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        background: #fff;
+    }
+    .dm-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding-top: 4px;
+    }
+    .dm-btn-search {
+        background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+        color: #fff;
+        border: none;
+        padding: 11px 16px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.88rem;
+        cursor: pointer;
+        transition: transform 0.1s, box-shadow 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .dm-btn-search:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+    .dm-btn-delete {
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        color: #fff;
+        border: none;
+        padding: 11px 16px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.88rem;
+        cursor: pointer;
+        transition: transform 0.1s, box-shadow 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .dm-btn-delete:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3); }
+    .dm-btn-delete:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Results area */
+    .dm-results {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .dm-empty-state {
+        background: #ffffff;
+        border: 2px dashed var(--line);
+        border-radius: 12px;
+        padding: 60px 40px;
+        text-align: center;
+    }
+    .dm-empty-state i { font-size: 3rem; color: #cbd5e1; margin-bottom: 16px; }
+    .dm-empty-state h3 { color: var(--dark); font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; }
+    .dm-empty-state p { color: var(--muted); font-size: 0.88rem; }
+
+    .dm-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 12px;
+    }
+    .dm-stat-card {
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px 18px;
+        transition: transform 0.15s, box-shadow 0.15s;
+        position: relative;
+        overflow: hidden;
+    }
+    .dm-stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.06); }
+    .dm-stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--stat-color, var(--brand));
+    }
+    .dm-stat-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--muted);
+        margin-bottom: 6px;
+    }
+    .dm-stat-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--dark);
+        line-height: 1.1;
+    }
+    .dm-stat-value.zero { color: #94a3b8; }
+
+    /* Lock warning bar */
+    .dm-lock-bar {
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 10px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #92400e;
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+    .dm-lock-bar i { font-size: 1.2rem; color: #f59e0b; }
+
+    /* Preview tables */
+    .dm-preview-panel {
+        background: #ffffff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .dm-preview-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .dm-preview-header h3 { font-size: 0.95rem; font-weight: 700; margin: 0; }
+    .dm-tab-bar {
+        display: flex;
+        border-bottom: 1px solid var(--line);
+        background: #fafbfc;
+    }
+    .dm-tab {
+        padding: 10px 20px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: color 0.15s, border-color 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .dm-tab:hover { color: var(--dark); }
+    .dm-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+    .dm-tab .tab-count {
+        background: rgba(37, 99, 235, 0.1);
+        color: var(--brand);
+        padding: 1px 7px;
+        border-radius: 99px;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+    .dm-tab.active .tab-count { background: var(--brand); color: #fff; }
+
+    .dm-tab-content { display: none; }
+    .dm-tab-content.active { display: block; }
+
+    .dm-data-table {
+        width: 100%;
+        font-size: 0.82rem;
+    }
+    .dm-data-table thead th {
+        padding: 10px 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.5px;
+        color: var(--muted);
+        background: #f8fafc;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+    }
+    .dm-data-table tbody td {
+        padding: 9px 14px;
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: middle;
+    }
+    .dm-data-table tbody tr:hover { background: rgba(37, 99, 235, 0.02); }
+    .dm-data-table .text-end { text-align: right; }
+
+    .dm-total-bar {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border-radius: 12px;
+        padding: 20px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #fff;
+    }
+    .dm-total-bar .total-label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #94a3b8;
+    }
+    .dm-total-bar .total-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        margin-top: 2px;
+    }
+    .dm-total-bar .total-right {
+        text-align: right;
+    }
+</style>
+
+<div class="dm-shell">
+    <!-- â•â•â• LEFT: FILTER PANEL â•â•â• -->
+    <div class="dm-filter-panel">
+        <div class="dm-filter-header">
+            <h2><i class="fa-solid fa-database text-primary me-2"></i> Data Manager</h2>
+            <p class="text-muted small mb-0 mt-1">Filter and purge incentive data for re-upload.</p>
+        </div>
+        <div class="dm-filter-body">
+            <div class="dm-field">
+                <label><i class="fa-solid fa-calendar me-1"></i> Year</label>
+                <select id="dmYear" class="corp-input">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+            <div class="dm-field">
+                <label><i class="fa-solid fa-calendar-day me-1"></i> Month</label>
+                <select id="dmMonth" class="corp-input">
+                    <option value="0">All Months</option>
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                </select>
+            </div>
+            <div class="dm-field">
+                <label><i class="fa-solid fa-location-dot me-1"></i> Branch / Location</label>
+                <select id="dmLocation" class="corp-input">
+                    <option value="">All Locations</option>
+                    @foreach (var b in branches)
+                    {
+                        <option value="@b.Code">@b.Code — @b.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="dm-field">
+                <label><i class="fa-solid fa-user-tag me-1"></i> Party Code</label>
+                <input id="dmPartyCode" type="text" list="partyCodeList" placeholder="Leave blank for all" class="corp-input" autocomplete="off" />
+                <datalist id="partyCodeList">
+                    @foreach (var p in parties)
+                    {
+                        <option value="@p.PartyCode">@p.PartyCode — @p.PartyName</option>
+                    }
+                </datalist>
+            </div>
+            <div class="dm-actions">
+                <button id="dmSearchBtn" class="dm-btn-search" type="button">
+                    <i class="fa-solid fa-magnifying-glass-chart"></i> Search & Preview
+                </button>
+                <button id="dmDeleteBtn" class="dm-btn-delete" type="button" disabled>
+                    <i class="fa-solid fa-trash-can"></i> Purge Selected Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- â•â•â• RIGHT: RESULTS PANEL â•â•â• -->
+    <div class="dm-results" id="dmResults">
+        <!-- Empty State (initial) -->
+        <div class="dm-empty-state" id="dmEmptyState">
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            <h3>Select Filters & Search</h3>
+            <p>Choose a year and optionally refine by month, location, or party code to preview the incentive data available for purging.</p>
+        </div>
+
+        <!-- Summary Cards (hidden until search) -->
+        <div id="dmSummarySection" class="d-none">
+            <!-- Total bar -->
+            <div class="dm-total-bar mb-3" id="dmTotalBar">
+                <div>
+                    <div class="total-label">Total Records Found</div>
+                    <div class="total-value" id="dmTotalValue">0</div>
+                </div>
+                <div class="total-right">
+                    <div class="total-label">Scope</div>
+                    <div id="dmScopeLabel" style="font-weight: 700; font-size: 1rem;"></div>
+                </div>
+            </div>
+
+            <!-- Lock Warning -->
+            <div class="dm-lock-bar d-none" id="dmLockWarning">
+                <i class="fa-solid fa-lock"></i>
+                <span>This period is <strong>locked</strong>. Unlock it from the Control Tower before purging data.</span>
+            </div>
+
+            <!-- Stat grid -->
+            <div class="dm-summary-grid" id="dmStatsGrid">
+                <div class="dm-stat-card" style="--stat-color: #6366f1;"><div class="dm-stat-label">Raw Records</div><div class="dm-stat-value" id="statRaw">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #2563eb;"><div class="dm-stat-label">Monthly Sales</div><div class="dm-stat-value" id="statMs">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #0891b2;"><div class="dm-stat-label">Calculations</div><div class="dm-stat-value" id="statCalc">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #059669;"><div class="dm-stat-label">Incentive Ledger</div><div class="dm-stat-value" id="statIl">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #d97706;"><div class="dm-stat-label">Summary Payouts</div><div class="dm-stat-value" id="statPi">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #dc2626;"><div class="dm-stat-label">Category Aggregates</div><div class="dm-stat-value" id="statCsa">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: var(--primary);"><div class="dm-stat-label">Dealer Performance</div><div class="dm-stat-value" id="statDmp">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #be185d;"><div class="dm-stat-label">Incentive Summary</div><div class="dm-stat-value" id="statIs">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #0d9488;"><div class="dm-stat-label">Slab Progress</div><div class="dm-stat-value" id="statDsp">0</div></div>
+                <div class="dm-stat-card" style="--stat-color: #ea580c;"><div class="dm-stat-label">Growth Analytics</div><div class="dm-stat-value" id="statDga">0</div></div>
+            </div>
+        </div>
+
+        <!-- Data Preview (hidden until search) -->
+        <div class="dm-preview-panel d-none" id="dmPreviewPanel">
+            <div class="dm-preview-header">
+                <h3><i class="fa-solid fa-table-list text-primary me-2"></i> Data Preview (first 50 rows)</h3>
+            </div>
+            <div class="dm-tab-bar">
+                <div class="dm-tab active" data-tab="rawTab">
+                    <i class="fa-solid fa-file-lines"></i> Raw Data <span class="tab-count" id="tabRawCount">0</span>
+                </div>
+                <div class="dm-tab" data-tab="salesTab">
+                    <i class="fa-solid fa-chart-column"></i> Monthly Sales <span class="tab-count" id="tabSalesCount">0</span>
+                </div>
+            </div>
+            <div class="dm-tab-content active" id="rawTab">
+                <div class="table-responsive" style="max-height: 360px;">
+                    <table class="dm-data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Party Code</th>
+                                <th>Party Name</th>
+                                <th>Location</th>
+                                <th>Category</th>
+                                <th>Month</th>
+                                <th>Year</th>
+                                <th class="text-end">Net Retail</th>
+                                <th class="text-end">Discount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rawTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="dm-tab-content" id="salesTab">
+                <div class="table-responsive" style="max-height: 360px;">
+                    <table class="dm-data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Party Code</th>
+                                <th>Party Name</th>
+                                <th>Location</th>
+                                <th>Month</th>
+                                <th>Year</th>
+                                <th class="text-end">Sale Value</th>
+                                <th class="text-end">Discount</th>
+                                <th class="text-end">Slab %</th>
+                                <th class="text-end">Incentive</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const monthNames = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthFull  = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    let lastResult = null;
+
+    // â”€â”€ Load available years â”€â”€
+    $.get('@Url.Action("GetFilterOptions")', function(res) {
+        var sel = $('#dmYear').empty();
+        if (res.years && res.years.length > 0) {
+            res.years.forEach(function(y) {
+                sel.append($('<option>').val(y).text(y));
+            });
+        } else {
+            sel.append($('<option>').val('').text('No data found'));
+        }
+    }).fail(function() {
+        $('#dmYear').empty().append($('<option>').val('').text('Error loading'));
+    });
+
+    // â”€â”€ Tab switching â”€â”€
+    $(document).on('click', '.dm-tab', function() {
+        var tabId = $(this).data('tab');
+        $('.dm-tab').removeClass('active');
+        $(this).addClass('active');
+        $('.dm-tab-content').removeClass('active');
+        $('#' + tabId).addClass('active');
+    });
+
+    // â”€â”€ Search â”€â”€
+    $('#dmSearchBtn').on('click', function() {
+        var year = parseInt($('#dmYear').val());
+        if (!year || isNaN(year)) {
+            Swal.fire({ icon: 'warning', title: 'Year Required', text: 'Please select a year to search.', confirmButtonColor: '#2563eb' });
+            return;
+        }
+
+        var btn = this;
+        portalSetBusy(btn, 'Scanning...');
+
+        $.post('@Url.Action("Search")', {
+            year: year,
+            month: parseInt($('#dmMonth').val()) || 0,
+            location: $('#dmLocation').val() || '',
+            partyCode: $('#dmPartyCode').val().trim() || '',
+            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+        }, function(res) {
+            lastResult = res;
+
+            // Update scope label
+            var m = parseInt($('#dmMonth').val());
+            var scope = m > 0 ? monthFull[m] + ' ' + year : 'Full Year ' + year;
+            var loc = $('#dmLocation').val();
+            var pc = $('#dmPartyCode').val().trim();
+            if (loc) scope += ' â€¢ ' + loc;
+            if (pc) scope += ' â€¢ ' + pc;
+            $('#dmScopeLabel').text(scope);
+
+            // Update totals
+            $('#dmTotalValue').text(res.totalCount.toLocaleString());
+
+            // Update stat cards
+            setStatCard('statRaw', res.rawCount);
+            setStatCard('statMs', res.msCount);
+            setStatCard('statCalc', res.calcCount);
+            setStatCard('statIl', res.ilCount);
+            setStatCard('statPi', res.piCount);
+            setStatCard('statCsa', res.csaCount);
+            setStatCard('statDmp', res.dmpCount);
+            setStatCard('statIs', res.isCount);
+            setStatCard('statDsp', res.dspCount);
+            setStatCard('statDga', res.dgaCount);
+
+            // Lock warning
+            if (res.isLocked) {
+                $('#dmLockWarning').removeClass('d-none');
+                $('#dmDeleteBtn').prop('disabled', true);
+            } else {
+                $('#dmLockWarning').addClass('d-none');
+                $('#dmDeleteBtn').prop('disabled', res.totalCount === 0);
+            }
+
+            // Tab counts
+            $('#tabRawCount').text(res.sampleRaw ? res.sampleRaw.length : 0);
+            $('#tabSalesCount').text(res.sampleSales ? res.sampleSales.length : 0);
+
+            // Raw table
+            var rawBody = $('#rawTableBody').empty();
+            if (res.sampleRaw && res.sampleRaw.length > 0) {
+                res.sampleRaw.forEach(function(r) {
+                    rawBody.append(`<tr>
+                        <td><code>${r.id}</code></td>
+                        <td><span class="party-code-pill">${r.consPartyCode || '-'}</span></td>
+                        <td>${r.consPartyName || '-'}</td>
+                        <td>${r.loc || '-'}</td>
+                        <td>${r.partCategoryCode || '-'}</td>
+                        <td>${r.monthNumber ? monthNames[r.monthNumber] : '-'}</td>
+                        <td>${r.yearNumber || '-'}</td>
+                        <td class="text-end">₹${Number(r.netRetailSelling || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                        <td class="text-end text-danger">₹${Number(r.discountAmount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    </tr>`);
+                });
+            } else {
+                rawBody.append('<tr><td colspan="9" class="text-center text-muted py-3">No raw records found</td></tr>');
+            }
+
+            // Sales table
+            var salesBody = $('#salesTableBody').empty();
+            if (res.sampleSales && res.sampleSales.length > 0) {
+                res.sampleSales.forEach(function(s) {
+                    salesBody.append(`<tr>
+                        <td><code>${s.id}</code></td>
+                        <td><span class="party-code-pill">${s.partyCode || '-'}</span></td>
+                        <td>${s.partyName || '-'}</td>
+                        <td>${s.sourceLocation || '-'}</td>
+                        <td>${s.month ? monthNames[s.month] : '-'}</td>
+                        <td>${s.year || '-'}</td>
+                        <td class="text-end">₹${Number(s.saleValue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                        <td class="text-end text-danger">₹${Number(s.discount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                        <td class="text-end">${(Number(s.importedSlabPercent || 0) * 100).toFixed(2)}%</td>
+                        <td class="text-end fw-bold text-teal">₹${Number(s.importedIncentive || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    </tr>`);
+                });
+            } else {
+                salesBody.append('<tr><td colspan="10" class="text-center text-muted py-3">No monthly sales found</td></tr>');
+            }
+
+            // Show sections
+            $('#dmEmptyState').addClass('d-none');
+            $('#dmSummarySection').removeClass('d-none');
+            $('#dmPreviewPanel').removeClass('d-none');
+
+            portalClearBusy(btn);
+
+        }).fail(function(xhr) {
+            var msg = xhr.responseJSON ? xhr.responseJSON.message : 'Search failed.';
+            Swal.fire({ icon: 'error', title: 'Search Failed', text: msg, confirmButtonColor: '#dc2626' });
+            portalClearBusy(btn);
+        });
+    });
+
+    // â”€â”€ Delete â”€â”€
+    $('#dmDeleteBtn').on('click', function() {
+        if (!lastResult || lastResult.totalCount === 0) return;
+
+        var year = parseInt($('#dmYear').val());
+        var m = parseInt($('#dmMonth').val()) || 0;
+        var scope = m > 0 ? monthFull[m] + ' ' + year : 'Full Year ' + year;
+        var loc = $('#dmLocation').val();
+        var pc = $('#dmPartyCode').val().trim();
+        if (loc) scope += ' — Location: ' + loc;
+        if (pc) scope += ' — Party: ' + pc;
+
+        Swal.fire({
+            title: '<i class="fa-solid fa-triangle-exclamation text-danger"></i> Confirm Data Purge',
+            html: `
+                <div style="text-align: left; font-size: 0.92rem; line-height: 1.7;">
+                    <p class="mb-2">You are about to <strong class="text-danger">permanently delete</strong> calculated and summary incentive data for this scope:</p>
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px;">
+                        <div style="font-weight: 700; color: #991b1b; margin-bottom: 4px;">📋 Scope: ${scope}</div>
+                        <div style="font-weight: 700; color: #dc2626; font-size: 1.1rem; margin-bottom: 8px;">🗑️ Records to Purge: ${lastResult.totalCount.toLocaleString()}</div>
+                        <div style="font-size: 0.8rem; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 12px; font-weight: 600;">
+                            <i class="fa-solid fa-circle-info me-1"></i> Note: Raw invoice/transaction data will remain untouched and safe.
+                        </div>
+                    </div>
+                    <p class="mb-1" style="color: #6b7280; font-size: 0.85rem;">This action is <strong>irreversible</strong>. Type <code style="background: #fef2f2; color: #dc2626; padding: 2px 6px; border-radius: 3px; font-weight: 700;">DELETE</code> below to confirm:</p>
+                </div>
+            `,
+            input: 'text',
+            inputPlaceholder: 'Type DELETE to confirm',
+            inputAttributes: { autocapitalize: 'characters', autocomplete: 'off' },
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-solid fa-trash-can me-1"></i> Purge Data',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            width: '520px',
+            preConfirm: (value) => {
+                if (value !== 'DELETE') {
+                    Swal.showValidationMessage('Please type DELETE to confirm');
+                    return false;
+                }
+                return true;
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var btn = document.getElementById('dmDeleteBtn');
+                portalSetBusy(btn, 'Purging...');
+
+                $.post('@Url.Action("Delete")', {
+                    year: year,
+                    month: m,
+                    location: loc || '',
+                    partyCode: pc || '',
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                }, function(res) {
+                    portalClearBusy(btn);
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Data Purged Successfully',
+                        html: `
+                            <div style="text-align: left; font-size: 0.92rem;">
+                                <p>${res.message}</p>
+                                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin-top: 12px;">
+                                    <div style="font-weight: 700; color: #166534;">âœ… ${res.totalDeleted.toLocaleString()} records removed</div>
+                                    <div style="color: #15803d; font-size: 0.85rem; margin-top: 4px;">You can now upload fresh data from the Upload Center.</div>
+                                </div>
+                            </div>
+                        `,
+                        confirmButtonColor: '#16a34a',
+                        confirmButtonText: 'Done',
+                        width: '480px'
+                    }).then(() => {
+                        // Re-search to refresh the view
+                        $('#dmSearchBtn').click();
+                    });
+                }).fail(function(xhr) {
+                    portalClearBusy(btn);
+                    var msg = xhr.responseJSON ? xhr.responseJSON.message : 'Delete operation failed.';
+                    Swal.fire({ icon: 'error', title: 'Purge Failed', text: msg, confirmButtonColor: '#dc2626' });
+                });
+            }
+        });
+    });
+
+    function setStatCard(id, value) {
+        var el = document.getElementById(id);
+        el.textContent = (value || 0).toLocaleString();
+        if (!value) el.classList.add('zero'); else el.classList.remove('zero');
+    }
+});
+</script>
+}
+
+

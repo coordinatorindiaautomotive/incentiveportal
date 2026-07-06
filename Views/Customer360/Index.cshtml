@@ -1,0 +1,637 @@
+@model IncentivePortal.DTOs.Customer360ViewModel
+@{
+    ViewData["Title"] = "Customer 360° Insight Hub";
+}
+
+<div class="container-fluid" style="padding: 20px;">
+    
+    <!-- Top Selector Bar -->
+    <div class="card mb-4" style="border: 1px solid rgba(196,198,207,0.4); border-radius: 12px; box-shadow: 0 4px 10px rgba(11,28,48,0.02); padding: 20px;">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 style="font-family: 'Inter', sans-serif; font-weight: 700; font-size: 18px; color: #0b1c30; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                    <span class="material-symbols-outlined" style="font-size: 24px; color: #2563eb;">supervised_user_circle</span>
+                    Customer 360° Insight Hub
+                </h4>
+                <p style="font-size: 12px; color: #74777f; margin-bottom: 0; font-weight: 500;">Complete visual timeline, purchase trends, risk index, and client interaction tracker.</p>
+            </div>
+            <div class="col-md-6 text-md-end mt-3 mt-md-0 position-relative">
+                <form method="get" action="@Url.Action("Index", "Customer360")" class="d-flex align-items-center justify-content-md-end gap-2">
+                    <label for="customerSearch" class="form-label mb-0 fw-semibold text-muted small me-2">Search Dealer:</label>
+                    <div style="position: relative; width: 300px;">
+                        <input type="text" id="customerSearch" name="partyCode" class="form-control" placeholder="Search by Code or Name..." autocomplete="off" value="@(Model.IsSearchMode ? Model.SearchQuery : Model.PartyCode)" />
+                        <div id="searchResults" class="dropdown-menu w-100" style="display:none; position: absolute; top: 100%; left: 0; z-index: 1050; max-height: 250px; overflow-y: auto;"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="height: 38px;"><i class="fa-solid fa-search"></i></button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.IsSearchMode && !string.IsNullOrEmpty(Model.SearchQuery))
+    {
+        <div class="alert alert-info">
+            <i class="fa-solid fa-info-circle me-2"></i> Please select a dealer from the search results to view their 360° profile.
+        </div>
+    }
+    else if (string.IsNullOrEmpty(Model.PartyCode))
+    {
+        <div class="alert alert-warning">
+            <i class="fa-solid fa-exclamation-triangle me-2"></i> Search for a dealer to get started.
+        </div>
+    }
+    else
+    {
+        <!-- Customer Master Header Card -->
+        <div class="row g-4 mb-4">
+            <div class="col-xl-8">
+                <div class="card border-0 h-100 p-4" style="background: linear-gradient(135deg, #0b1c30 0%, #002b5c 100%); color: white; border-radius: 14px; box-shadow: var(--shadow-md);">
+                    <div class="d-flex flex-column flex-md-row justify-content-between">
+                        <div>
+                            <span class="badge bg-primary mb-2" style="background: rgba(37, 99, 235, 0.2) !important; color: #a5d3ff !important; border: 1px solid rgba(37, 99, 235, 0.4);">@Model.DealerType</span>
+                            <h2 class="fw-bold mb-1" style="font-family:'Inter',sans-serif; letter-spacing: -0.5px;">@Model.PartyName</h2>
+                            <p class="mb-3 opacity-75 small">Code: <strong>@Model.PartyCode</strong> | Branch: <strong>@Model.BranchName</strong></p>
+                            
+                            <div class="row g-3 mt-1">
+                                <div class="col-sm-6">
+                                    <div class="small" style="color: #94a3b8;">GSTIN / Tax ID</div>
+                                    <div class="fw-bold" style="color: #e2e8f0;"><i class="fa-solid fa-file-invoice me-1" style="color: #64748b;"></i> @(string.IsNullOrEmpty(Model.GST) ? "N/A" : Model.GST)</div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="small" style="color: #94a3b8;">Mobile / Contacts</div>
+                                    <div class="fw-bold" style="color: #e2e8f0;"><i class="fa-solid fa-phone me-1" style="color: #64748b;"></i> @(string.IsNullOrEmpty(Model.Mobile) ? "N/A" : Model.Mobile)</div>
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <div class="small" style="color: #94a3b8;">Billing Address</div>
+                                    <div class="small" style="color: #e2e8f0;"><i class="fa-solid fa-map-location-dot me-1" style="color: #64748b;"></i> @(string.IsNullOrEmpty(Model.Address) ? "N/A" : Model.Address)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4 mt-md-0 text-md-end d-flex flex-row flex-md-column justify-content-between align-items-end">
+                            <span class="badge px-3 py-2 rounded-pill fs-6" style="background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2);"><i class="fa-solid fa-check-circle me-1"></i> @Model.Status</span>
+                            <div class="mt-4 w-100">
+                                <div class="small text-start mb-1" style="color: #94a3b8;">Account Manager</div>
+                                <div class="fw-bold text-start" style="color: #e2e8f0;"><span class="material-symbols-outlined align-middle" style="font-size: 16px; color: #64748b;">badge</span> @Model.ExecutiveName</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Heuristic AI Prediction Panel -->
+            <div class="col-xl-4">
+                <div class="card h-100 p-4" style="background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-sm);">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <i class="fa-solid fa-building-columns text-primary fs-4" style="color: #2563eb !important;"></i>
+                        <h5 class="mb-0 fw-bold text-primary" style="font-family:'Inter',sans-serif; color: #2563eb !important;">Bank Details</h5>
+                    </div>
+                    
+                    @if (string.IsNullOrEmpty(Model.BankAccountNumber))
+                    {
+                        <div class="mb-3 p-3 rounded" style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2);">
+                            <div class="d-flex align-items-center gap-2 text-warning mb-2">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                <span class="fw-bold" style="color: #b45309;">No Bank Details Found</span>
+                            </div>
+                            <div class="small text-muted">Please ask the dealer to update their bank information to receive incentives.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3 p-3 rounded" style="background: rgba(37, 99, 235, 0.03); border: 1px solid var(--line-2);">
+                            <div class="small text-muted mb-1">Account Holder</div>
+                            <div class="fw-bold text-dark mb-0">@Model.BankAccountHolder</div>
+                        </div>
+
+                        <div class="mb-3 p-3 rounded" style="background: rgba(37, 99, 235, 0.03); border: 1px solid var(--line-2);">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <div class="small text-muted mb-1">Account Number</div>
+                                    <div class="fw-bold text-dark mb-0 font-monospace">@Model.BankAccountNumber</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="small text-muted mb-1">IFSC Code</div>
+                                    <div class="fw-bold text-dark mb-0 font-monospace">@Model.BankIFSC</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-auto pt-2">
+                            <span class="small fw-semibold text-muted">@Model.BankName</span>
+                            @if (Model.BankApprovalStatus == "Approved")
+                            {
+                                <span class="badge" style="background: rgba(34, 197, 94, 0.1); color: #15803d; border: 1px solid rgba(34, 197, 94, 0.2);"><i class="fa-solid fa-shield-check me-1"></i> Verified</span>
+                            }
+                            else
+                            {
+                                <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.2);"><i class="fa-solid fa-clock me-1"></i> @Model.BankApprovalStatus</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Tower Grid -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="ct-widget">
+                    <div class="ct-widget-header">
+                        <span class="ct-widget-title">Current Month Sales</span>
+                        <span class="ct-status-badge online"><i class="fa-solid fa-arrow-up"></i> Live</span>
+                    </div>
+                    <div class="ct-widget-value currency-display">₹@Model.CurrentMonthSales.ToString("N0")</div>
+                    <div class="ct-widget-footer">
+                        <span>Target: ₹@Model.CurrentMonthTarget.ToString("N0")</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="ct-widget">
+                    <div class="ct-widget-header">
+                        <span class="ct-widget-title">Current Outstanding</span>
+                        @if (Model.CurrentOutstanding > 50000m)
+                        {
+                            <span class="ct-status-badge warning"><i class="fa-solid fa-triangle-exclamation"></i> High</span>
+                        }
+                        else
+                        {
+                            <span class="ct-status-badge online"><i class="fa-solid fa-check"></i> Normal</span>
+                        }
+                    </div>
+                    <div class="ct-widget-value currency-display" style="@(Model.CurrentOutstanding > 0 ? "color: #b91c1c;" : "color: #15803d;")">
+                        ₹@Model.CurrentOutstanding.ToString("N0")
+                    </div>
+                    <div class="ct-widget-footer">
+                        <span>Receivables aging balance</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="ct-widget">
+                    <div class="ct-widget-header">
+                        <span class="ct-widget-title">YTD Sales</span>
+                        <span class="ct-status-badge online"><i class="fa-solid fa-chart-line"></i> Active</span>
+                    </div>
+                    <div class="ct-widget-value currency-display">₹@Model.YTDSales.ToString("N0")</div>
+                    <div class="ct-widget-footer">
+                        <span>Fiscal Year To Date</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="ct-widget">
+                    <div class="ct-widget-header">
+                        <span class="ct-widget-title">Incentive Tier</span>
+                        <span class="ct-status-badge online"><i class="fa-solid fa-star"></i> Slab</span>
+                    </div>
+                    <div class="ct-widget-value">@Model.CurrentSlabPercent.ToString("F1")%</div>
+                    <div class="ct-widget-footer">
+                        <span>Next Tier: @Model.NextSlabPercent.ToString("F1")%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Left Column: Chart -->
+            <div class="col-xl-8">
+                <div class="section-box h-100">
+                    <div class="section-box-header">
+                        <div>
+                            <div class="section-title">Sales & Incentive Trend</div>
+                            <div class="section-subtitle">Trailing 6 Months Performance History</div>
+                        </div>
+                    </div>
+                    <div class="section-box-body">
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column: Recent Transactions & Next Slab Progress -->
+            <div class="col-xl-4">
+                <div class="section-box mb-4">
+                    <div class="section-box-header">
+                        <div>
+                            <div class="section-title">Next Slab Tracker</div>
+                            <div class="section-subtitle">Progress to @Model.NextSlabPercent.ToString("F1")% tier</div>
+                        </div>
+                    </div>
+                    <div class="section-box-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold">@Model.ProgressToNextSlabPercent.ToString("F1")% Achieved</span>
+                            <span class="text-muted small">Target: ₹@Model.NextSlabTarget.ToString("N0")</span>
+                        </div>
+                        <div class="progress" style="height: 12px; border-radius: 6px; background: rgba(0,89,187,0.1);">
+                            <div class="progress-bar" role="progressbar" style="width: @(Math.Min(Model.ProgressToNextSlabPercent, 100))%; background: linear-gradient(90deg, #2563eb 0%, #2563eb 100%); border-radius: 6px;"></div>
+                        </div>
+                        <div class="mt-3 text-center small text-muted">
+                            @if (Model.NextSlabTarget > Model.CurrentMonthSales)
+                            {
+                                <span>Shortfall: <strong class="text-dark">₹@((Model.NextSlabTarget - Model.CurrentMonthSales).ToString("N0"))</strong> to next tier.</span>
+                            }
+                            else
+                            {
+                                <span class="text-success"><i class="fa-solid fa-check-circle"></i> Highest tier reached or target met.</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-box h-100">
+                    <div class="section-box-header">
+                        <div>
+                            <div class="section-title">Recent Transactions</div>
+                        </div>
+                    </div>
+                    <div class="section-box-body p-0">
+                        @if (!Model.RecentTransactions.Any())
+                        {
+                            <div class="p-4 text-center text-muted">No recent transactions found.</div>
+                        }
+                        else
+                        {
+                            <div class="corp-table-wrapper border-0 rounded-0 shadow-none m-0">
+                                <table class="table mb-0" style="font-size: 13px;">
+                                    <thead style="background: rgba(37, 99, 235, 0.02);">
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Doc #</th>
+                                            <th>Cat</th>
+                                            <th class="text-end">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var txn in Model.RecentTransactions)
+                                        {
+                                            <tr>
+                                                <td class="text-muted">@txn.Date</td>
+                                                <td class="font-monospace">@txn.DocumentNum</td>
+                                                <td><span class="badge" style="background: rgba(37, 99, 235, 0.1); color: #2563eb;">@txn.Category</span></td>
+                                                <td class="text-end fw-bold currency-display">₹@txn.NetSales.ToString("N0")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-2">
+            <!-- YoY Matrix Summary -->
+            <div class="col-12">
+                <div class="section-box h-100">
+                    <div class="section-box-header">
+                        <div>
+                            <div class="section-title">Year-over-Year Sales Matrix</div>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <div class="table-responsive saas-table-wrapper">
+                            <table class="saas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Month</th>
+                                        @foreach (var year in Model.AvailableYears)
+                                        {
+                                            <th class="text-end">@year</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in Model.MonthYearMatrix)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-muted">@row.MonthName</td>
+                                            @foreach (var year in Model.AvailableYears)
+                                            {
+                                                var cell = row.YearlyData.ContainsKey(year) ? row.YearlyData[year] : new IncentivePortal.DTOs.YearlySalesData();
+                                                <td class="text-end">
+                                                    @if (cell.Sales > 0)
+                                                    {
+                                                        <div class="fw-bold" style="font-size: 0.95rem;">₹@cell.Sales.ToString("N0")</div>
+                                                        @if (cell.GrowthPercentage.HasValue)
+                                                        {
+                                                            <div class="mt-1">
+                                                                @if (cell.GrowthPercentage.Value > 0)
+                                                                {
+                                                                    <span class="saas-badge-success">+@cell.GrowthPercentage.Value.ToString("F1")%</span>
+                                                                }
+                                                                else if (cell.GrowthPercentage.Value < 0)
+                                                                {
+                                                                    <span class="saas-badge-danger">@cell.GrowthPercentage.Value.ToString("F1")%</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="saas-badge-neutral">0%</span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                    @if (!Model.MonthYearMatrix.Any())
+                                    {
+                                        <tr><td colspan="@(Model.AvailableYears.Count + 1)" class="text-center text-muted p-3">No data available</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row g-4 mt-2">
+            <!-- Category-wise Summary -->
+            <div class="col-12">
+                <div class="section-box h-100">
+                    <div class="section-box-header">
+                        <div>
+                            <div class="section-title">Category-wise Sales</div>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <div class="table-responsive saas-table-wrapper">
+                            <table class="saas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th class="text-end">Total Qty</th>
+                                        <th class="text-end">Total Sales (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in Model.CategoryWiseSales)
+                                    {
+                                        <tr>
+                                            <td><span class="saas-badge-primary">@c.Label</span></td>
+                                            <td class="text-end text-muted fw-semibold">@c.TotalQty.ToString("N0")</td>
+                                            <td class="text-end fw-bold" style="font-size: 0.95rem; color: #16a34a;">₹@c.TotalSales.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                    @if (!Model.CategoryWiseSales.Any())
+                                    {
+                                        <tr><td colspan="3" class="text-center text-muted p-3">No data available</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-2">
+            <div class="col-12">
+                <div class="section-box h-100">
+                    <div class="section-box-header">
+                        <div>
+                            <div class="section-title">Detailed Sales Analysis</div>
+                            <div class="section-subtitle">Month-wise, Category-wise, and Part-wise Sales</div>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <div class="table-responsive saas-table-wrapper">
+                            <table id="salesAnalysisTable" class="saas-table w-100">
+                                <thead>
+                                    <tr>
+                                        <th>Month Year</th>
+                                        <th>Category</th>
+                                        <th>Part Number</th>
+                                        <th class="text-end">Total Qty</th>
+                                        <th class="text-end">Total Sales (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" />
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        $(document).ready(function() {
+            @if (!Model.IsSearchMode && !string.IsNullOrEmpty(Model.PartyCode))
+            {
+                <text>
+                $('#salesAnalysisTable').DataTable({
+                    serverSide: true,
+                    processing: true,
+                    ajax: {
+                        url: '@Url.Action("GetSalesAnalysis", "Customer360")',
+                        type: 'POST',
+                        data: function(d) {
+                            d.partyCode = '@Model.PartyCode';
+                        }
+                    },
+                    columns: [
+                        { data: 'monthYear', name: 'MonthYear' },
+                        { data: 'category', name: 'Category' },
+                        { data: 'partNum', name: 'PartNum', render: function(data) {
+                            return `<span class="saas-badge-neutral">${data}</span>`;
+                        }},
+                        { data: 'totalQty', name: 'TotalQty', className: 'text-end text-muted fw-semibold', render: $.fn.dataTable.render.number(',', '.', 0, '') },
+                        { data: 'totalSales', name: 'TotalSales', className: 'text-end fw-bold', render: function(data, type, row) {
+                            return '<span style="color: #16a34a; font-size: 0.95rem;">' + $.fn.dataTable.render.number(',', '.', 2, '₹').display(data) + '</span>';
+                        }}
+                    ],
+                    order: [[4, 'desc']], // default sort by TotalSales desc
+                    language: {
+                        search: "",
+                        searchPlaceholder: "Search Part or Category..."
+                    }
+                });
+                </text>
+            }
+
+            
+            // Search Autocomplete
+            const searchInput = $('#customerSearch');
+            const resultsDiv = $('#searchResults');
+            let debounceTimer;
+
+            function triggerSearch() {
+                clearTimeout(debounceTimer);
+                const query = searchInput.val();
+                
+                debounceTimer = setTimeout(() => {
+                    $.ajax({
+                        url: '@Url.Action("Search", "Customer360")',
+                        data: { query: query },
+                        success: function(data) {
+                            resultsDiv.empty();
+                            if (data.length > 0) {
+                                data.forEach(item => {
+                                    resultsDiv.append(`
+                                        <a href="/Customer360/Index?partyCode=${item.partyCode}" class="dropdown-item py-2 border-bottom">
+                                            <div class="fw-bold">${item.partyName} <span class="badge bg-light text-dark ms-2 border">${item.partyCode}</span></div>
+                                            <div class="small text-muted"><i class="fa-solid fa-building me-1"></i> ${item.branchName}</div>
+                                        </a>
+                                    `);
+                                });
+                                resultsDiv.show();
+                            } else {
+                                resultsDiv.append('<div class="dropdown-item text-muted">No dealers found</div>');
+                                resultsDiv.show();
+                            }
+                        }
+                    });
+                }, 300);
+            }
+            
+            searchInput.on('input focus click', triggerSearch);
+
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#customerSearch, #searchResults').length) {
+                    resultsDiv.hide();
+                }
+            });
+
+            // Chart.js implementation
+            @if (!Model.IsSearchMode && !string.IsNullOrEmpty(Model.PartyCode) && Model.TrendLabels.Any())
+            {
+                <text>
+                const ctx = document.getElementById('trendChart').getContext('2d');
+                
+                // Gradient for Sales
+                let salesGradient = ctx.createLinearGradient(0, 0, 0, 300);
+                salesGradient.addColorStop(0, 'rgba(37, 99, 235, 0.3)');
+                salesGradient.addColorStop(1, 'rgba(37, 99, 235, 0.0)');
+
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.TrendLabels)),
+                        datasets: [
+                            {
+                                label: 'Sales (₹)',
+                                data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SalesTrend)),
+                                borderColor: '#2563eb',
+                                backgroundColor: salesGradient,
+                                borderWidth: 3,
+                                pointBackgroundColor: '#fff',
+                                pointBorderColor: '#2563eb',
+                                pointBorderWidth: 2,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                fill: true,
+                                tension: 0.4,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Incentive (₹)',
+                                data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.IncentiveTrend)),
+                                borderColor: '#10b981',
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                pointBackgroundColor: '#10b981',
+                                pointRadius: 3,
+                                fill: false,
+                                tension: 0.4,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    usePointStyle: true,
+                                    boxWidth: 8,
+                                    font: { family: "'Inter', sans-serif" }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(11, 28, 48, 0.9)',
+                                titleFont: { family: "'Inter', sans-serif", size: 13 },
+                                bodyFont: { family: "'Inter', sans-serif", size: 12 },
+                                padding: 12,
+                                cornerRadius: 8,
+                                displayColors: true,
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) { label += ': '; }
+                                        if (context.parsed.y !== null) {
+                                            label += '₹' + context.parsed.y.toLocaleString('en-IN');
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false, drawBorder: false },
+                                ticks: { font: { family: "'Inter', sans-serif" }, color: '#64748b' }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                grid: { color: 'rgba(196, 198, 207, 0.2)', borderDash: [5, 5] },
+                                ticks: {
+                                    font: { family: "'Inter', sans-serif" }, 
+                                    color: '#64748b',
+                                    callback: function(value) {
+                                        if (value >= 10000000) return '₹' + (value/10000000).toFixed(1) + 'Cr';
+                                        if (value >= 100000) return '₹' + (value/100000).toFixed(1) + 'L';
+                                        if (value >= 1000) return '₹' + (value/1000).toFixed(1) + 'k';
+                                        return '₹' + value;
+                                    }
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                ticks: {
+                                    font: { family: "'Inter', sans-serif" }, 
+                                    color: '#10b981',
+                                    callback: function(value) {
+                                        if (value >= 100000) return '₹' + (value/100000).toFixed(1) + 'L';
+                                        if (value >= 1000) return '₹' + (value/1000).toFixed(1) + 'k';
+                                        return '₹' + value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                </text>
+            }
+        });
+    </script>
+}
+

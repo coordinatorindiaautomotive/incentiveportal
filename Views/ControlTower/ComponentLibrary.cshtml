@@ -1,0 +1,578 @@
+@{
+    ViewData["Title"] = "Enterprise Component Library";
+}
+
+<!-- Google Material Symbols & Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+<style>
+    /* ── Dev Showcase Layout ── */
+    .showcase-header {
+        background: linear-gradient(135deg, #0b1c30 0%, #002244 100%) !important;
+        border-bottom: 2px solid #0059bb !important;
+        border-radius: 12px !important;
+        color: #ffffff !important;
+        padding: 24px 30px !important;
+        margin-bottom: 24px !important;
+        box-shadow: 0 4px 15px rgba(0, 89, 187, 0.1) !important;
+    }
+    
+    .showcase-section {
+        background: #ffffff !important;
+        border: 1px solid rgba(196, 198, 207, 0.4) !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 10px rgba(11, 28, 48, 0.02) !important;
+        padding: 24px !important;
+        margin-bottom: 24px !important;
+    }
+
+    .section-title {
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
+        color: #0b1c30 !important;
+        border-bottom: 1px solid rgba(196, 198, 207, 0.3) !important;
+        padding-bottom: 8px !important;
+        margin-bottom: 20px !important;
+        font-size: 1.15rem !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+
+    /* ── Token Grid ── */
+    .token-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 16px;
+    }
+    .token-card {
+        border: 1px solid rgba(196, 198, 207, 0.3);
+        border-radius: 8px;
+        padding: 12px;
+        background: #f8f9ff;
+    }
+    .token-color-swatch {
+        height: 48px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* ── Dev Spec Badge ── */
+    .dev-spec {
+        font-family: monospace;
+        font-size: 10px;
+        color: #0059bb;
+        background: rgba(0, 89, 187, 0.05);
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin-top: 8px;
+        display: inline-block;
+    }
+
+    /* ── Code box ── */
+    .code-box {
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: 'Fira Code', monospace;
+        font-size: 11px;
+        padding: 12px;
+        border-radius: 6px;
+        max-height: 180px;
+        overflow-y: auto;
+        margin-top: 12px;
+    }
+
+    /* ── Custom UI Sandbox Components ── */
+    
+    /* Tags / Chips */
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 100px;
+        background: rgba(0, 89, 187, 0.05);
+        border: 1px solid rgba(0, 89, 187, 0.12);
+        color: #0059bb;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .chip i {
+        font-size: 10px;
+        opacity: 0.7;
+    }
+    .chip:hover {
+        background: rgba(0, 89, 187, 0.08);
+    }
+
+    /* Accordion */
+    .styleguide-accordion {
+        border: 1px solid rgba(196, 198, 207, 0.4);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .accordion-item-head {
+        background: #f8f9ff;
+        padding: 12px 16px;
+        font-weight: 700;
+        font-family: 'Inter', sans-serif;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(196, 198, 207, 0.3);
+    }
+    .accordion-item-body {
+        padding: 16px;
+        font-size: 12px;
+        color: #44474e;
+        display: none;
+    }
+
+    /* Progress Circle */
+    .progress-ring {
+        position: relative;
+        width: 48px;
+        height: 48px;
+    }
+    .progress-ring-svg {
+        transform: rotate(-90deg);
+        width: 100%;
+        height: 100%;
+    }
+    .progress-ring-svg circle {
+        fill: transparent;
+        stroke-width: 4;
+    }
+    .progress-ring-svg .bg {
+        stroke: #e2e8f0;
+    }
+    .progress-ring-svg .bar {
+        stroke: #0059bb;
+        stroke-dasharray: 125.6; /* 2 * pi * 20 */
+        stroke-dashoffset: 37.6; /* 30% progress left */
+        stroke-linecap: round;
+        transition: stroke-dashoffset 0.35s;
+    }
+
+    /* Custom Switch Wrapper */
+    .custom-tooltip {
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+    }
+    .custom-tooltip .tooltiptext {
+        visibility: hidden;
+        width: 120px;
+        background-color: #0b1c30;
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 5px 8px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%; /* Position above tooltip trigger */
+        left: 50%;
+        margin-left: -60px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        font-size: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+    .custom-tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Showcase Title Block -->
+    <div class="showcase-header">
+        <div class="d-flex align-items-center gap-3">
+            <div style="background: rgba(255, 255, 255, 0.15); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px;">
+                <i class="fa-solid fa-swatchbook text-white fa-lg"></i>
+            </div>
+            <div>
+                <h1 class="h4 fw-bold mb-1" style="font-family:'Inter',sans-serif; letter-spacing:-0.5px;">ThessBuddy Design System</h1>
+                <p class="mb-0 small" style="opacity: 0.85;">Interactive component library & specification rules for developer handoff. Built with CSS custom properties.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 1: Design Tokens -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-circle-nodes"></i> 1. Core Design Tokens</h2>
+        <div class="token-grid">
+            <div class="token-card">
+                <div class="token-color-swatch" style="background: #0059bb;"></div>
+                <strong>Primary Cobalt</strong>
+                <div class="small text-muted">#0059bb</div>
+                <div class="dev-spec">var(--primary)</div>
+            </div>
+            <div class="token-card">
+                <div class="token-color-swatch" style="background: #0070ea;"></div>
+                <strong>Accent Blue</strong>
+                <div class="small text-muted">#0070ea</div>
+                <div class="dev-spec">var(--accent)</div>
+            </div>
+            <div class="token-card">
+                <div class="token-color-swatch" style="background: #0b1c30;"></div>
+                <strong>Tech Navy</strong>
+                <div class="small text-muted">#0b1c30</div>
+                <div class="dev-spec">#0b1c30</div>
+            </div>
+            <div class="token-card">
+                <div class="token-color-swatch" style="background: #ba1a1a;"></div>
+                <strong>Danger Crimson</strong>
+                <div class="small text-muted">#ba1a1a</div>
+                <div class="dev-spec">var(--danger)</div>
+            </div>
+            <div class="token-card">
+                <div class="token-color-swatch" style="background: #22c55e;"></div>
+                <strong>Success Emerald</strong>
+                <div class="small text-muted">#22c55e</div>
+                <div class="dev-spec">var(--success)</div>
+            </div>
+            <div class="token-card">
+                <div class="token-color-swatch" style="background: #ffffff; border: 1px solid #cbd5e1;"></div>
+                <strong>Radius & Shadows</strong>
+                <div class="small text-muted">Radius: 6px / 12px</div>
+                <div class="dev-spec">var(--shadow-md)</div>
+            </div>
+        </div>
+        <div class="dev-spec mt-3">Auto Layout Grid: 16px Gaps, Align: Stretch, Direction: Row Wrap</div>
+    </div>
+
+    <!-- Section 2: Command Buttons -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-rectangle-ad"></i> 2. Command Buttons</h2>
+        <div class="row">
+            <div class="col-lg-6 mb-4 mb-lg-0">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button class="btn btn-primary">Primary Action</button>
+                    <button class="btn btn-secondary">Secondary</button>
+                    <button class="btn btn-outline-primary">Outline Primary</button>
+                    <button class="btn btn-link">Link Button</button>
+                    <button class="btn btn-danger">Danger Alert</button>
+                    <button class="btn btn-success">Success Confirm</button>
+                    <button class="btn btn-primary btn-loading">Loading</button>
+                    <button class="btn btn-primary" disabled>Disabled</button>
+                </div>
+                <div class="dev-spec mt-3">Padding: 0 16px, Height: 38px, Font: Inter Bold 12px, Gap: 6px, Shadow: 0 2px 6px</div>
+            </div>
+            <div class="col-lg-6">
+                <div class="code-box">
+&lt;button class="btn btn-primary"&gt;Primary Action&lt;/button&gt;
+&lt;button class="btn btn-secondary"&gt;Secondary&lt;/button&gt;
+&lt;button class="btn btn-outline-primary"&gt;Outline&lt;/button&gt;
+&lt;button class="btn btn-link"&gt;Link Button&lt;/button&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: Interactive Inputs & Selections -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-keyboard"></i> 3. Form Inputs & Selection Controls</h2>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Text Field <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" placeholder="Enter alphanumeric text..." />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Select Dropdown</label>
+                    <select class="form-select">
+                        <option>Choose options...</option>
+                        <option>Option Variable A</option>
+                        <option>Option Variable B</option>
+                    </select>
+                </div>
+                <div class="d-flex flex-wrap gap-4 mt-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="checkEx" checked />
+                        <label class="form-check-label small fw-bold" for="checkEx">Checkbox Active</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="radioEx" id="radioEx1" checked />
+                        <label class="form-check-label small fw-bold" for="radioEx1">Radio Option</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="switchEx" checked />
+                        <label class="form-check-label small fw-bold" for="switchEx">Toggle Switch</label>
+                    </div>
+                </div>
+                <div class="dev-spec mt-4">Auto Layout Inputs: Padding: 8px 12px, Height: 38px, Radius: 6px, Focus Border: 1px solid #0059bb, Focus Glow: 3px</div>
+            </div>
+            <div class="col-lg-6">
+                <div class="code-box">
+&lt;!-- Input Field --&gt;
+&lt;input type="text" class="form-control" placeholder="..." /&gt;
+
+&lt;!-- Toggle Switch --&gt;
+&lt;div class="form-check form-switch"&gt;
+  &lt;input class="form-check-input" type="checkbox" id="sw" checked /&gt;
+  &lt;label class="form-check-label" for="sw"&gt;Toggle Switch&lt;/label&gt;
+&lt;/div&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: Data Tables -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-table"></i> 4. Data Tables</h2>
+        <div class="row">
+            <div class="col-12 mb-3">
+                <div class="table-responsive">
+                    <table class="table corp-table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Party Code</th>
+                                <th>Party Name</th>
+                                <th>Gross Incentive</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Oct 2026</td>
+                                <td><span class="party-code-pill">DLR224</span></td>
+                                <td>Anil Motors Pvt Ltd</td>
+                                <td>₹184,500</td>
+                                <td><span class="status-badge success">Approved</span></td>
+                            </tr>
+                            <tr>
+                                <td>Oct 2026</td>
+                                <td><span class="party-code-pill">DLR593</span></td>
+                                <td>Global Automobiles</td>
+                                <td>₹92,300</td>
+                                <td><span class="status-badge warning">Pending</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="dev-spec">Headers: Tech Navy linear-gradient, Cell Padding: 8px 12px, Hover Tint: rgba(0, 89, 187, 0.04)</div>
+            </div>
+            <div class="col-12">
+                <div class="code-box">
+&lt;table class="table corp-table"&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;&lt;th&gt;Month&lt;/th&gt;&lt;th&gt;Party Code&lt;/th&gt;&lt;th&gt;Gross Incentive&lt;/th&gt;&lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Oct 2026&lt;/td&gt;
+      &lt;td&gt;&lt;span class="party-code-pill"&gt;DLR224&lt;/span&gt;&lt;/td&gt;
+      &lt;td&gt;₹184,500&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 5: Stat Cards & Bento Cells -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-shapes"></i> 5. Bento Cards & Metrics</h2>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="stat-cards-grid" style="grid-template-columns: repeat(2, 1fr) !important;">
+                    <div class="stat-card card-1">
+                        <div class="stat-card-top d-flex align-items-center justify-content-between">
+                            <div class="stat-icon">📊</div>
+                            <small class="stat-detail">Live synced</small>
+                        </div>
+                        <span class="stat-label">Total Outstandings</span>
+                        <strong class="stat-value">₹2.4M</strong>
+                    </div>
+                    <div class="stat-card card-4">
+                        <div class="stat-card-top d-flex align-items-center justify-content-between">
+                            <div class="stat-icon">✔</div>
+                            <small class="stat-detail">94% efficiency</small>
+                        </div>
+                        <span class="stat-label">Collection Target</span>
+                        <strong class="stat-value">₹1.8M</strong>
+                    </div>
+                </div>
+                <div class="dev-spec mt-3">Grid: Bento Flex-Auto, Background: #ffffff, Radii: 12px, Hover Offset: -4px, Border Left accent: 4px</div>
+            </div>
+            <div class="col-lg-6">
+                <div class="code-box">
+&lt;div class="stat-card card-1"&gt;
+  &lt;div class="stat-card-top d-flex align-items-center justify-content-between"&gt;
+    &lt;div class="stat-icon"&gt;📊&lt;/div&gt;
+    &lt;small class="stat-detail"&gt;Live synced&lt;/small&gt;
+  &lt;/div&gt;
+  &lt;span class="stat-label"&gt;Total Outstandings&lt;/span&gt;
+  &lt;strong class="stat-value"&gt;₹2.4M&lt;/strong&gt;
+&lt;/div&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 6: Tab Controls & Accordions -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-layer-group"></i> 6. Tab Panels & Accordions</h2>
+        <div class="row">
+            <div class="col-lg-6">
+                <!-- Tabs -->
+                <div class="nav flex-row nav-pills mb-3 border-bottom pb-2" id="styleguideTabs" role="tablist">
+                    <button class="nav-link active border-0 py-2 px-3 me-2" style="border-radius: 6px; font-weight:700; font-size:12px; background: rgba(0, 89, 187, 0.06); color: #0059bb;" type="button">Active View</button>
+                    <button class="nav-link border-0 py-2 px-3 text-secondary me-2" style="border-radius: 6px; font-weight:700; font-size:12px; background: transparent;" type="button">Inactive View</button>
+                </div>
+                <!-- Accordions -->
+                <div class="styleguide-accordion mt-3">
+                    <div class="accordion-item-head" onclick="$(this).next('.accordion-item-body').slideToggle(200); $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');">
+                        <span>General Settings Accordion</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="accordion-item-body">
+                        This is an expandable accordion panel used for grouping configurations, instructions, or slabs details under the settings tower.
+                    </div>
+                </div>
+                <div class="dev-spec mt-3">Accordion: padding: 12px 16px, background: #f8f9ff, transition: height 0.2s</div>
+            </div>
+            <div class="col-lg-6">
+                <div class="code-box">
+&lt;!-- Simple Accordion Template --&gt;
+&lt;div class="styleguide-accordion"&gt;
+  &lt;div class="accordion-item-head"&gt;
+    &lt;span&gt;Accordion Title&lt;/span&gt;
+    &lt;i class="fa-solid fa-chevron-down"&gt;&lt;/i&gt;
+  &lt;/div&gt;
+  &lt;div class="accordion-item-body"&gt;
+    Accordion Body content goes here...
+  &lt;/div&gt;
+&lt;/div&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 7: Badges, Tags & Tooltips -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-tags"></i> 7. Badges, Tags & Tooltips</h2>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                    <span class="status-badge success">Approved</span>
+                    <span class="status-badge warning">Pending</span>
+                    <span class="status-badge neutral">Inactive</span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                    <div class="chip">Dealer Code <i class="fa-solid fa-xmark"></i></div>
+                    <div class="chip">Oct 2026 <i class="fa-solid fa-xmark"></i></div>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="custom-tooltip">
+                        Hover over me
+                        <span class="tooltiptext">SaaS Tooltip detail info</span>
+                    </span>
+                </div>
+                <div class="dev-spec mt-3">Badges: Padding: 3px 8px, font-size: 10px, border-radius: 20px, borders: 1px transparent</div>
+            </div>
+            <div class="col-lg-6">
+                <div class="code-box">
+&lt;!-- Status Badge --&gt;
+&lt;span class="status-badge success"&gt;Approved&lt;/span&gt;
+
+&lt;!-- Tooltip --&gt;
+&lt;span class="custom-tooltip"&gt;
+  Hover over me
+  &lt;span class="tooltiptext"&gt;Tooltip text info&lt;/span&gt;
+&lt;/span&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 8: Progress Bars & Skeletons -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-hourglass-half"></i> 8. Progress & Loaders</h2>
+        <div class="row">
+            <div class="col-lg-6">
+                <label class="form-label small fw-bold">Linear Progress Bar (60%)</label>
+                <div class="progress mb-3" style="height: 6px; border-radius: 10px;">
+                    <div class="progress-bar" role="progressbar" style="width: 60%; background: linear-gradient(135deg, #0059bb 0%, #0070ea 100%); border-radius: 10px;" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <div class="d-flex align-items-center gap-4 mb-3">
+                    <div>
+                        <label class="form-label small fw-bold d-block">Circular Progress (70%)</label>
+                        <div class="progress-ring">
+                            <svg class="progress-ring-svg">
+                                <circle class="bg" cx="24" cy="24" r="20" />
+                                <circle class="bar" cx="24" cy="24" r="20" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div style="flex-grow:1;">
+                        <label class="form-label small fw-bold">Skeleton Line Loader</label>
+                        <div class="skeleton-line" style="height: 12px; margin-bottom: 6px; border-radius: 4px;"></div>
+                        <div class="skeleton-line" style="height: 12px; width: 70%; border-radius: 4px;"></div>
+                    </div>
+                </div>
+                <div class="dev-spec">Skeleton animation: sweep gradient 1.5s ease-out, Circular Progress: Dasharray 125.6</div>
+            </div>
+            <div class="col-lg-6">
+                <div class="code-box">
+&lt;!-- Skeleton Line --&gt;
+&lt;div class="skeleton-line" style="height: 12px;"&gt;&lt;/div&gt;
+
+&lt;!-- Circular Progress --&gt;
+&lt;div class="progress-ring"&gt;
+  &lt;svg class="progress-ring-svg"&gt;
+    &lt;circle class="bg" cx="24" cy="24" r="20" /&gt;
+    &lt;circle class="bar" cx="24" cy="24" r="20" /&gt;
+  &lt;/svg&gt;
+&lt;/div&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 9: Pagination, Breadcrumbs & Alerts -->
+    <div class="showcase-section">
+        <h2 class="section-title"><i class="fa-solid fa-circle-exclamation"></i> 9. Pagination, Breadcrumbs & Alerts</h2>
+        <div class="row">
+            <div class="col-lg-6">
+                <!-- Breadcrumbs -->
+                <div class="breadcrumb-lite mb-3">
+                    Reports <i class="fa-solid fa-chevron-right" style="font-size:0.5rem; margin: 0 4px; opacity: 0.5;"></i> Outstanding Registry
+                </div>
+                <!-- Pagination -->
+                <div class="d-flex gap-1 mb-3">
+                    <button class="btn btn-sm btn-secondary" style="width: 32px;"><i class="fa-solid fa-chevron-left"></i></button>
+                    <button class="btn btn-sm btn-primary" style="width: 32px; background: #0059bb;">1</button>
+                    <button class="btn btn-sm btn-secondary" style="width: 32px;">2</button>
+                    <button class="btn btn-sm btn-secondary" style="width: 32px;"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+                <!-- Alerts -->
+                <div class="alert alert-success d-flex align-items-center gap-2 mb-2" role="alert" style="border-radius: 8px; font-size:12px; padding:10px 14px;">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span><strong>Success!</strong> Your changes have been saved to database.</span>
+                </div>
+                <div class="alert alert-danger d-flex align-items-center gap-2" role="alert" style="border-radius: 8px; font-size:12px; padding:10px 14px;">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                    <span><strong>Error!</strong> Action could not be authorized.</span>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="code-box">
+&lt;!-- Alert box --&gt;
+&lt;div class="alert alert-success d-flex align-items-center gap-2" role="alert"&gt;
+  &lt;i class="fa-solid fa-circle-check"&gt;&lt;/i&gt;
+  &lt;span&gt;&lt;strong&gt;Success!&lt;/strong&gt; Saved successfully.&lt;/span&gt;
+&lt;/div&gt;
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

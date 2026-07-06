@@ -1,0 +1,1638 @@
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Control Tower Console";
+    var portalSettings = ViewBag.PortalSettings as Dictionary<string, string> ?? new();
+    var tdsRules = ViewBag.TdsRules as List<IncentivePortal.Models.TdsRule> ?? new();
+    var columnMappings = ViewBag.ColumnMappings as List<IncentivePortal.Models.ColumnMappingRule> ?? new();
+    var outstandingRules = ViewBag.OutstandingRules as List<IncentivePortal.Models.OutstandingRule> ?? new();
+    var notificationSetting = ViewBag.NotificationSetting as IncentivePortal.Models.NotificationSetting ?? new();
+    var tallySetting = ViewBag.TallySetting as IncentivePortal.Models.TallyIntegrationSetting ?? new();
+    var rolePermissions = ViewBag.RolePermissions as List<IncentivePortal.Models.RolePermission> ?? new();
+    var auditLogs = ViewBag.AuditLogs as List<IncentivePortal.Models.AuditLog> ?? new();
+    var helpTexts = ViewBag.HelpTexts as List<IncentivePortal.Models.HelpText> ?? new();
+    var reportColumns = ViewBag.ReportColumns as List<IncentivePortal.Models.ReportColumnConfig> ?? new();
+
+    var modules = ViewBag.ModulesList as string[] ?? Array.Empty<string>();
+    var actions = ViewBag.ActionsList as string[] ?? Array.Empty<string>();
+    var roles = ViewBag.RolesList as string[] ?? Array.Empty<string>();
+
+    string GetSetting(string key, string fallback = "")
+        => portalSettings.TryGetValue(key, out var val) ? val : fallback;
+}
+
+<style>
+    /* Responsive Iframe heights inside tab panes to prevent small viewport scroll traps */
+    .tab-content iframe {
+        width: 100% !important;
+        height: calc(100vh - 220px) !important;
+        border: none !important;
+        border-radius: 12px !important;
+    }
+    @@media (max-width: 768px) {
+        .tab-content iframe {
+            height: 600px !important;
+        }
+    }
+
+    /* ── Settings Tab Navigation ── */
+    #ct-tabs .nav-link {
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        color: #44474e !important;
+        border-radius: 6px !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 11.5px !important;
+        padding: 8px 12px !important;
+        margin-bottom: 2px !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        text-align: left !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        border-left: 3px solid transparent !important;
+    }
+
+    #ct-tabs .nav-link:hover {
+        background-color: rgba(0, 89, 187, 0.03) !important;
+        color: #0059bb !important;
+    }
+
+    #ct-tabs .nav-link.active {
+        background-color: rgba(0, 89, 187, 0.06) !important;
+        color: #0059bb !important;
+        border-left: 3px solid #0059bb !important;
+        box-shadow: none !important;
+    }
+
+    /* Column Category Divider */
+    #ct-tabs .border-bottom {
+        border-bottom: 1px solid rgba(196, 198, 207, 0.3) !important;
+        color: #74777f !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 10px !important;
+        letter-spacing: 0.08em !important;
+        padding-bottom: 6px !important;
+        margin-top: 12px !important;
+        margin-bottom: 8px !important;
+    }
+
+    /* ── Toggle Switch Custom Styling ── */
+    .form-switch .form-check-input {
+        width: 2.8em !important;
+        height: 1.5em !important;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23a1a8c0'/%3e%3c/svg%3e") !important;
+        background-color: #e2e8f0 !important;
+        border-color: rgba(196, 198, 207, 0.6) !important;
+        border-radius: 2em !important;
+        transition: background-position 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+        cursor: pointer !important;
+    }
+
+    .form-switch .form-check-input:focus {
+        box-shadow: 0 0 0 3px rgba(0, 89, 187, 0.08) !important;
+        border-color: rgba(0, 89, 187, 0.4) !important;
+        outline: none !important;
+    }
+
+    .form-switch .form-check-input:checked {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23ffffff'/%3e%3c/svg%3e") !important;
+        background-color: #0059bb !important;
+        border-color: #0059bb !important;
+    }
+
+    /* ── Tab Card Overrides ── */
+    .tab-content .card {
+        border-radius: 12px !important;
+        border: 1px solid rgba(196, 198, 207, 0.4) !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 4px 10px rgba(11, 28, 48, 0.02) !important;
+        padding: 24px !important;
+    }
+
+    /* Table override inside console */
+    .tab-content table thead th {
+        background: linear-gradient(135deg, #0b1c30 0%, #002244 100%) !important;
+        color: #ffffff !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        border-bottom: 2px solid #0059bb !important;
+    }
+</style>
+
+<div class="container-fluid py-4" style="">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm p-4" style="border-radius: 16px; background: linear-gradient(135deg, var(--panel) 0%, rgba(255, 255, 255, 0.95) 100%);">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; box-shadow: 0 4px 15px rgba(30, 64, 175, 0.3);">
+                        <i class="fa-solid fa-tower-control-tower text-white fa-xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="h4 fw-bold mb-1" style="color: var(--ink); letter-spacing: -0.5px;">Control Tower Console</h2>
+                        <p class="text-secondary small mb-0">Configure site branding, TDS calculations, columns mappings, outstanding adjustments, notifications, and access matrix. Zero code updates needed.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs Menu organized in 4 Columns side-by-side at the top -->
+    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+        <div class="row" id="ct-tabs" role="tablist">
+            <!-- Column 1: Core Configurations -->
+            <div class="col-md-3 mb-3">
+                <div class="px-3 py-2 text-uppercase fw-bold text-muted small border-bottom mb-2" style="font-size:0.7rem; letter-spacing:0.5px;">Core Configurations</div>
+                <div class="nav flex-column nav-pills" role="tablist" aria-orientation="vertical">
+                    <button class="nav-link active text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-portal-btn" data-bs-toggle="pill" data-bs-target="#tab-portal" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-palette text-secondary" style="width:16px;"></i> Portal Settings
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-tds-btn" data-bs-toggle="pill" data-bs-target="#tab-tds" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-percent text-secondary" style="width:16px;"></i> TDS Rules
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-mapping-btn" data-bs-toggle="pill" data-bs-target="#tab-mapping" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-table-columns text-secondary" style="width:16px;"></i> Column Mapping
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-outstanding-btn" data-bs-toggle="pill" data-bs-target="#tab-outstanding" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-scale-balanced text-secondary" style="width:16px;"></i> Outstanding Rules
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-notifications-btn" data-bs-toggle="pill" data-bs-target="#tab-notifications" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-envelope-open-text text-secondary" style="width:16px;"></i> Notifications Settings
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-permissions-btn" data-bs-toggle="pill" data-bs-target="#tab-permissions" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-user-lock text-secondary" style="width:16px;"></i> Role Permissions
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-tally-btn" data-bs-toggle="pill" data-bs-target="#tab-tally" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-file-invoice text-secondary" style="width:16px;"></i> Tally Integration
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-reports-btn" data-bs-toggle="pill" data-bs-target="#tab-reports" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-file-excel text-secondary" style="width:16px;"></i> Report Columns
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-help-btn" data-bs-toggle="pill" data-bs-target="#tab-help" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-circle-question text-secondary" style="width:16px;"></i> Help Tooltips
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-audit-btn" data-bs-toggle="pill" data-bs-target="#tab-audit" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;">
+                        <i class="fa-solid fa-history text-secondary" style="width:16px;"></i> Audit Logs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Column 2: Master Registries -->
+            <div class="col-md-3 mb-3">
+                <div class="px-3 py-2 text-uppercase fw-bold text-muted small border-bottom mb-2" style="font-size:0.7rem; letter-spacing:0.5px;">Master Registries</div>
+                <div class="nav flex-column nav-pills" role="tablist" aria-orientation="vertical">
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-branches-btn" data-bs-toggle="pill" data-bs-target="#tab-branches" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('branches-iframe', '/Branches?embed=true')">
+                        <i class="fa-solid fa-sitemap text-secondary" style="width:16px;"></i> Branches Registry
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-parties-btn" data-bs-toggle="pill" data-bs-target="#tab-parties" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('parties-iframe', '/Parties?embed=true')">
+                        <i class="fa-solid fa-users text-secondary" style="width:16px;"></i> Parties Master
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-bankmaster-btn" data-bs-toggle="pill" data-bs-target="#tab-bankmaster" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('bankmaster-iframe', '/Parties/BankDetails?embed=true')">
+                        <i class="fa-solid fa-credit-card text-secondary" style="width:16px;"></i> Bank Details Master
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-altcodes-btn" data-bs-toggle="pill" data-bs-target="#tab-altcodes" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('altcodes-iframe', '/Parties/AlternateMappings?embed=true')">
+                        <i class="fa-solid fa-code-compare text-secondary" style="width:16px;"></i> Alternate Codes
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-partymappings-btn" data-bs-toggle="pill" data-bs-target="#tab-partymappings" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('partymappings-iframe', '/ControlTower/PartyCodeMappings?embed=true')">
+                        <i class="fa-solid fa-code-merge text-secondary" style="width:16px;"></i> Party Mappings (Gov)
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-schemes-btn" data-bs-toggle="pill" data-bs-target="#tab-schemes" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('schemes-iframe', '/Schemes?embed=true')">
+                        <i class="fa-solid fa-layer-group text-secondary" style="width:16px;"></i> Slab Master (Schemes)
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-formula-btn" data-bs-toggle="pill" data-bs-target="#tab-formula" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('formula-iframe', '/ControlTower/FormulaBuilder?embed=true')">
+                        <i class="fa-solid fa-calculator text-secondary" style="width:16px;"></i> Formula Builder
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-mapping-executive-btn" data-bs-toggle="pill" data-bs-target="#tab-mapping-executive" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('mapping-executive-iframe', '/PartyExecutive?embed=true')">
+                        <i class="fa-solid fa-people-arrows text-secondary" style="width:16px;"></i> Executive Mapping
+                    </button>
+                </div>
+            </div>
+
+            <!-- Column 3: Data Processing -->
+            <div class="col-md-3 mb-3">
+                <div class="px-3 py-2 text-uppercase fw-bold text-muted small border-bottom mb-2" style="font-size:0.7rem; letter-spacing:0.5px;">Data & Uploads</div>
+                <div class="nav flex-column nav-pills" role="tablist" aria-orientation="vertical">
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-upload-btn" data-bs-toggle="pill" data-bs-target="#tab-upload" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('upload-iframe', '/UploadManagement?embed=true&v=' + new Date().getTime())">
+                        <i class="fa-solid fa-cloud-arrow-up text-secondary" style="width:16px;"></i> Upload Console
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-calcengine-btn" data-bs-toggle="pill" data-bs-target="#tab-calcengine" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('calcengine-iframe', '/Imports/MonthlySales?tab=engine&embed=true&v=' + new Date().getTime())">
+                        <i class="fa-solid fa-gears text-secondary" style="width:16px;"></i> Calculation Engine
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-datamanager-btn" data-bs-toggle="pill" data-bs-target="#tab-datamanager" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('datamanager-iframe', '/DataManagement?embed=true')">
+                        <i class="fa-solid fa-database text-secondary" style="width:16px;"></i> Data Manager
+                    </button>
+                </div>
+            </div>
+
+            <!-- Column 4: Administration -->
+            <div class="col-md-3 mb-3">
+                <div class="px-3 py-2 text-uppercase fw-bold text-muted small border-bottom mb-2" style="font-size:0.7rem; letter-spacing:0.5px;">Administration</div>
+                <div class="nav flex-column nav-pills" role="tablist" aria-orientation="vertical">
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-users-btn" data-bs-toggle="pill" data-bs-target="#tab-users" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('users-iframe', '/Users?embed=true')">
+                        <i class="fa-solid fa-shield-halved text-secondary" style="width:16px;"></i> User Management
+                    </button>
+                    <button class="nav-link text-start py-2 px-3 mb-1 d-flex align-items-center gap-2 border-0" id="tab-announcements-btn" data-bs-toggle="pill" data-bs-target="#tab-announcements" type="button" role="tab" style="border-radius: 8px; font-weight: 550; font-size: 0.84rem;" onclick="loadIframeTab('announcements-iframe', '/Announcements?embed=true')">
+                        <i class="fa-solid fa-bullhorn text-secondary" style="width:16px;"></i> Announcements
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contents Panels -->
+    <div class="row">
+        <div class="col-12">
+            <div class="tab-content" id="ct-tabsContent">
+                
+                <!-- 1. PORTAL SETTINGS -->
+                <div class="tab-pane fade show active" id="tab-portal" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <h4 class="fw-bold mb-3" style="color: var(--ink);">Portal Branding Settings</h4>
+                        
+                        <form id="portalSettingsForm" method="post" asp-action="SavePortalSettings">
+                            @Html.AntiForgeryToken()
+                            <div class="row">
+                                <div class="col-md-7 mb-4">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label small fw-bold">Brand Color</label>
+                                            <input type="color" class="form-control form-control-color w-100 border-0 p-1" style="height:44px; border-radius:8px;" name="settings[--brand]" id="brandColor" value="@GetSetting("--brand", "var(--primary)")" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label small fw-bold">Brand Dark Mode Color</label>
+                                            <input type="color" class="form-control form-control-color w-100 border-0 p-1" style="height:44px; border-radius:8px;" name="settings[--brand-dark]" id="brandDarkColor" value="@GetSetting("--brand-dark", "var(--primary)")" />
+                                        </div>
+                                    </div>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label small fw-bold">Canvas Background</label>
+                                            <input type="color" class="form-control form-control-color w-100 border-0 p-1" style="height:44px; border-radius:8px;" name="settings[--canvas]" id="canvasColor" value="@GetSetting("--canvas", "#f8fafc")" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label small fw-bold">Panel Background</label>
+                                            <input type="color" class="form-control form-control-color w-100 border-0 p-1" style="height:44px; border-radius:8px;" name="settings[--panel]" id="panelColor" value="@GetSetting("--panel", "#ffffff")" />
+                                        </div>
+                                    </div>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label small fw-bold">Ink Color (Text)</label>
+                                            <input type="color" class="form-control form-control-color w-100 border-0 p-1" style="height:44px; border-radius:8px;" name="settings[--ink]" id="inkColor" value="@GetSetting("--ink", "#1e293b")" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label small fw-bold">Line color</label>
+                                            <input type="color" class="form-control form-control-color w-100 border-0 p-1" style="height:44px; border-radius:8px;" name="settings[--line]" id="lineColor" value="@GetSetting("--line", "#e2e8f0")" />
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Company Display Name</label>
+                                        <input type="text" class="form-control" name="settings[company_name]" id="companyNameInput" value="@GetSetting("company_name", "ThessBuddy")" placeholder="ThessBuddy" style="padding-left:15px;" />
+                                    </div>
+                                    <button type="submit" class="btn btn-primary px-4 py-2 mt-3" style="background: var(--brand); border: 0; border-radius: 8px; font-weight:600;"><i class="fa-solid fa-save me-1"></i> Save Changes</button>
+                                </div>
+                                
+                                <!-- Live CSS Variable Preview Card -->
+                                <div class="col-md-5 mb-4">
+                                    <label class="form-label small fw-bold d-block mb-3">Style Live Preview</label>
+                                    <div class="live-preview-card p-4 border border-secondary shadow-sm w-100" style="border-radius:12px; background:var(--canvas); --brand: @GetSetting("--brand", "var(--primary)"); --canvas: @GetSetting("--canvas", "#f8fafc"); --panel: @GetSetting("--panel", "#ffffff"); --ink: @GetSetting("--ink", "#1e293b"); --line: @GetSetting("--line", "#e2e8f0"); transition: all 0.25s;">
+                                        <div class="card p-3 border-0 shadow-sm mb-3" style="border-radius: 10px; background:var(--panel);">
+                                            <div class="d-flex align-items-center gap-2 mb-2">
+                                                <div style="background:var(--brand); border-radius: 6px; width: 28px; height: 28px; display:flex; align-items:center; justify-content:center;">
+                                                    <span class="text-white fw-bold small" id="companyLogoPreview">a</span>
+                                                </div>
+                                                <span style="font-weight:700; color:var(--ink); font-size:1.05rem;" id="companyNamePreview">@GetSetting("company_name", "ThessBuddy")</span>
+                                            </div>
+                                            <div style="height: 1px; background: var(--line);" class="my-2"></div>
+                                            <span style="font-size: 0.72rem; text-transform:uppercase; color:var(--ink); font-weight:700;">Dashboard Widget</span>
+                                            <div class="mt-2 d-flex justify-content-between">
+                                                <span class="small" style="color:var(--ink); opacity:0.75;">Gross Incentive</span>
+                                                <span class="fw-bold" style="color:var(--brand);">₹150,000</span>
+                                            </div>
+                                        </div>
+                                        <span class="text-secondary small d-block text-center mt-2">Outputs CSS variables directly to the root shell</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 2. TDS RULES -->
+                <div class="tab-pane fade" id="tab-tds" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="fw-bold mb-0" style="color: var(--ink);">TDS Slab Configurations</h4>
+                            <button class="btn btn-sm btn-primary px-3 py-2 border-0" style="background: var(--brand); border-radius:8px;" onclick="showTdsModal()"><i class="fa-solid fa-plus me-1"></i> Add Rule</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle" style="font-size:0.88rem;">
+                                <thead>
+                                    <tr class="text-secondary fw-semibold">
+                                        <th>Section</th>
+                                        <th>Date Range</th>
+                                        <th>Annual Threshold</th>
+                                        <th>With PAN %</th>
+                                        <th>No PAN %</th>
+                                        <th>Notes</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in tdsRules)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">@r.Section</td>
+                                            <td>@r.EffectiveFrom.ToString("dd MMM yyyy") - @r.EffectiveTo.ToString("dd MMM yyyy")</td>
+                                            <td class="fw-bold text-success">₹@r.AnnualThreshold.ToString("N0")</td>
+                                            <td class="fw-bold">@(r.RateWithPan * 100)%</td>
+                                            <td class="fw-bold text-danger">@(r.RateNoPan * 100)%</td>
+                                            <td>@r.Notes</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-light border-0 me-1" onclick="editTdsRule(@JsonSerializer.Serialize(r))" title="Edit"><i class="fa-solid fa-edit text-secondary"></i></button>
+                                                <button class="btn btn-sm btn-light border-0" onclick="deleteTdsRule(@r.Id, '@r.Section')" title="Delete"><i class="fa-solid fa-trash text-danger"></i></button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (!tdsRules.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">No TDS rules configured. Falling back to default system rates (10% with PAN / 20% without PAN).</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. COLUMN MAPPINGS -->
+                <div class="tab-pane fade" id="tab-mapping" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="fw-bold mb-0" style="color: var(--ink);">Excel Import Mappings</h4>
+                            <button class="btn btn-sm btn-primary px-3 py-2 border-0" style="background: var(--brand); border-radius:8px;" onclick="showMappingModal()"><i class="fa-solid fa-plus me-1"></i> Add Mapping</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle" style="font-size:0.88rem;">
+                                <thead>
+                                    <tr class="text-secondary fw-semibold">
+                                        <th>Upload Context</th>
+                                        <th>Excel Header</th>
+                                        <th>Portal Field Target</th>
+                                        <th>Status</th>
+                                        <th>Notes</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var m in columnMappings)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-primary">@m.UploadContext</td>
+                                            <td class="fw-bold">@m.ExcelHeader</td>
+                                            <td><span class="badge bg-light text-dark border p-2">@m.PortalField</span></td>
+                                            <td>
+                                                <span class="badge @(m.IsActive ? "bg-success" : "bg-secondary")">@(m.IsActive ? "Active" : "Inactive")</span>
+                                            </td>
+                                            <td>@m.Notes</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-light border-0 me-1" onclick="editMapping(@JsonSerializer.Serialize(m))" title="Edit"><i class="fa-solid fa-edit text-secondary"></i></button>
+                                                <button class="btn btn-sm btn-light border-0" onclick="deleteMapping(@m.Id, '@m.ExcelHeader')" title="Delete"><i class="fa-solid fa-trash text-danger"></i></button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (!columnMappings.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-4">No column mappings configured. Falling back to default header aliases.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. OUTSTANDING RULES -->
+                <div class="tab-pane fade" id="tab-outstanding" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="fw-bold mb-0" style="color: var(--ink);">Outstanding Deduction Rules</h4>
+                            <button class="btn btn-sm btn-primary px-3 py-2 border-0" style="background: var(--brand); border-radius:8px;" onclick="showOutstandingModal()"><i class="fa-solid fa-plus me-1"></i> Add Rule</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle" style="font-size:0.88rem;">
+                                <thead>
+                                    <tr class="text-secondary fw-semibold">
+                                        <th style="width: 80px;">Priority</th>
+                                        <th>Name</th>
+                                        <th>Min Outstanding Threshold</th>
+                                        <th>Withhold / Deduction %</th>
+                                        <th>Status</th>
+                                        <th>Description</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var o in outstandingRules)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-center"><span class="badge bg-secondary p-2">@o.Priority</span></td>
+                                            <td class="fw-bold">@o.Name</td>
+                                            <td class="fw-bold">₹@o.ThresholdAmount.ToString("N0")</td>
+                                            <td class="fw-bold text-danger">@(o.DeductionRate * 100)%</td>
+                                            <td>
+                                                <span class="badge @(o.IsActive ? "bg-success" : "bg-secondary")">@(o.IsActive ? "Active" : "Inactive")</span>
+                                            </td>
+                                            <td>@o.Description</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-light border-0 me-1" onclick="editOutstandingRule(@JsonSerializer.Serialize(o))" title="Edit"><i class="fa-solid fa-edit text-secondary"></i></button>
+                                                <button class="btn btn-sm btn-light border-0" onclick="deleteOutstandingRule(@o.Id, '@o.Name')" title="Delete"><i class="fa-solid fa-trash text-danger"></i></button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (!outstandingRules.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">No outstanding deduction rules configured. Defaulting to 100% outstanding balance deduction.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. NOTIFICATION SETTINGS -->
+                <div class="tab-pane fade" id="tab-notifications" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <h4 class="fw-bold mb-3" style="color: var(--ink);">Email & SMS Notifications Configurations</h4>
+
+                        <form id="notificationSettingsForm" method="post" asp-action="SaveNotificationSettings">
+                            @Html.AntiForgeryToken()
+                            
+                            <h5 class="fw-bold text-secondary mb-3 mt-2" style="font-size:0.95rem; text-transform:uppercase;"><i class="fa-regular fa-envelope me-1"></i> SMTP Server Setup</h5>
+                            <div class="row mb-3">
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label small fw-bold">Provider</label>
+                                    <select class="form-select" name="Provider">
+                                        <option value="SMTP" selected>SMTP (Standard Email)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">SMTP Host</label>
+                                    <input type="text" class="form-control" name="SmtpHost" value="@notificationSetting.SmtpHost" placeholder="smtp.mailtrap.io" required />
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label small fw-bold">SMTP Port</label>
+                                    <input type="number" class="form-control" name="SmtpPort" value="@notificationSetting.SmtpPort" required />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">SMTP User / Username</label>
+                                    <input type="text" class="form-control" name="SmtpUser" value="@notificationSetting.SmtpUser" required />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">SMTP Password</label>
+                                    <input type="password" class="form-control" name="smtpPassword" value="@ViewBag.DecryptedSmtpPassword" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">From Email Address</label>
+                                    <input type="email" class="form-control" name="FromEmail" value="@notificationSetting.FromEmail" required />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">From Display Name</label>
+                                    <input type="text" class="form-control" name="FromName" value="@notificationSetting.FromName" required />
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="SmtpUseSsl" value="true" id="smtpSslSwitch" @(notificationSetting.SmtpUseSsl ? "checked" : "") />
+                                    <label class="form-check-label small fw-bold" for="smtpSslSwitch">Use SSL / TLS Encryption</label>
+                                </div>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" name="EmailEnabled" value="true" id="emailEnabledSwitch" @(notificationSetting.EmailEnabled ? "checked" : "") />
+                                    <label class="form-check-label small fw-bold" for="emailEnabledSwitch" style="color: var(--brand);">Enable Automated System Emails (Password Resets, Alerts)</label>
+                                </div>
+                            </div>
+
+                            <h5 class="fw-bold text-secondary mb-3 mt-4" style="font-size:0.95rem; text-transform:uppercase;"><i class="fa-solid fa-mobile-screen-button me-1"></i> MSG91 SMS Gateway Setup</h5>
+                            <div class="row mb-3">
+                                <div class="col-md-8 mb-3">
+                                    <label class="form-label small fw-bold">MSG91 Auth Key</label>
+                                    <input type="text" class="form-control" name="SmsApiKey" value="@notificationSetting.SmsApiKey" placeholder="MSG91 API Auth Key" />
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label small fw-bold">Sender ID</label>
+                                    <input type="text" class="form-control" name="SmsSenderId" value="@notificationSetting.SmsSenderId" placeholder="e.g. THESSB" />
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="SmsEnabled" value="true" id="smsEnabledSwitch" @(notificationSetting.SmsEnabled ? "checked" : "") />
+                                    <label class="form-check-label small fw-bold" for="smsEnabledSwitch" style="color: var(--brand);">Enable Automated System SMS Alerts</label>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-3 mt-4">
+                                <button type="submit" class="btn btn-primary px-4 py-2 border-0" style="background: var(--brand); font-weight:600;"><i class="fa-solid fa-save me-1"></i> Save Notification Settings</button>
+                                <button type="button" class="btn btn-outline-secondary px-3" onclick="triggerTestEmail()"><i class="fa-solid fa-envelope me-1"></i> Test SMTP Email</button>
+                                <button type="button" class="btn btn-outline-secondary px-3" onclick="triggerTestSms()"><i class="fa-solid fa-mobile-retro me-1"></i> Test SMS Dispatch</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 6. ROLE PERMISSIONS MATRIX -->
+                <div class="tab-pane fade" id="tab-permissions" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <h4 class="fw-bold mb-1" style="color: var(--ink);">Role Permissions Matrix</h4>
+                        <p class="text-secondary small mb-3">Grant or deny access dynamically to features. Checked cells mean ALLOWED. Unchecked cells mean BLOCKED/DENIED. Super Admin retains global bypass access.</p>
+
+                        <form id="rolePermissionsForm" method="post" asp-action="SaveRolePermissions">
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle text-center" style="font-size:0.86rem;">
+                                    <thead>
+                                        <tr style="background:#f8fafc;">
+                                            <th class="text-start">Module / Controller</th>
+                                            <th>Action</th>
+                                            @foreach (var r in roles)
+                                            {
+                                                <th>@r</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{ var keyIdx = 0; }
+                                        @foreach (var mod in modules)
+                                        {
+                                            foreach (var act in actions)
+                                            {
+                                                <tr>
+                                                    <td class="text-start fw-bold">@mod</td>
+                                                    <td><span class="badge bg-light text-secondary border">@act</span></td>
+                                                    @foreach (var r in roles)
+                                                    {
+                                                        var isAllowed = rolePermissions.Any(p => p.RoleName == r && p.Module == mod && p.Action == act && p.IsAllowed);
+                                                        <td>
+                                                            <input type="checkbox" class="form-check-input" style="width:20px; height:20px;" 
+                                                                   name="permissions[@(keyIdx)].IsAllowed" value="true" @(isAllowed ? "checked" : "") />
+                                                            <input type="hidden" name="permissions[@(keyIdx)].RoleName" value="@r" />
+                                                            <input type="hidden" name="permissions[@(keyIdx)].Module" value="@mod" />
+                                                            <input type="hidden" name="permissions[@(keyIdx)].Action" value="@act" />
+                                                        </td>
+                                                        keyIdx++;
+                                                    }
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="submit" class="btn btn-primary px-4 py-2 mt-3 border-0" style="background: var(--brand); font-weight:600;"><i class="fa-solid fa-save me-1"></i> Save Access Matrix</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 7. TALLY INTEGRATION -->
+                <div class="tab-pane fade" id="tab-tally" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <h4 class="fw-bold mb-3" style="color: var(--ink);">Tally Integration Settings</h4>
+
+                        <form id="tallySettingsForm" method="post" asp-action="SaveTallySettings">
+                            @Html.AntiForgeryToken()
+                            <div class="row">
+                                <div class="col-md-8 mb-3">
+                                    <label class="form-label small fw-bold">Tally Server Base URL</label>
+                                    <input type="url" class="form-control" name="BaseUrl" value="@tallySetting.BaseUrl" placeholder="http://localhost:9000" required />
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label small fw-bold">Port</label>
+                                    <input type="number" class="form-control" name="Port" value="@tallySetting.Port" required />
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Company Name (Exact match in Tally ERP/Prime)</label>
+                                <input type="text" class="form-control" name="CompanyName" value="@tallySetting.CompanyName" required />
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Tally XML Username (Optional)</label>
+                                    <input type="text" class="form-control" name="Username" value="@tallySetting.Username" />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Tally XML Password (Optional)</label>
+                                    <input type="password" class="form-control" name="tallyPassword" value="@ViewBag.DecryptedTallyPassword" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
+                                </div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Timeout (Seconds)</label>
+                                    <input type="number" class="form-control" name="TimeoutSeconds" value="@tallySetting.TimeoutSeconds" required />
+                                </div>
+                                <div class="col-md-6 d-flex align-items-center mt-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="IsEnabled" value="true" id="tallyEnabledSwitch" @(tallySetting.IsEnabled ? "checked" : "") />
+                                        <label class="form-check-label small fw-bold" for="tallyEnabledSwitch" style="color: var(--brand);">Enable Automatic Sync</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info border-0 p-3 small mb-4" style="border-radius:10px;">
+                                <i class="fa-solid fa-circle-info me-1"></i> Tally Sync Status: <strong>@tallySetting.LastSyncStatus</strong> (Last run: @(tallySetting.LastSyncAt?.ToString("g") ?? "Never"))
+                            </div>
+
+                            <button type="submit" class="btn btn-primary px-4 py-2 border-0" style="background: var(--brand); font-weight:600;"><i class="fa-solid fa-save me-1"></i> Save Tally Settings</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 8. AUDIT LOGS -->
+                <div class="tab-pane fade" id="tab-audit" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <h4 class="fw-bold mb-3" style="color: var(--ink);">Governance Change Log Tracker</h4>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle" style="font-size:0.86rem;" id="auditLogsTable">
+                                <thead>
+                                    <tr class="text-secondary fw-semibold">
+                                        <th>Timestamp</th>
+                                        <th>User</th>
+                                        <th>IP Address</th>
+                                        <th>Entity Name</th>
+                                        <th>Record ID</th>
+                                        <th>Action</th>
+                                        <th class="text-end">Changes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var l in auditLogs)
+                                    {
+                                        var actionClass = l.Action switch
+                                        {
+                                            "Added" => "bg-success",
+                                            "Deleted" => "bg-danger",
+                                            _ => "bg-warning text-dark"
+                                        };
+                                        <tr>
+                                            <td>@l.ChangedAt.ToString("dd MMM yyyy HH:mm:ss")</td>
+                                            <td class="fw-bold">@l.ChangedBy</td>
+                                            <td class="small text-secondary">@l.IpAddress</td>
+                                            <td><span class="badge bg-light text-dark border">@l.EntityName</span></td>
+                                            <td class="fw-bold">@l.EntityId</td>
+                                            <td><span class="badge @actionClass">@l.Action</span></td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-primary py-1 px-2 border-0" onclick="viewAuditDiff(@l.Id)" style="font-size:0.8rem;"><i class="fa-solid fa-eye me-1"></i> Diff</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9. HELP TOOLTIPS -->
+                <div class="tab-pane fade" id="tab-help" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="fw-bold mb-0" style="color: var(--ink);">Contextual Help Texts</h4>
+                            <button class="btn btn-sm btn-primary px-3 py-2 border-0" style="background: var(--brand); border-radius:8px;" onclick="showHelpModal()"><i class="fa-solid fa-plus me-1"></i> Add Tooltip</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle" style="font-size:0.88rem;">
+                                <thead>
+                                    <tr class="text-secondary fw-semibold">
+                                        <th>Page</th>
+                                        <th>Field / Element Key</th>
+                                        <th>Help Text Description</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var h in helpTexts)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-primary">@h.Page</td>
+                                            <td class="fw-bold">@h.FieldKey</td>
+                                            <td>@h.Text</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-light border-0 me-1" onclick="editHelpText(@JsonSerializer.Serialize(h))" title="Edit"><i class="fa-solid fa-edit text-secondary"></i></button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (!helpTexts.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-4">No tooltips configured. Configure tooltip descriptions for keys like 'FixedIncentivePercent'.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 10. REPORT COLUMNS CONFIG -->
+                <div class="tab-pane fade" id="tab-reports" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-4 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="fw-bold mb-0" style="color: var(--ink);">Report Columns Config</h4>
+                            <button class="btn btn-sm btn-primary px-3 py-2 border-0" style="background: var(--brand); border-radius:8px;" onclick="showReportColModal()"><i class="fa-solid fa-plus me-1"></i> Add Column Config</button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle" style="font-size:0.88rem;">
+                                <thead>
+                                    <tr class="text-secondary fw-semibold">
+                                        <th>Report Name</th>
+                                        <th>Column Key</th>
+                                        <th>Display Name</th>
+                                        <th>Visible</th>
+                                        <th>Sort Order</th>
+                                        <th>Format</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in reportColumns)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold text-primary">@c.ReportName</td>
+                                            <td class="fw-bold">@c.ColumnKey</td>
+                                            <td>@c.DisplayName</td>
+                                            <td>
+                                                @if (c.IsVisible)
+                                                {
+                                                    <span class="badge bg-success">Visible</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Hidden</span>
+                                                }
+                                            </td>
+                                            <td>@c.SortOrder</td>
+                                            <td>@(string.IsNullOrEmpty(c.Format) ? "-" : c.Format)</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-light border-0 me-1" onclick="editReportCol(@JsonSerializer.Serialize(c))" title="Edit"><i class="fa-solid fa-edit text-secondary"></i></button>
+                                                <button class="btn btn-sm btn-light border-0" onclick="deleteReportCol(@c.Id, '@c.DisplayName')" title="Delete"><i class="fa-solid fa-trash text-danger"></i></button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (!reportColumns.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">No report column configurations found.</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 11. BRANCHES -->
+                <div class="tab-pane fade" id="tab-branches" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="branches-iframe" data-src="/Branches?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 12. PARTIES -->
+                <div class="tab-pane fade" id="tab-parties" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="parties-iframe" data-src="/Parties?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 13. BANK MASTER -->
+                <div class="tab-pane fade" id="tab-bankmaster" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="bankmaster-iframe" data-src="/Parties/BankDetails?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 14. ALTERNATE CODES -->
+                <div class="tab-pane fade" id="tab-altcodes" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="altcodes-iframe" data-src="/Parties/AlternateMappings?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- PARTY MAPPINGS (GOVERNOR) -->
+                <div class="tab-pane fade" id="tab-partymappings" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="partymappings-iframe" data-src="/ControlTower/PartyCodeMappings?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 15. SLAB MASTER (SCHEMES) -->
+                <div class="tab-pane fade" id="tab-schemes" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="schemes-iframe" data-src="/Schemes?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 16. FORMULA BUILDER -->
+                <div class="tab-pane fade" id="tab-formula" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="formula-iframe" data-src="/ControlTower/FormulaBuilder?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 17. EXECUTIVE MAPPING -->
+                <div class="tab-pane fade" id="tab-mapping-executive" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="mapping-executive-iframe" data-src="/PartyExecutive?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 18. UPLOAD CENTER -->
+                <div class="tab-pane fade" id="tab-upload" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="upload-iframe" data-src="/UploadManagement?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 20. CALCULATION ENGINE -->
+                <div class="tab-pane fade" id="tab-calcengine" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="calcengine-iframe" data-src="/Imports/MonthlySales?tab=engine&embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 21. DATA MANAGER -->
+                <div class="tab-pane fade" id="tab-datamanager" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="datamanager-iframe" data-src="/DataManagement?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 22. USER MANAGEMENT -->
+                <div class="tab-pane fade" id="tab-users" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="users-iframe" data-src="/Users?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+                <!-- 23. ANNOUNCEMENTS -->
+                <div class="tab-pane fade" id="tab-announcements" role="tabpanel">
+                    <div class="card border-0 shadow-sm p-2 mb-4" style="border-radius: 16px; background: var(--panel);">
+                        <iframe id="announcements-iframe" data-src="/Announcements?embed=true" style="width: 100%; height: calc(100vh - 250px); border: none; border-radius: 12px;" src="about:blank"></iframe>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================
+MODAL CONTEXTS
+========================================================= -->
+
+<!-- TDS Rule Save Modal -->
+<div class="modal fade" id="tdsModal" tabindex="-1" aria-hidden="true" style="">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="tdsModalTitle">Add TDS Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="tdsRuleForm" method="post" asp-action="SaveTdsRule">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="tdsId" value="0" />
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Effective From</label>
+                            <input type="date" class="form-control" name="EffectiveFrom" id="tdsEffectiveFrom" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Effective To</label>
+                            <input type="date" class="form-control" name="EffectiveTo" id="tdsEffectiveTo" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Annual Gross Threshold (INR)</label>
+                        <input type="number" class="form-control" name="AnnualThreshold" id="tdsAnnualThreshold" placeholder="15000" required />
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Rate With PAN (%)</label>
+                            <input type="number" step="0.01" class="form-control" name="RateWithPan" id="tdsRateWithPan" placeholder="5" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Rate No PAN (%)</label>
+                            <input type="number" step="0.01" class="form-control" name="RateNoPan" id="tdsRateNoPan" placeholder="20" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Section Code</label>
+                        <input type="text" class="form-control" name="Section" id="tdsSection" placeholder="194H" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Notes / Description</label>
+                        <textarea class="form-control" name="Notes" id="tdsNotes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background:var(--brand); border:0;">Save Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Column Mapping Modal -->
+<div class="modal fade" id="mappingModal" tabindex="-1" aria-hidden="true" style="">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="mappingModalTitle">Add Column Mapping</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="columnMappingForm" method="post" asp-action="SaveColumnMapping">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="mappingId" value="0" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Upload Context</label>
+                        <select class="form-select" name="UploadContext" id="mappingContext">
+                            <option value="MonthlySales" selected>Monthly Sales Upload</option>
+                            <option value="Outstanding">Outstanding Master Upload</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Excel Header Title</label>
+                        <input type="text" class="form-control" name="ExcelHeader" id="mappingHeader" placeholder="e.g. Doc Num" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Portal Target Field Name</label>
+                        <select class="form-select" name="PortalField" id="mappingField">
+                            <option value="DealerSubType">DealerSubType</option>
+                            <option value="DealerType">DealerType</option>
+                            <option value="Consignee">Consignee</option>
+                            <option value="FiscalYear">FiscalYear</option>
+                            <option value="Quarter">Quarter</option>
+                            <option value="DocumentNum">DocumentNum</option>
+                            <option value="Remarks">Remarks</option>
+                            <option value="NetRetailDdl">NetRetailDdl</option>
+                            <option value="PartyCode">PartyCode</option>
+                            <option value="PartyName">PartyName</option>
+                            <option value="SaleValue">SaleValue (Net Retail Selling)</option>
+                            <option value="Discount">Discount (Discount Amount)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="IsActive" value="true" id="mappingActiveSwitch" checked />
+                            <label class="form-check-label small fw-bold" for="mappingActiveSwitch">Mapping Enabled</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Notes</label>
+                        <input type="text" class="form-control" name="Notes" id="mappingNotes" />
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background:var(--brand); border:0;">Save Mapping</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Outstanding Rule Modal -->
+<div class="modal fade" id="outstandingModal" tabindex="-1" aria-hidden="true" style="">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="outstandingModalTitle">Add Outstanding Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="outstandingRuleForm" method="post" asp-action="SaveOutstandingRule">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="outstandingId" value="0" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Rule Name</label>
+                        <input type="text" class="form-control" name="Name" id="outstandingName" placeholder="Rule Name" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Min Outstanding Balance Threshold (INR)</label>
+                        <input type="number" class="form-control" name="ThresholdAmount" id="outstandingThreshold" placeholder="10000" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Withhold Rate (%)</label>
+                        <input type="number" step="0.01" class="form-control" name="DeductionRate" id="outstandingRate" placeholder="e.g. 50 meaning 50%" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Priority Order</label>
+                        <input type="number" class="form-control" name="Priority" id="outstandingPriority" placeholder="1" required />
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="IsActive" value="true" id="outstandingActiveSwitch" checked />
+                            <label class="form-check-label small fw-bold" for="outstandingActiveSwitch">Rule Enabled</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Description</label>
+                        <textarea class="form-control" name="Description" id="outstandingDescription" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background:var(--brand); border:0;">Save Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Help Text Tooltip Modal -->
+<div class="modal fade" id="helpModal" tabindex="-1" aria-hidden="true" style="">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="helpModalTitle">Add Context Tooltip</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="helpTextForm" method="post" asp-action="SaveHelpText">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Target Page</label>
+                        <input type="text" class="form-control" name="Page" id="helpPage" placeholder="e.g. Parties" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Field Key Name (Exact ID/Name match)</label>
+                        <input type="text" class="form-control" name="FieldKey" id="helpFieldKey" placeholder="e.g. FixedIncentivePercent" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tooltip Help Text</label>
+                        <textarea class="form-control" name="Text" id="helpTextValue" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background:var(--brand); border:0;">Save Tooltip</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Report Column Config Modal -->
+<div class="modal fade" id="reportColModal" tabindex="-1" aria-hidden="true" style="">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="reportColModalTitle">Add Column Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="reportColForm" method="post" asp-action="SaveReportColumnConfig">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="reportColId" value="0" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Report Name</label>
+                        <select class="form-select" name="ReportName" id="reportColReportName" required>
+                            <option value="IncentiveRegister">IncentiveRegister</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Column Key</label>
+                        <select class="form-select" name="ColumnKey" id="reportColColumnKey" required>
+                            <option value="MonthLabel">MonthLabel (Incentive Month)</option>
+                            <option value="PartyCode">PartyCode (Party Code)</option>
+                            <option value="PartyName">PartyName (Party Name)</option>
+                            <option value="BranchCode">BranchCode (Branch Code)</option>
+                            <option value="SaleValue">SaleValue (Sales Value)</option>
+                            <option value="OnBillDiscount">OnBillDiscount (On Bill Discount)</option>
+                            <option value="AchievementPercent">AchievementPercent (Achievement %)</option>
+                            <option value="GrossIncentive">GrossIncentive (Gross Incentive)</option>
+                            <option value="TdsAmount">TdsAmount (TDS Amount)</option>
+                            <option value="AdjustedAmount">AdjustedAmount (Adjusted Amount)</option>
+                            <option value="TransferAmount">TransferAmount (Transfer Amount)</option>
+                            <option value="ProcessingDate">ProcessingDate (Processing Date)</option>
+                            <option value="PaymentDate">PaymentDate (Payment Date)</option>
+                            <option value="PaymentStatus">PaymentStatus (Payment Status)</option>
+                            <option value="UTRNumber">UTRNumber (UTR Number)</option>
+                            <option value="BankAccountNumber">BankAccountNumber (Bank Account Number)</option>
+                            <option value="IFSC">IFSC (IFSC Code)</option>
+                            <option value="BeneficiaryName">BeneficiaryName (Beneficiary Name)</option>
+                            <option value="BankDetails">BankDetails (Combined Bank Details)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Display Name</label>
+                        <input type="text" class="form-control" name="DisplayName" id="reportColDisplayName" placeholder="e.g. Sales Value" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Sort Order</label>
+                        <input type="number" class="form-control" name="SortOrder" id="reportColSortOrder" value="0" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Format Style</label>
+                        <select class="form-select" name="Format" id="reportColFormat">
+                            <option value="">None (String/Raw)</option>
+                            <option value="C">Currency (₹)</option>
+                            <option value="P">Percentage (%)</option>
+                            <option value="D">Decimal</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="IsVisible" value="true" id="reportColIsVisible" checked />
+                            <label class="form-check-label small fw-bold" for="reportColIsVisible">Column Visible</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background:var(--brand); border:0;">Save Column</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Audit Log Side-by-Side Diff Modal -->
+<div class="modal fade" id="auditDiffModal" tabindex="-1" aria-hidden="true" style="">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:16px;">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold" id="diffModalTitle">Change Audit Log Details</h5>
+                    <span class="text-secondary small" id="diffModalSubtitle">Loading...</span>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-4">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle text-start" style="font-size:0.86rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 25%;">Property Name</th>
+                                        <th style="width: 37.5%;">Original Old Value</th>
+                                        <th style="width: 37.5%;" style="background:#ecfdf5;">New Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="diffModalBody">
+                                    <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Setup Brand Color pickers real-time style preview
+            $('#brandColor').on('input', function() {
+                $('.live-preview-card').css('--brand', $(this).val());
+            });
+            $('#canvasColor').on('input', function() {
+                $('.live-preview-card').css('--canvas', $(this).val());
+            });
+            $('#panelColor').on('input', function() {
+                $('.live-preview-card').css('--panel', $(this).val());
+            });
+            $('#inkColor').on('input', function() {
+                $('.live-preview-card').css('--ink', $(this).val());
+            });
+            $('#lineColor').on('input', function() {
+                $('.live-preview-card').css('--line', $(this).val());
+            });
+            $('#companyNameInput').on('input', function() {
+                var val = $(this).val() || "ThessBuddy";
+                $('#companyNamePreview').text(val);
+                $('#companyLogoPreview').text(val.substring(0, 1).toLowerCase());
+            });
+
+            // Ajax Form Submission Handler
+            $('form').on('submit', function(e) {
+                if (e.target.id === "resetForm") return; // Skip auth forms
+
+                e.preventDefault();
+                var form = $(this);
+                var url = form.attr('action');
+                var data = form.serialize();
+
+                $.post(url, data)
+                    .done(function(res) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Saved!',
+                            text: res.message || 'Settings saved successfully.',
+                            confirmButtonColor: 'var(--brand, var(--primary))'
+                        }).then(() => {
+                            // If saving branding, refresh page to show dynamic styling instantly
+                            if (form.attr('id') === 'portalSettingsForm') {
+                                window.location.reload();
+                            } else {
+                                window.location.reload();
+                            }
+                        });
+                    })
+                    .fail(function(err) {
+                        var msg = err.responseJSON ? err.responseJSON.message : 'An error occurred during submission.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: msg,
+                            confirmButtonColor: 'var(--brand, var(--primary))'
+                        });
+                    });
+            });
+        });
+
+        // â”€â”€ TDS RULES SCRIPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function showTdsModal() {
+            $('#tdsId').val(0);
+            $('#tdsEffectiveFrom').val('');
+            $('#tdsEffectiveTo').val('');
+            $('#tdsAnnualThreshold').val('');
+            $('#tdsRateWithPan').val('');
+            $('#tdsRateNoPan').val('');
+            $('#tdsSection').val('194H');
+            $('#tdsNotes').val('');
+            $('#tdsModalTitle').text('Add TDS Rule');
+            $('#tdsModal').modal('show');
+        }
+
+        function editTdsRule(rule) {
+            $('#tdsId').val(rule.Id);
+            $('#tdsEffectiveFrom').val(rule.EffectiveFrom.split('T')[0]);
+            $('#tdsEffectiveTo').val(rule.EffectiveTo.split('T')[0]);
+            $('#tdsAnnualThreshold').val(rule.AnnualThreshold);
+            $('#tdsRateWithPan').val(rule.RateWithPan * 100);
+            $('#tdsRateNoPan').val(rule.RateNoPan * 100);
+            $('#tdsSection').val(rule.Section);
+            $('#tdsNotes').val(rule.Notes);
+            $('#tdsModalTitle').text('Edit TDS Rule');
+            $('#tdsModal').modal('show');
+        }
+
+        function deleteTdsRule(id, section) {
+            Swal.fire({
+                title: 'Delete Rule?',
+                text: `Are you sure you want to delete the TDS rule for section '${section}'?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Delete'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    var token = $('input[name="__RequestVerificationToken"]').val();
+                    $.post('/ControlTower/DeleteTdsRule', { id: id, __RequestVerificationToken: token })
+                        .done(function(res) {
+                            Swal.fire('Deleted!', res.message, 'success').then(() => window.location.reload());
+                        })
+                        .fail(function(err) {
+                            Swal.fire('Error', err.responseJSON ? err.responseJSON.message : 'Could not delete rule.', 'error');
+                        });
+                }
+            });
+        }
+
+        // â”€â”€ COLUMN MAPPING SCRIPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function showMappingModal() {
+            $('#mappingId').val(0);
+            $('#mappingContext').val('MonthlySales');
+            $('#mappingHeader').val('');
+            $('#mappingField').val('DealerSubType');
+            $('#mappingNotes').val('');
+            $('#mappingActiveSwitch').prop('checked', true);
+            $('#mappingModalTitle').text('Add Column Mapping');
+            $('#mappingModal').modal('show');
+        }
+
+        function editMapping(map) {
+            $('#mappingId').val(map.Id);
+            $('#mappingContext').val(map.UploadContext);
+            $('#mappingHeader').val(map.ExcelHeader);
+            $('#mappingField').val(map.PortalField);
+            $('#mappingNotes').val(map.Notes);
+            $('#mappingActiveSwitch').prop('checked', map.IsActive);
+            $('#mappingModalTitle').text('Edit Column Mapping');
+            $('#mappingModal').modal('show');
+        }
+
+        function deleteMapping(id, header) {
+            Swal.fire({
+                title: 'Delete Mapping?',
+                text: `Are you sure you want to delete the column mapping for header '${header}'?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Delete'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    var token = $('input[name="__RequestVerificationToken"]').val();
+                    $.post('/ControlTower/DeleteColumnMapping', { id: id, __RequestVerificationToken: token })
+                        .done(function(res) {
+                            Swal.fire('Deleted!', res.message, 'success').then(() => window.location.reload());
+                        })
+                        .fail(function(err) {
+                            Swal.fire('Error', err.responseJSON ? err.responseJSON.message : 'Could not delete mapping.', 'error');
+                        });
+                }
+            });
+        }
+
+        // â”€â”€ OUTSTANDING RULES SCRIPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function showOutstandingModal() {
+            $('#outstandingId').val(0);
+            $('#outstandingName').val('');
+            $('#outstandingThreshold').val('');
+            $('#outstandingRate').val('');
+            $('#outstandingPriority').val('1');
+            $('#outstandingDescription').val('');
+            $('#outstandingActiveSwitch').prop('checked', true);
+            $('#outstandingModalTitle').text('Add Outstanding Rule');
+            $('#outstandingModal').modal('show');
+        }
+
+        function editOutstandingRule(rule) {
+            $('#outstandingId').val(rule.Id);
+            $('#outstandingName').val(rule.Name);
+            $('#outstandingThreshold').val(rule.ThresholdAmount);
+            $('#outstandingRate').val(rule.DeductionRate * 100);
+            $('#outstandingPriority').val(rule.Priority);
+            $('#outstandingDescription').val(rule.Description);
+            $('#outstandingActiveSwitch').prop('checked', rule.IsActive);
+            $('#outstandingModalTitle').text('Edit Outstanding Rule');
+            $('#outstandingModal').modal('show');
+        }
+
+        function deleteOutstandingRule(id, name) {
+            Swal.fire({
+                title: 'Delete Rule?',
+                text: `Are you sure you want to delete the outstanding rule '${name}'?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Delete'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    var token = $('input[name="__RequestVerificationToken"]').val();
+                    $.post('/ControlTower/DeleteOutstandingRule', { id: id, __RequestVerificationToken: token })
+                        .done(function(res) {
+                            Swal.fire('Deleted!', res.message, 'success').then(() => window.location.reload());
+                        })
+                        .fail(function(err) {
+                            Swal.fire('Error', err.responseJSON ? err.responseJSON.message : 'Could not delete rule.', 'error');
+                        });
+                }
+            });
+        }
+
+        // â”€â”€ NOTIFICATION TESTERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function triggerTestEmail() {
+            Swal.fire({
+                title: 'Test SMTP settings',
+                text: 'Enter the destination email address to dispatch the test email:',
+                input: 'email',
+                inputPlaceholder: 'recipient@company.local',
+                showCancelButton: true,
+                confirmButtonText: 'Send Test Mail',
+                confirmButtonColor: 'var(--brand, var(--primary))',
+                showLoaderOnConfirm: true,
+                preConfirm: (email) => {
+                    var form = $('#notificationSettingsForm');
+                    var data = {
+                        host: form.find('input[name="SmtpHost"]').val(),
+                        port: form.find('input[name="SmtpPort"]').val(),
+                        useSsl: form.find('input[name="SmtpUseSsl"]').is(':checked'),
+                        user: form.find('input[name="SmtpUser"]').val(),
+                        password: form.find('input[name="smtpPassword"]').val(),
+                        fromEmail: form.find('input[name="FromEmail"]').val(),
+                        fromName: form.find('input[name="FromName"]').val(),
+                        testEmail: email,
+                        __RequestVerificationToken: form.find('input[name="__RequestVerificationToken"]').val()
+                    };
+
+                    return $.post('/ControlTower/TestSmtpSettings', data)
+                        .fail(function(err) {
+                            var msg = err.responseJSON ? err.responseJSON.message : 'Email dispatch failed.';
+                            Swal.showValidationMessage(`SMTP Error: ${msg}`);
+                        });
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire('Dispatched!', 'Test email dispatched successfully.', 'success');
+                }
+            });
+        }
+
+        function triggerTestSms() {
+            Swal.fire({
+                title: 'Test MSG91 settings',
+                text: 'Enter the recipient mobile number (with country code):',
+                input: 'text',
+                inputPlaceholder: '919876543210',
+                showCancelButton: true,
+                confirmButtonText: 'Send Test SMS',
+                confirmButtonColor: 'var(--brand, var(--primary))',
+                showLoaderOnConfirm: true,
+                preConfirm: (mobile) => {
+                    var form = $('#notificationSettingsForm');
+                    var data = {
+                        apiKey: form.find('input[name="SmsApiKey"]').val(),
+                        senderId: form.find('input[name="SmsSenderId"]').val(),
+                        testMobile: mobile,
+                        __RequestVerificationToken: form.find('input[name="__RequestVerificationToken"]').val()
+                    };
+
+                    return $.post('/ControlTower/TestSmsSettings', data)
+                        .fail(function(err) {
+                            var msg = err.responseJSON ? err.responseJSON.message : 'SMS dispatch failed.';
+                            Swal.showValidationMessage(`SMS Gateway Error: ${msg}`);
+                        });
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire('Dispatched!', 'Test SMS dispatched successfully.', 'success');
+                }
+            });
+        }
+
+        // â”€â”€ AUDIT LOG DIFF VIEWER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function viewAuditDiff(id) {
+            $('#diffModalSubtitle').text(`Loading log entry ID: ${id}...`);
+            $('#diffModalBody').html('<tr><td colspan="3" class="text-center py-4"><i class="fa-solid fa-spinner fa-spin me-1"></i> Analysing values difference...</td></tr>');
+            $('#auditDiffModal').modal('show');
+
+            $.get(`/ControlTower/GetAuditLogDiff?id=${id}`)
+                .done(function(res) {
+                    $('#diffModalSubtitle').text(`${res.entityName} (Record ID: ${res.entityId}) changed by ${res.changedBy} on ${res.changedAt}`);
+                    
+                    var html = '';
+                    if (res.diff && res.diff.length > 0) {
+                        res.diff.forEach(item => {
+                            html += `<tr>
+                                <td class="fw-bold">${item.PropertyName}</td>
+                                <td class="text-danger bg-light text-decoration-line-through">${item.OldValue || '<em class="text-muted">null</em>'}</td>
+                                <td class="text-success" style="background:#ecfdf5; font-weight: 500;">${item.NewValue || '<em class="text-muted">null</em>'}</td>
+                            </tr>`;
+                        });
+                    } else {
+                        html = '<tr><td colspan="3" class="text-center text-muted py-4">No field modifications detected (values are identical or masked).</td></tr>';
+                    }
+                    $('#diffModalBody').html(html);
+                })
+                .fail(function(err) {
+                    $('#diffModalBody').html(`<tr><td colspan="3" class="text-center text-danger py-4"><i class="fa-solid fa-circle-xmark me-1"></i> Failed to retrieve differences log: ${err.responseText}</td></tr>`);
+                });
+        }
+
+        // â”€â”€ HELP TOOLTIP SCRIPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function showHelpModal() {
+            $('#helpPage').val('Parties');
+            $('#helpFieldKey').val('');
+            $('#helpTextValue').val('');
+            $('#helpModalTitle').text('Add Context Tooltip');
+            $('#helpModal').modal('show');
+        }
+
+        function editHelpText(help) {
+            $('#helpPage').val(help.Page);
+            $('#helpFieldKey').val(help.FieldKey);
+            $('#helpTextValue').val(help.Text);
+            $('#helpModalTitle').text('Edit Context Tooltip');
+            $('#helpModal').modal('show');
+        }
+
+        // â”€â”€ REPORT COLUMNS CONFIG SCRIPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function showReportColModal() {
+            $('#reportColId').val(0);
+            $('#reportColReportName').val('IncentiveRegister');
+            $('#reportColColumnKey').val('MonthLabel');
+            $('#reportColDisplayName').val('');
+            $('#reportColSortOrder').val('0');
+            $('#reportColFormat').val('');
+            $('#reportColIsVisible').prop('checked', true);
+            $('#reportColModalTitle').text('Add Column Configuration');
+            $('#reportColModal').modal('show');
+        }
+
+        function editReportCol(config) {
+            $('#reportColId').val(config.Id);
+            $('#reportColReportName').val(config.ReportName);
+            $('#reportColColumnKey').val(config.ColumnKey);
+            $('#reportColDisplayName').val(config.DisplayName);
+            $('#reportColSortOrder').val(config.SortOrder);
+            $('#reportColFormat').val(config.Format || '');
+            $('#reportColIsVisible').prop('checked', config.IsVisible);
+            $('#reportColModalTitle').text('Edit Column Configuration');
+            $('#reportColModal').modal('show');
+        }
+
+        function deleteReportCol(id, displayName) {
+            Swal.fire({
+                title: 'Delete Column Configuration?',
+                text: `Are you sure you want to delete the configuration for column '${displayName}'?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Delete'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    var token = $('input[name="__RequestVerificationToken"]').val();
+                    $.post('/ControlTower/DeleteReportColumnConfig', { id: id, __RequestVerificationToken: token })
+                        .done(function(res) {
+                            Swal.fire('Deleted!', res.message, 'success').then(() => window.location.reload());
+                        })
+                        .fail(function(err) {
+                            Swal.fire('Error', err.responseJSON ? err.responseJSON.message : 'Could not delete configuration.', 'error');
+                        });
+                }
+            });
+        }
+
+        // â”€â”€ DYNAMIC IFRAME LOADING SCRIPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function loadIframeTab(iframeId, url) {
+            var iframe = document.getElementById(iframeId);
+            if (iframe && (iframe.src === 'about:blank' || iframe.src === '' || iframe.getAttribute('src') === 'about:blank')) {
+                var parent = iframe.parentElement;
+                if (parent) {
+                    var loader = parent.querySelector('.iframe-loader');
+                    if (!loader) {
+                        loader = document.createElement('div');
+                        loader.className = 'iframe-loader d-flex flex-column align-items-center justify-content-center py-5';
+                        loader.innerHTML = `
+                            <div class="spinner-border text-primary mb-3" role="status" style="width: 2.5rem; height: 2.5rem; border-width: 3px;"></div>
+                            <div class="text-muted small fw-bold" style="">Loading registry console...</div>
+                        `;
+                        parent.insertBefore(loader, iframe);
+                        iframe.style.display = 'none';
+                        
+                        iframe.addEventListener('load', function() {
+                            if (loader) {
+                                loader.remove();
+                            }
+                            iframe.style.display = 'block';
+                        });
+                    }
+                }
+                iframe.src = url;
+            }
+        }
+
+        $(document).ready(function() {
+            // Deactivate active tabs and hide other panes across columns when a tab is clicked
+            $('#ct-tabs .nav-link').on('click', function() {
+                // Remove active class from all other tab buttons
+                $('#ct-tabs .nav-link').not(this).removeClass('active').attr('aria-selected', 'false');
+                
+                // Hide all other tab content panes
+                var targetPaneId = $(this).attr('data-bs-target');
+                $('#ct-tabsContent .tab-pane').not(targetPaneId).removeClass('show active');
+            });
+
+            var urlParams = new URLSearchParams(window.location.search);
+            var activeTab = urlParams.get('tab');
+            if (activeTab) {
+                var btn = $('#tab-' + activeTab + '-btn');
+                if (btn.length) {
+                    btn.trigger('click');
+                }
+            }
+        });
+    </script>
+}
+
+
+
+

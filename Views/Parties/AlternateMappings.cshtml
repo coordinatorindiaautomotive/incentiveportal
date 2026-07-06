@@ -1,0 +1,570 @@
+﻿@model IReadOnlyList<IncentivePortal.Models.Party>
+@{
+    ViewData["Title"] = "Alternate Codes Manager";
+    var branches = (IReadOnlyList<IncentivePortal.Models.Branch>)ViewBag.Branches;
+}
+
+<style>
+    .portal-tabs .nav-link {
+        color: var(--text-muted);
+        border: none;
+        border-bottom: 2px solid transparent;
+        font-weight: 600;
+        padding: 0.8rem 1.2rem;
+        transition: all 0.2s ease;
+    }
+    .portal-tabs .nav-link.active {
+        color: var(--color-1);
+        border-bottom: 2px solid var(--color-1);
+        background: transparent;
+    }
+    .portal-tabs .nav-link:hover:not(.active) {
+        color: var(--color-1-light);
+        border-bottom: 2px solid var(--border-color);
+    }
+    .preview-card {
+        border: 1px dashed var(--color-1);
+        background: rgba(13, 82, 214, 0.02);
+        border-radius: 8px;
+    }
+    .badge-alt {
+        background: rgba(13, 82, 214, 0.1);
+        color: var(--color-1);
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: monospace;
+    }
+    .badge-orig {
+        background: rgba(9, 51, 117, 0.1);
+        color: var(--nav);
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: monospace;
+    }
+    .import-preview-table th {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+</style>
+
+<div class="row g-4">
+    <!-- Left Form Panel (Manual Creation/Edit) -->
+    <div class="col-lg-4">
+        <div class="panel sticky-lg-top" style="top: 20px; z-index: 10;">
+            <div class="panel-header mb-3">
+                <div>
+                    <h2 id="formTitle">Create Mapping</h2>
+                    <p>Map secondary party codes to a single target for incentive sales rollup</p>
+                </div>
+            </div>
+            <form id="mappingForm" asp-action="SaveAlternateMapping" method="post" class="needs-validation">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="mappingId" value="0" />
+                
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Alternate Party Code <span class="text-danger">*</span></label>
+                    <input name="PartyCode" id="partyCode" class="form-control corp-input" placeholder="e.g., WRJ010120962" required />
+                    <div class="form-text text-muted">The code used in raw transactional sales records.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Original Party Code (Merge Target) <span class="text-danger">*</span></label>
+                    <input name="OriginalPartyCode" id="originalPartyCode" class="form-control corp-input" placeholder="e.g., WRJ010120000" required />
+                    <div class="form-text text-muted">The master record where sales volume will be merged and paid out.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Party Name (Optional)</label>
+                    <input name="PartyName" id="partyName" class="form-control corp-input" placeholder="e.g., GIYA MOTORS (ALT)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Branch Mapping <span class="text-danger">*</span></label>
+                    <select name="BranchId" id="branchId" class="form-select corp-select" required>
+                        @foreach (var b in branches)
+                        {
+                            <option value="@b.Id">@b.Name (@b.Code)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="d-flex gap-2 justify-content-end mt-4">
+                    <button type="button" id="btnReset" class="btn btn-outline-secondary" style="display: none;">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="min-width: 120px;">Save Mapping</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right Content Tabs -->
+    <div class="col-lg-8">
+        <div class="panel">
+            <ul class="nav nav-tabs portal-tabs border-bottom mb-3" id="mappingTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="registry-tab" data-bs-toggle="tab" data-bs-target="#registry" type="button" role="tab">Active Registry</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="paste-tab" data-bs-toggle="tab" data-bs-target="#paste" type="button" role="tab">Copy & Paste Excel</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab">Upload Excel File</button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="mappingTabsContent">
+                <!-- Active Registry Tab -->
+                <div class="tab-pane fade show active" id="registry" role="tabpanel">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+                        <div>
+                            <h3 class="h5 mb-1">Mapping Database</h3>
+                            <p class="text-muted small">List of secondary alternate codes mapped to consolidated masters</p>
+                        </div>
+                        <div class="position-relative" style="width: 250px;">
+                            <input type="text" id="registrySearch" class="form-control corp-input ps-4" placeholder="Search mappings..." />
+                            <span class="position-absolute top-50 start-0 translate-middle-y ps-2 text-muted" style="font-size: 0.8rem;">🔍</span>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive corp-table-wrapper" style="max-height: 550px;">
+                        <table class="table table-hover corp-table align-middle" id="mappingsTable">
+                            <thead>
+                                <tr>
+                                    <th>Alternate Code</th>
+                                    <th>Party Name</th>
+                                    <th>Original Target</th>
+                                    <th>Branch Mapping</th>
+                                    <th class="text-center" style="width: 100px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-4">No alternate mappings configured. Use the form to add mappings.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr class="mapping-row" data-id="@item.Id" data-alt-code="@item.PartyCode" data-orig-code="@item.OriginalPartyCode" data-name="@item.PartyName" data-branch-id="@item.BranchId">
+                                            <td><span class="badge-alt">@item.PartyCode</span></td>
+                                            <td><strong>@item.PartyName</strong></td>
+                                            <td><span class="badge-orig">@item.OriginalPartyCode</span></td>
+                                            <td><span class="badge bg-light text-dark border">@item.Branch?.Name (@item.Branch?.Code)</span></td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center gap-1">
+                                                    <button class="btn btn-sm btn-outline-primary btn-edit" title="Edit row">✏️</button>
+                                                    <button class="btn btn-sm btn-outline-danger btn-delete" data-id="@item.Id" title="Delete mapping">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Copy & Paste Tab -->
+                <div class="tab-pane fade" id="paste" role="tabpanel">
+                    <div class="mb-3">
+                        <h3 class="h5 mb-1">Batch Copy & Paste</h3>
+                        <p class="text-muted small">Copy mapping columns from Excel and paste them directly in the text area below.</p>
+                    </div>
+
+                    <div class="alert alert-info py-2 small mb-3">
+                        <strong>Expected Columns:</strong> Alternate Code (Col 1), Original Code (Col 2), Party Name (Col 3, Optional), Branch Code (Col 4, Optional). Header rows are automatically matched.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Paste Tabular Excel Data Here:</label>
+                        <textarea id="pasteArea" class="form-control corp-input" rows="6" placeholder="Alternate Code&#9;Original Code&#9;Party Name&#9;Branch Code&#10;ALT001&#9;ORIG001&#9;Dealer One&#9;BWI&#10;ALT002&#9;ORIG001&#9;Dealer Two&#9;BWI" style="font-family: monospace; font-size: 0.85rem;"></textarea>
+                    </div>
+
+                    <!-- Interactive Parser Preview -->
+                    <div id="pastePreviewSection" style="display: none;" class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h4 class="h6 mb-0 text-success">📋 Parsed Data Preview (<span id="previewCount">0</span> rows found)</h4>
+                            <button id="btnClearPaste" class="btn btn-sm btn-outline-secondary">Clear</button>
+                        </div>
+                        <div class="table-responsive corp-table-wrapper mb-3" style="max-height: 300px; border: 1px solid var(--border-color);">
+                            <table class="table table-sm corp-table align-middle import-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>Row</th>
+                                        <th>Alternate Code</th>
+                                        <th>Original Target</th>
+                                        <th>Party Name</th>
+                                        <th>Branch Code</th>
+                                        <th class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pastePreviewBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button id="btnSubmitPaste" class="btn btn-success" style="min-width: 180px;">Import Verified Records</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Excel Tab -->
+                <div class="tab-pane fade" id="upload" role="tabpanel">
+                    <div class="mb-4">
+                        <h3 class="h5 mb-1">Upload Mapping Excel</h3>
+                        <p class="text-muted small">Select or drag in an Excel sheet (`.xlsx`) containing Alternate Code mappings.</p>
+                    </div>
+
+                    <form id="excelUploadForm" asp-action="UploadAlternateMappingsExcel" method="post" enctype="multipart/form-data" class="p-3 text-center">
+                        @Html.AntiForgeryToken()
+                        
+                        <div id="alternateDropZone" class="mb-4 text-center p-4" style="border: 2px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.25s ease;" onclick="$('#excelFile').click();">
+                            <i class="fa-regular fa-file-excel fa-3x text-success mb-3"></i>
+                            <h6 class="fw-bold text-dark mb-1">Drag & Drop Excel File Here</h6>
+                            <p class="text-muted small mb-3">or click to browse local folders</p>
+                            <input type="file" name="file" id="excelFile" accept=".xlsx" style="display: none;" required onclick="event.stopPropagation();" />
+                            <span id="selectedAltFileName" class="badge bg-secondary px-3 py-2 fw-semibold d-none" style="font-size: 0.78rem; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></span>
+                        </div>
+
+                        <div class="alert alert-info py-2 small mb-4 text-start" style="border-radius: 8px;">
+                            <i class="fa-solid fa-circle-info text-info me-1"></i>
+                            <strong>Spreadsheet Requirements:</strong> Workbook must contain columns named <strong>Alternate Code</strong> and <strong>Original Code</strong>.
+                        </div>
+
+                        <div class="border-top pt-3 d-flex justify-content-end gap-2">
+                            <button type="submit" id="btnUploadSubmit" class="btn btn-primary" style="min-width: 150px;" disabled>Upload Excel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    // -------------------------------------------------------------
+    // REAL-TIME REGISTRY SEARCH
+    // -------------------------------------------------------------
+    $('#registrySearch').on('input', function() {
+        const query = $(this).val().trim().toLowerCase();
+        $('#mappingsTable tbody tr').each(function() {
+            const alt = ($(this).data('alt-code') || '').toString().toLowerCase();
+            const orig = ($(this).data('orig-code') || '').toString().toLowerCase();
+            const name = ($(this).data('name') || '').toString().toLowerCase();
+            if (alt.includes(query) || orig.includes(query) || name.includes(query)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+
+    // -------------------------------------------------------------
+    // MANUAL FORM CRUD LOGIC
+    // -------------------------------------------------------------
+    // Edit action trigger
+    $('#mappingsTable').on('click', '.btn-edit', function(e) {
+        e.stopPropagation();
+        const row = $(this).closest('.mapping-row');
+        const id = row.data('id');
+        const alt = row.data('alt-code');
+        const orig = row.data('orig-code');
+        const name = row.data('name');
+        const branchId = row.data('branch-id');
+
+        $('#mappingId').val(id);
+        $('#partyCode').val(alt).attr('readonly', 'readonly');
+        $('#originalPartyCode').val(orig);
+        $('#partyName').val(name);
+        $('#branchId').val(branchId);
+
+        $('#formTitle').html('Edit Mapping: <span class="text-primary">' + alt + '</span>');
+        $('#btnReset').show();
+        
+        $('html, body').animate({
+            scrollTop: $("#mappingForm").offset().top - 100
+        }, 200);
+    });
+
+    // Delete mapping trigger
+    $('#mappingsTable').on('click', '.btn-delete', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        const row = $(this).closest('.mapping-row');
+        const alt = row.data('alt-code');
+
+        if (confirm('Are you sure you want to remove the alternate mapping for ' + alt + '? The party code will remain, but its sales will no longer rollup.')) {
+            const btn = this;
+            portalSetBusy(btn, '...');
+
+            $.ajax({
+                url: '@Url.Action("DeleteAlternateMapping", "Parties")',
+                method: 'POST',
+                data: {
+                    id: id,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                }
+            })
+            .done(r => {
+                portalToast(r.message || 'Mapping removed.');
+                row.fadeOut(300, function() {
+                    $(this).remove();
+                    if ($('#mappingsTable tbody tr').length === 0) {
+                        $('#mappingsTable tbody').append('<tr><td colspan="5" class="text-center text-muted py-4">No alternate mappings configured.</td></tr>');
+                    }
+                });
+            })
+            .fail(xhr => {
+                portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to remove mapping.');
+            })
+            .always(() => portalClearBusy(btn));
+        }
+    });
+
+    // Cancel edit
+    $('#btnReset').on('click', function() {
+        $('#mappingId').val('0');
+        $('#partyCode').val('').removeAttr('readonly');
+        $('#originalPartyCode').val('');
+        $('#partyName').val('');
+        $('#formTitle').text('Create Mapping');
+        $(this).hide();
+    });
+
+    // Save submit intercept
+    $('#mappingForm').on('submit', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const btn = form.find('button[type="submit"]')[0];
+        portalSetBusy(btn, 'Saving...');
+
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize()
+        })
+        .done(r => {
+            portalToast(r.message || 'Mapping saved successfully.');
+            setTimeout(() => location.reload(), 600);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to save mapping.');
+        })
+        .always(() => portalClearBusy(btn));
+    });
+
+    // Form population on row click
+    $('#mappingsTable').on('click', '.mapping-row', function() {
+        $(this).find('.btn-edit').click();
+    });
+
+    // -------------------------------------------------------------
+    // EXCEL COPY & PASTE PARSER LOGIC
+    // -------------------------------------------------------------
+    let parsedPasteItems = [];
+
+    $('#pasteArea').on('input', function() {
+        const text = $(this).val();
+        if (!text.trim()) {
+            $('#pastePreviewSection').hide();
+            parsedPasteItems = [];
+            return;
+        }
+
+        const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+        if (lines.length === 0) {
+            $('#pastePreviewSection').hide();
+            parsedPasteItems = [];
+            return;
+        }
+
+        // Parse header alignment
+        const firstLineCells = lines[0].split('\t').map(c => c.trim().toLowerCase());
+        
+        let hasHeader = false;
+        let altIndex = -1;
+        let origIndex = -1;
+        let nameIndex = -1;
+        let branchIndex = -1;
+
+        const knownAlt = ["alternate code", "cons party code", "alternate", "alt code", "alt", "party code", "partycode"];
+        const knownOrig = ["original code", "originalpartycode", "original", "orig code", "orig", "merge target", "merge code", "original party code"];
+        const knownName = ["party name", "cons party name", "name", "dealer name"];
+        const knownBranch = ["branch code", "location", "branch", "branchcode"];
+
+        for (let i = 0; i < firstLineCells.length; i++) {
+            const hVal = firstLineCells[i];
+            if (knownAlt.includes(hVal)) { altIndex = i; hasHeader = true; }
+            else if (knownOrig.includes(hVal)) { origIndex = i; hasHeader = true; }
+            else if (knownName.includes(hVal)) { nameIndex = i; hasHeader = true; }
+            else if (knownBranch.includes(hVal)) { branchIndex = i; hasHeader = true; }
+        }
+
+        // If no explicit matching header, map sequentially by default positions
+        if (!hasHeader) {
+            altIndex = 0;
+            origIndex = 1;
+            nameIndex = firstLineCells.length > 2 ? 2 : -1;
+            branchIndex = firstLineCells.length > 3 ? 3 : -1;
+        }
+
+        const startIndex = hasHeader ? 1 : 0;
+        parsedPasteItems = [];
+        const tbody = $('#pastePreviewBody');
+        tbody.empty();
+
+        let rowCounter = 1;
+        for (let i = startIndex; i < lines.length; i++) {
+            const cells = lines[i].split('\t');
+            if (cells.length < 2) continue;
+
+            const alt = (cells[altIndex] || '').trim();
+            const orig = (cells[origIndex] || '').trim();
+            const name = nameIndex !== -1 ? (cells[nameIndex] || '').trim() : '';
+            const branchCode = branchIndex !== -1 ? (cells[branchIndex] || '').trim() : '';
+
+            if (!alt && !orig) continue;
+
+            let rowStatus = '<span class="badge bg-success">Valid</span>';
+            if (!alt || !orig) {
+                rowStatus = '<span class="badge bg-danger">Invalid (Missing Codes)</span>';
+            }
+
+            parsedPasteItems.push({
+                AlternateCode: alt,
+                OriginalCode: orig,
+                PartyName: name || null,
+                BranchCode: branchCode || null
+            });
+
+            tbody.append(`
+                <tr>
+                    <td class="text-muted small">${rowCounter++}</td>
+                    <td><span class="badge-alt">${alt || '-'}</span></td>
+                    <td><span class="badge-orig">${orig || '-'}</span></td>
+                    <td><strong>${name || '<span class="text-muted small">-</span>'}</strong></td>
+                    <td><span class="badge bg-light border text-dark">${branchCode || '<span class="text-muted small">Default</span>'}</span></td>
+                    <td class="text-center">${rowStatus}</td>
+                </tr>
+            `);
+        }
+
+        $('#previewCount').text(parsedPasteItems.length);
+        if (parsedPasteItems.length > 0) {
+            $('#pastePreviewSection').show();
+        } else {
+            $('#pastePreviewSection').hide();
+        }
+    });
+
+    $('#btnClearPaste').on('click', function() {
+        $('#pasteArea').val('');
+        $('#pastePreviewSection').hide();
+        parsedPasteItems = [];
+    });
+
+    $('#btnSubmitPaste').on('click', function() {
+        if (parsedPasteItems.length === 0) return;
+        
+        const btn = this;
+        portalSetBusy(btn, 'Importing ' + parsedPasteItems.length + ' rows...');
+
+        $.ajax({
+            url: '@Url.Action("ImportAlternateMappingsBatch", "Parties")',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(parsedPasteItems),
+            headers: {
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+            }
+        })
+        .done(r => {
+            portalToast(r.message || 'Batch imported successfully.');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Batch import failed.');
+        })
+        .always(() => portalClearBusy(btn));
+    });
+
+    // -------------------------------------------------------------
+    // EXCEL FILE UPLOAD LOGIC
+    // -------------------------------------------------------------
+    $('#excelUploadForm').on('submit', function(e) {
+        e.preventDefault();
+        const fileInput = $('#excelFile')[0];
+        if (!fileInput.files.length) {
+            portalToast('Please select an Excel file first.');
+            return;
+        }
+
+        const formData = new FormData(this);
+        const btn = $('#btnUploadSubmit')[0];
+        portalSetBusy(btn, 'Uploading...');
+
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false
+        })
+        .done(r => {
+            portalToast(r.message || 'Excel file uploaded and imported successfully.');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Excel upload failed.');
+        })
+        .always(() => portalClearBusy(btn));
+    });
+
+    // Drag and Drop for Alternate Mappings Dropzone
+    var altDropZone = document.getElementById('alternateDropZone');
+    var altFileInput = document.getElementById('excelFile');
+
+    if (altDropZone && altFileInput) {
+        altDropZone.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            altDropZone.style.background = '#f0fdf4';
+            altDropZone.style.borderColor = '#22c55e';
+        });
+
+        altDropZone.addEventListener('dragleave', function () {
+            altDropZone.style.background = '#f8fafc';
+            altDropZone.style.borderColor = '#cbd5e1';
+        });
+
+        altDropZone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            altDropZone.style.background = '#f8fafc';
+            altDropZone.style.borderColor = '#cbd5e1';
+            
+            if (e.dataTransfer.files.length > 0) {
+                altFileInput.files = e.dataTransfer.files;
+                $(altFileInput).trigger('change');
+            }
+        });
+    }
+
+    // File input selection tracking
+    $('#excelFile').on('change', function () {
+        var file = this.files[0];
+        if (file) {
+            $('#selectedAltFileName').text(file.name).removeClass('d-none');
+            $('#btnUploadSubmit').prop('disabled', false);
+        } else {
+            $('#selectedAltFileName').addClass('d-none');
+            $('#btnUploadSubmit').prop('disabled', true);
+        }
+    });
+});
+</script>
+}

@@ -1,0 +1,189 @@
+/* ==========================================================================
+   TYPOGRAPHY � ThessBuddy Premium SaaS Redesign
+   Intelligent Companion Typography Guidelines
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+h1, h2, h3, h4, h5, h6,
+.page-h1,
+.section-title {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  margin-top: 0;
+  font-weight: 600;
+}
+.headline-xl {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 56px;
+  letter-spacing: -0.02em;
+}
+
+.headline-lg {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 40px;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 767px) {
+  .headline-lg {
+    font-size: 28px;
+    line-height: 36px;
+  }
+}
+
+.headline-md {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.body-lg {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 28px;
+}
+
+.body-md {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+.body-sm {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.label-md {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.05em;
+}
+
+/* ── Page Header Component ─────────────────────────────────── */
+.page-header {
+  margin-bottom: var(--space-5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.page-eyebrow {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 2px;
+  background: var(--secondary);
+  border-radius: var(--radius-full);
+}
+
+.page-h1 {
+  font-size: clamp(1.6rem, 3vw, var(--font-3xl));
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 6px;
+}
+
+.page-desc {
+  font-size: var(--font-sm);
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 52ch;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* ── Section Headings ──────────────────────────────────────── */
+.section-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin-bottom: 4px;
+}
+
+.section-subtitle {
+  font-size: var(--font-sm);
+  color: var(--muted);
+}
+
+/* ── Data Labels ───────────────────────────────────────────── */
+.data-label {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.data-value {
+  font-size: var(--font-base);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ── Currency Display ──────────────────────────────────────── */
+.currency-display {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.currency-display.lg {
+  font-size: var(--font-2xl);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+/* ── Code / Mono Text ──────────────────────────────────────── */
+.mono-text {
+  font-family: 'Fira Code', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.90em;
+  background: var(--canvas);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--line);
+  color: var(--secondary);
+}
+
+/* ── Dividers ──────────────────────────────────────────────── */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, var(--line) 0%, transparent 100%);
+  margin: var(--space-5) 0;
+  border: none;
+}
+

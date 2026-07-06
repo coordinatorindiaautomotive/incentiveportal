@@ -1,0 +1,677 @@
+﻿@model List<IncentivePortal.Models.CashOutTransaction>
+@using IncentivePortal.Models
+@inject IncentivePortal.Helpers.ICurrentUser Cu
+@{
+    ViewData["Title"] = "Cash Out";
+    var branches = ViewData["Branches"] as List<Branch> ?? new();
+    bool isHO = Cu.IsInRole(AppRoles.SuperAdmin) || Cu.IsInRole(AppRoles.HOFinance) || Cu.IsInRole(AppRoles.Auditor);
+    bool canCreate = !Cu.IsInRole(AppRoles.Auditor);
+    bool canApprove = Cu.IsInRole(AppRoles.SuperAdmin) || Cu.IsInRole(AppRoles.HOFinance);
+    bool canVerifyTally = Cu.IsInRole(AppRoles.SuperAdmin) || Cu.IsInRole(AppRoles.HOFinance);
+    bool canEdit = Cu.IsInRole(AppRoles.SuperAdmin) || Cu.IsInRole(AppRoles.HOFinance);
+    decimal totalAmt = (decimal)(ViewBag.TotalAmount ?? 0m);
+    int totalCount = (int)(ViewBag.TotalCount ?? 0);
+    string FormatCr(decimal v) => v >= 10000000m ? $"₹{v/10000000m:N2} Cr" : v >= 100000m ? $"₹{v/100000m:N2} L" : $"₹{v:N0}";
+}
+
+<style>
+.cash-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;}
+.cash-badge::before{content:'';width:5px;height:5px;border-radius:50%;}
+.badge-draft{background:rgba(100,116,139,.12);color:#64748b;}.badge-draft::before{background:#64748b;}
+.badge-submitted{background:rgba(59,130,246,.12);color:#3b82f6;}.badge-submitted::before{background:#3b82f6;}
+.badge-verified{background:rgba(20,184,166,.12);color:#14b8a6;}.badge-verified::before{background:#14b8a6;}
+.badge-approved{background:rgba(34,197,94,.12);color:#22c55e;}.badge-approved::before{background:#22c55e;}
+.badge-posted{background:rgba(99,102,241,.12);color:#6366f1;}.badge-posted::before{background:#6366f1;}
+.badge-reconciled{background:rgba(34,197,94,.15);color:#16a34a;}.badge-reconciled::before{background:#16a34a;}
+.badge-rejected{background:rgba(239,68,68,.12);color:#ef4444;}.badge-rejected::before{background:#ef4444;}
+.badge-closed{background:rgba(100,116,139,.1);color:#94a3b8;}.badge-closed::before{background:#94a3b8;}
+.act-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;border:1px solid #e2e8f0;color:#64748b;transition:all .15s;cursor:pointer;}
+.act-icon:hover.vi{background:rgba(59,130,246,.1);color:#3b82f6;border-color:rgba(59,130,246,.3);}
+.act-icon:hover.ap{background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.3);}
+.act-icon:hover.re{background:rgba(239,68,68,.1);color:#ef4444;border-color:rgba(239,68,68,.3);}
+</style>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" style="border-radius:8px;font-size:.875rem;">
+        <i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- Header -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:.5px;">Cash Management</div>
+        <h2 style="font-size:1.5rem;font-weight:700;color:var(--ink);margin:0;">
+            <i class="fa-solid fa-arrow-circle-up me-2" style="color:#ef4444;"></i>Cash Out Register
+        </h2>
+        <p class="text-muted mb-0" style="font-size:.82rem;">
+            @totalCount record(s) &nbsp;|&nbsp; Total: <strong style="color:#ef4444;">@FormatCr(totalAmt)</strong>
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (canCreate)
+        {
+            <button class="btn btn-primary d-flex align-items-center gap-2 px-4"
+                    style="background:#ef4444;border:none;height:40px;font-weight:600;font-size:.88rem;border-radius:8px;box-shadow:0 4px 12px rgba(239,68,68,.2);"
+                    data-bs-toggle="modal" data-bs-target="#cashOutModal" onclick="resetCashOutForm()">
+                <i class="fa-solid fa-plus"></i> New Cash Out
+            </button>
+        }
+        <a href="@Url.Action("CashOut")" class="btn btn-outline-secondary d-flex align-items-center gap-2" style="height:40px;border-radius:8px;font-size:.88rem;font-weight:600;">
+            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="panel mb-3" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
+    <form method="get" class="d-flex flex-wrap align-items-end gap-3">
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Status</label>
+            <select name="status" class="form-select form-select-sm" style="width:140px;border-radius:8px;">
+                <option value="">All Status</option>
+                @foreach (var s in CashTxStatus.Workflow)
+                {
+                    <option value="@s" selected="@(ViewBag.FilterStatus==s?"selected":null)">@s</option>
+                }
+            </select>
+        </div>
+        @if (isHO)
+        {
+            <div>
+                <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</label>
+                <select name="branchId" class="form-select form-select-sm" style="width:170px;border-radius:8px;">
+                    <option value="">All Branches</option>
+                    @foreach (var b in branches)
+                    {
+                        <option value="@b.Id" selected="@(ViewBag.FilterBranchId?.ToString()==b.Id.ToString()?"selected":null)">@b.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">From</label>
+            <input type="date" name="from" value="@ViewBag.FilterFrom" class="form-control form-control-sm" style="width:145px;border-radius:8px;">
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">To</label>
+            <input type="date" name="to" value="@ViewBag.FilterTo" class="form-control form-control-sm" style="width:145px;border-radius:8px;">
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Category</label>
+            <select name="category" class="form-select form-select-sm" style="width:150px;border-radius:8px;">
+                <option value="">All Categories</option>
+                @if (ViewBag.ExpenseCategories != null)
+                {
+                    @foreach (var cat in (List<string>)ViewBag.ExpenseCategories)
+                    {
+                        <option value="@cat">@cat</option>
+                    }
+                }
+                else
+                {
+                    <option>Salary</option><option>Rent</option><option>Electricity</option>
+                    <option>Travel</option><option>Marketing</option><option>Professional Fee</option><option>Maintenance</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-secondary" style="height:32px;border-radius:8px;font-weight:600;font-size:.8rem;">
+            <i class="fa-solid fa-filter me-1"></i>Apply
+        </button>
+        <a href="@Url.Action("CashOut")" class="btn btn-sm btn-ghost text-muted" style="height:32px;font-size:.8rem;">Clear</a>
+    </form>
+</div>
+
+<!-- Table -->
+<div class="panel" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.04);overflow:hidden;">
+    <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom">
+        <div style="font-size:.88rem;font-weight:700;color:var(--ink);">
+            <i class="fa-solid fa-receipt me-2 text-muted"></i>Payment Register
+        </div>
+        <input type="text" placeholder="Search..." class="form-control form-control-sm" style="width:220px;border-radius:20px;font-size:.82rem;" oninput="filterTable(this.value,'coTbody')">
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.83rem;">
+            <thead style="background:#f8fafc;">
+                <tr>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;padding:12px 16px;">Payment ID</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Date</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Category</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Vendor</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Amount</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Cost Center</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">GL Account</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Status</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Tally</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="coTbody">
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="11" class="text-center py-5 text-muted">
+                        <i class="fa-solid fa-inbox fa-2x mb-2 d-block" style="opacity:.2;"></i>No records found
+                    </td></tr>
+                }
+                @foreach (var tx in Model)
+                {
+                    <tr>
+                        <td><code style="font-size:.78rem;color:#f97316;font-weight:700;">@tx.TransactionNo</code></td>
+                        <td style="font-weight:500;">@tx.Branch?.Name</td>
+                        <td>@tx.TransactionDate.ToString("dd MMM yyyy")</td>
+                        <td><span style="font-size:.75rem;color:#64748b;">@tx.ExpenseCategory</span></td>
+                        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@tx.VendorName">@tx.VendorName</td>
+                        <td style="font-weight:700;color:#ef4444;font-family:monospace;">@FormatCr(tx.Amount)</td>
+                        <td style="font-size:.75rem;color:#94a3b8;">@tx.CostCenter</td>
+                        <td style="font-size:.75rem;color:#94a3b8;">@tx.GlAccount</td>
+                        <td><span class="cash-badge badge-@tx.Status.ToLower()">@tx.Status</span></td>
+                        <td>
+                            <div class="d-flex flex-column gap-1">
+                                @if (tx.TallySyncStatus == "Correct")
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem; padding:3px 8px; border-radius:12px; align-self: start;">
+                                        <i class="fa-solid fa-circle-check me-1"></i>Tally OK
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(tx.TallyVoucherNo))
+                                    {
+                                        <span class="tally-chip" style="font-size: 0.68rem; align-self: start;"><i class="fa-solid fa-receipt me-1"></i>@tx.TallyVoucherNo</span>
+                                    }
+                                }
+                                else if (tx.TallySyncStatus == "Wrong")
+                                {
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:0.7rem; padding:3px 8px; border-radius:12px; align-self: start;" title="@tx.ApprovalRemarks">
+                                        <i class="fa-solid fa-circle-xmark me-1"></i>Tally Error
+                                    </span>
+                                    <span style="font-size:0.68rem; color:#ef4444; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="@tx.ApprovalRemarks">@tx.ApprovalRemarks</span>
+                                }
+                                else
+                                {
+                                    @if (!string.IsNullOrEmpty(tx.TallyVoucherNo))
+                                    {
+                                        <span class="tally-chip"><i class="fa-solid fa-link me-1"></i>@tx.TallyVoucherNo</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:#cbd5e1;font-size:.75rem;">—</span>
+                                    }
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="act-icon vi" title="View"
+                                        onclick="viewCashTx('Cash Out', '@tx.TransactionNo','@(tx.Branch?.Name?.Replace("'", "\\'"))','@tx.TransactionDate.ToString("dd MMM yyyy")','@tx.ExpenseCategory','@(tx.VendorName.Replace("'", "\\'"))','—','@FormatCr(tx.Amount)','@tx.PaymentMode','@(tx.BankName?.Replace("'", "\\'") ?? "")','@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")','@tx.Status','@(tx.TallyVoucherNo ?? "—")','@(tx.Narration?.Replace("'", "\\'").Replace("\r", "").Replace("\n", " ") ?? "")','@tx.CostCenter','@tx.GlAccount','@tx.PaymentInstrument')">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                                @if (canEdit)
+                                {
+                                    <button class="act-icon text-warning" style="border-color: rgba(245, 158, 11, .3);" title="Edit"
+                                            onclick="editCashOut('@tx.Id', '@tx.TransactionDate.ToString("yyyy-MM-dd")', '@tx.BranchId', '@tx.ExpenseCategory', '@(tx.VendorName.Replace("'", "\\'"))', '@tx.CostCenter', '@tx.GlAccount', '@tx.Amount', '@tx.PaymentMode', '@tx.PaymentInstrument', '@(tx.BankName?.Replace("'", "\\'") ?? "")', '@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")', '@(tx.Narration?.Replace("'", "\\'").Replace("\r", "").Replace("\n", " ") ?? "")')">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                }
+                                @if (canVerifyTally)
+                                {
+                                    <button class="act-icon text-success" style="border-color: rgba(34,197,94,.3);" title="Verify Tally Entry"
+                                            onclick="checkTallyEntry('@tx.Id', 'CashOut', 'Correct', '@(tx.TallyVoucherNo ?? "")')">
+                                        <i class="fa-solid fa-check"></i>
+                                    </button>
+                                    <button class="act-icon text-danger" style="border-color: rgba(239,68,68,.3);" title="Report Tally Discrepancy"
+                                            onclick="checkTallyEntry('@tx.Id', 'CashOut', 'Wrong')">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                }
+                                @if (canApprove && (tx.Status == CashTxStatus.Submitted || tx.Status == CashTxStatus.Verified))
+                                {
+                                    <button class="act-icon ap" title="Approve"
+                                            onclick="quickAction('/CashManagement/ApproveCashOut','@tx.Id','@CashTxStatus.Approved','Approve this payment?')">
+                                        <i class="fa-solid fa-check"></i>
+                                    </button>
+                                    <button class="act-icon re" title="Reject"
+                                            onclick="quickAction('/CashManagement/ApproveCashOut','@tx.Id','@CashTxStatus.Rejected','Reject this payment?')">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                }
+                                @if (canEdit && tx.Status == CashTxStatus.Approved)
+                                {
+                                    <button class="act-icon" style="color:#6366f1;" title="Post to Tally"
+                                            onclick="quickAction('/CashManagement/ApproveCashOut','@tx.Id','@CashTxStatus.Posted','Post this to Tally?')">
+                                        <i class="fa-solid fa-upload"></i>
+                                    </button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="d-flex justify-content-between align-items-center px-4 py-3 border-top" style="font-size:.78rem;color:#94a3b8;">
+        <span>Showing @Model.Count records</span>
+        <span>Total: <strong style="color:#ef4444;">@FormatCr(totalAmt)</strong></span>
+    </div>
+</div>
+
+<!-- New Cash Out Modal -->
+<div class="modal fade" id="cashOutModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:14px;">
+            <div class="modal-header border-0 pb-0" style="padding:24px 28px 12px;">
+                <div>
+                    <h5 class="modal-title fw-bold" style="font-size:1.1rem;">
+                        <i class="fa-solid fa-arrow-circle-up me-2" style="color:#ef4444;"></i>New Cash Out Payment
+                    </h5>
+                    <p class="text-muted mb-0" style="font-size:.78rem;">Record an outgoing payment or expense.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/CashManagement/CreateCashOut" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="cashOutTxId" value="0" />
+                <div class="modal-body bg-light-subtle" style="padding:20px 28px;">
+                    <!-- Common Details Section (Single Column Stack) -->
+                    <div class="d-flex flex-column gap-3 pb-3 mb-4 border-bottom" style="border-color: #cbd5e1 !important;">
+                        <div>
+                            <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Payment Date <span class="text-danger">*</span></label>
+                            <input type="date" name="TransactionDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required style="border-radius:8px; height: 42px;">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Branch <span class="text-danger">*</span></label>
+                            <select name="BranchId" class="form-select" required style="border-radius:8px; height: 42px;" @(!isHO?"disabled":"")>
+                                @foreach (var b in branches)
+                                {
+                                    <option value="@b.Id">@b.Name (@b.Code)</option>
+                                }
+                            </select>
+                            @if (!isHO && branches.Count == 1)
+                            {
+                                <input type="hidden" name="BranchId" value="@branches[0].Id">
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Expense Line Items -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-dark m-0" style="font-size: .95rem;">
+                            <i class="fa-solid fa-list-check me-2" style="color:var(--primary);"></i>Expense Entries
+                            <span class="badge bg-danger-subtle text-danger ms-2" id="runningTotalBadge" style="font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.15);">Total: ₹0.00</span>
+                        </h6>
+                        <button type="button" id="addExpenseRowBtn" class="btn btn-sm btn-outline-primary px-3 d-flex align-items-center gap-1" style="border-radius:20px; font-weight:600; font-size:.78rem; border-color:var(--primary); color:var(--primary);">
+                            <i class="fa-solid fa-plus"></i> Add Entry
+                        </button>
+                    </div>
+
+                    <div id="expenseRowsContainer" style="max-height: 420px; overflow-y: auto; padding-right: 4px;">
+                        <!-- Dynamic Rows injected via Javascript -->
+                    </div>
+
+                    <!-- Common Attachment Section (Single Column Stack) -->
+                    <div class="mt-4 pt-3 border-top" style="border-color: #cbd5e1 !important;">
+                        <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Bill / Invoice Attachment</label>
+                        <input type="file" name="AttachmentFile" class="form-control" accept=".pdf,.jpg,.png,.jpeg" style="border-radius:8px; height: 42px;">
+                        <div class="form-text text-muted" style="font-size: .72rem; margin-top: 4px;">Optional. Applies to all expense entries listed above.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0" style="padding:12px 28px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:8px;font-weight:600;">Cancel</button>
+                    <button type="submit" name="action" value="draft" class="btn btn-outline-primary" style="border-radius:8px;font-weight:600;">
+                        <i class="fa-solid fa-floppy-disk me-1"></i>Save Draft
+                    </button>
+                    <button type="submit" name="action" value="submit" class="btn btn-primary" style="background:var(--primary);border:none;border-radius:8px;font-weight:600;">
+                        <i class="fa-solid fa-paper-plane me-1"></i>Submit for Approval
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<form method="post" id="actionForm" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="actionId" name="id">
+    <input type="hidden" id="actionStatus" name="newStatus">
+    <input type="hidden" name="remarks" value="">
+</form>
+
+@section Scripts {
+<script>
+function filterTable(val, id) {
+    document.querySelectorAll('#'+id+' tr').forEach(r => r.style.display = r.textContent.toLowerCase().includes(val.toLowerCase())?'':'none');
+}
+function quickAction(url, id, status, msg) {
+    Swal.fire({ title: msg, icon:'question', showCancelButton:true, confirmButtonText:'Yes, proceed',
+        confirmButtonColor:'var(--primary)', cancelButtonColor:'#6c757d' })
+    .then(r => { if(r.isConfirmed){ const f=document.getElementById('actionForm');f.action=url;
+        document.getElementById('actionId').value=id;document.getElementById('actionStatus').value=status;f.submit(); }});
+}
+
+function checkTallyEntry(id, type, tallyStatus, currentVoucherNo = '') {
+    if (tallyStatus === 'Correct') {
+        Swal.fire({
+            title: 'Verify with Tally',
+            text: 'Please enter the Tally Voucher Number to mark this entry as correct:',
+            input: 'text',
+            inputValue: currentVoucherNo,
+            inputPlaceholder: 'Tally Voucher No. (e.g. TLY-1234)',
+            showCancelButton: true,
+            confirmButtonText: 'Confirm & Verify',
+            confirmButtonColor: '#22c55e',
+            cancelButtonColor: '#6c757d'
+        }).then(result => {
+            if (result.isConfirmed) {
+                const f = document.getElementById('tallyVerificationForm');
+                document.getElementById('tallyVerifyId').value = id;
+                document.getElementById('tallyVerifyType').value = type;
+                document.getElementById('tallyVerifyStatus').value = tallyStatus;
+                document.getElementById('tallyVerifyVoucherNo').value = result.value || '';
+                document.getElementById('tallyVerifyRemarks').value = '';
+                f.submit();
+            }
+        });
+    } else {
+        Swal.fire({
+            title: 'Report Tally Discrepancy',
+            text: 'Please describe the discrepancy or error details (required):',
+            input: 'textarea',
+            inputPlaceholder: 'e.g. Amount mismatch, reference incorrect in Tally...',
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'You must enter remarks for wrong entries!'
+                }
+            },
+            showCancelButton: true,
+            confirmButtonText: 'Report Discrepancy',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6c757d'
+        }).then(result => {
+            if (result.isConfirmed) {
+                const f = document.getElementById('tallyVerificationForm');
+                document.getElementById('tallyVerifyId').value = id;
+                document.getElementById('tallyVerifyType').value = type;
+                document.getElementById('tallyVerifyStatus').value = tallyStatus;
+                document.getElementById('tallyVerifyVoucherNo').value = '';
+                document.getElementById('tallyVerifyRemarks').value = result.value;
+                f.submit();
+            }
+        });
+    }
+}
+
+const expenseCategories = [
+    @if (ViewBag.ExpenseCategories != null)
+    {
+        @Html.Raw(string.Join(",", ((List<string>)ViewBag.ExpenseCategories).Select(x => $"'{x.Replace("'", "\\'")}'")))
+    }
+    else
+    {
+        @Html.Raw("'Salary','Rent','Electricity','Travel','Marketing','Professional Fee','Maintenance','Stationery','Other'")
+    }
+];
+
+const paymentModes = ['NEFT', 'RTGS', 'Cheque', 'Cash', 'Online', 'UPI', 'POS Machine', 'By Hand'];
+
+function updateRunningTotal() {
+    const rows = document.querySelectorAll('#expenseRowsContainer .expense-row-item');
+    let total = 0;
+    rows.forEach(row => {
+        const amtInput = row.querySelector('[name="Amount"]');
+        if (amtInput) {
+            const val = parseFloat(amtInput.value);
+            if (!isNaN(val) && val > 0) {
+                total += val;
+            }
+        }
+    });
+    const badge = document.getElementById('runningTotalBadge');
+    if (badge) {
+        badge.textContent = 'Total: ₹' + total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+}
+
+function addExpenseRow(category = '', amount = '', narration = '', paymentMode = 'NEFT') {
+    const container = document.getElementById('expenseRowsContainer');
+    const rowId = 'row-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    
+    let categoryOptions = '';
+    expenseCategories.forEach(cat => {
+        const selected = cat === category ? 'selected' : '';
+        categoryOptions += `<option value="${cat}" ${selected}>${cat}</option>`;
+    });
+
+    let paymentModeOptions = '';
+    paymentModes.forEach(pm => {
+        const selected = pm === paymentMode ? 'selected' : '';
+        paymentModeOptions += `<option value="${pm}" ${selected}>${pm}</option>`;
+    });
+
+    const rowHtml = `
+        <div class="expense-row-item border rounded-3 p-3 mb-3 bg-light" id="${rowId}" style="border-color: #cbd5e1 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.01);">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Expense Category <span class="text-danger">*</span></label>
+                    <select name="ExpenseCategory" class="form-select form-select-sm" required style="border-radius:6px; height: 38px;">
+                        ${categoryOptions}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Amount (₹) <span class="text-danger">*</span></label>
+                    <input type="number" name="Amount" class="form-control form-control-sm" placeholder="0.00" step="0.01" min="1" required value="${amount}" style="border-radius:6px; height: 38px;">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Payment Mode <span class="text-danger">*</span></label>
+                    <select name="PaymentMode" class="form-select form-select-sm" required style="border-radius:6px; height: 38px;">
+                        ${paymentModeOptions}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Narration</label>
+                    <input type="text" name="Narration" class="form-control form-control-sm" placeholder="Payment details..." value="${narration}" style="border-radius:6px; height: 38px;">
+                </div>
+                <div class="col-md-1 text-end pb-1 remove-btn-col">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn d-flex align-items-center justify-content-center" style="border-radius:6px; height: 38px; width: 100%; border-color: rgba(239, 68, 68, 0.2); color:#ef4444;" onclick="removeExpenseRow('${rowId}')" title="Remove Entry">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', rowHtml);
+    updateRemoveButtonsVisibility();
+    updateRunningTotal();
+}
+
+function removeExpenseRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (row) {
+        row.remove();
+    }
+    updateRemoveButtonsVisibility();
+    updateRunningTotal();
+}
+
+function updateRemoveButtonsVisibility() {
+    const rows = document.querySelectorAll('.expense-row-item');
+    const isEditMode = document.getElementById('cashOutTxId').value !== '0';
+    rows.forEach(row => {
+        const btn = row.querySelector('.remove-row-btn');
+        if (btn) {
+            if (isEditMode || rows.length <= 1) {
+                btn.style.display = 'none';
+            } else {
+                btn.style.display = '';
+            }
+        }
+    });
+}
+
+function editCashOut(id, date, branchId, expenseCategory, vendorName, costCenter, glAccount, amount, paymentMode, paymentInstrument, bankName, referenceNo, narration) {
+    document.getElementById('cashOutTxId').value = id;
+    const titleEl = document.querySelector('#cashOutModal .modal-title');
+    if (titleEl) {
+        titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square me-2" style="color:#f59e0b;"></i>Edit Cash Out Payment`;
+    }
+    const modal = document.getElementById('cashOutModal');
+    modal.querySelector('[name="TransactionDate"]').value = date;
+    modal.querySelector('[name="BranchId"]').value = branchId;
+    
+    const container = document.getElementById('expenseRowsContainer');
+    container.innerHTML = '';
+    addExpenseRow(expenseCategory, amount, narration, paymentMode);
+    
+    document.getElementById('addExpenseRowBtn').style.display = 'none';
+    updateRemoveButtonsVisibility();
+    
+    new bootstrap.Modal(modal).show();
+}
+
+function resetCashOutForm() {
+    const idEl = document.getElementById('cashOutTxId');
+    if (idEl) idEl.value = '0';
+    const titleEl = document.querySelector('#cashOutModal .modal-title');
+    if (titleEl) {
+        titleEl.innerHTML = `<i class="fa-solid fa-arrow-circle-up me-2" style="color:#ef4444;"></i>New Cash Out Payment`;
+    }
+    const form = document.querySelector('#cashOutModal form');
+    if (form) {
+        form.reset();
+        const dateInput = form.querySelector('[name="TransactionDate"]');
+        if (dateInput) dateInput.value = new Date().toISOString().substring(0, 10);
+    }
+    
+    document.getElementById('addExpenseRowBtn').style.display = '';
+    
+    const container = document.getElementById('expenseRowsContainer');
+    container.innerHTML = '';
+    addExpenseRow();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const addBtn = document.getElementById('addExpenseRowBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function () {
+            addExpenseRow();
+        });
+    }
+
+    const container = document.getElementById('expenseRowsContainer');
+    if (container) {
+        container.addEventListener('input', function (e) {
+            if (e.target && e.target.name === 'Amount') {
+                updateRunningTotal();
+            }
+        });
+    }
+
+    const form = document.querySelector('#cashOutModal form');
+    if (form) {
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            
+            const rows = document.querySelectorAll('.expense-row-item');
+            if (rows.length === 0) {
+                Swal.fire('Error', 'Please add at least one expense entry.', 'error');
+                return;
+            }
+            
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            const clickedBtn = document.activeElement;
+            const action = clickedBtn ? clickedBtn.value : 'draft';
+            
+            const txId = document.getElementById('cashOutTxId').value;
+            const date = form.querySelector('[name="TransactionDate"]').value;
+            const branchId = form.querySelector('[name="BranchId"]').value;
+            const attachmentFile = form.querySelector('[name="AttachmentFile"]').files[0];
+            const token = form.querySelector('[name="__RequestVerificationToken"]').value;
+
+            Swal.fire({
+                title: 'Saving payments...',
+                html: 'Processing entry <b>1</b> of <b>' + rows.length + '</b>...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            try {
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const currentTxId = i === 0 ? txId : '0'; 
+
+                    if (rows.length > 1) {
+                        const bElement = Swal.getHtmlContainer().querySelector('b');
+                        if (bElement) bElement.textContent = (i + 1);
+                    }
+
+                    const formData = new FormData();
+                    formData.append('__RequestVerificationToken', token);
+                    formData.append('Id', currentTxId);
+                    formData.append('TransactionDate', date);
+                    formData.append('BranchId', branchId);
+                    formData.append('PaymentMode', row.querySelector('[name="PaymentMode"]').value);
+                    formData.append('PaymentInstrument', '');
+                    formData.append('BankName', '');
+                    formData.append('ReferenceNo', '');
+                    
+                    formData.append('ExpenseCategory', row.querySelector('[name="ExpenseCategory"]').value);
+                    formData.append('VendorName', '');
+                    formData.append('Amount', row.querySelector('[name="Amount"]').value);
+                    formData.append('CostCenter', '');
+                    formData.append('GlAccount', '');
+                    formData.append('Narration', row.querySelector('[name="Narration"]').value);
+                    formData.append('action', action);
+
+                    if (attachmentFile && i === 0) {
+                        formData.append('AttachmentFile', attachmentFile);
+                    }
+
+                    const response = await fetch('/CashManagement/CreateCashOut', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to save entry ' + (i + 1));
+                    }
+                }
+
+                Swal.close();
+                Swal.fire({
+                    title: 'Success!',
+                    text: rows.length === 1 ? 'Cash Out transaction saved successfully!' : 'All ' + rows.length + ' Cash Out transactions saved successfully!',
+                    icon: 'success',
+                    confirmButtonColor: 'var(--primary)'
+                }).then(() => {
+                    window.location.reload();
+                });
+
+            } catch (err) {
+                Swal.close();
+                Swal.fire('Error', err.message || 'An error occurred while saving the transactions.', 'error');
+            }
+        });
+    }
+    
+    resetCashOutForm();
+});
+</script>
+
+<form method="post" id="tallyVerificationForm" action="/CashManagement/VerifyTally" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="tallyVerifyId" name="id">
+    <input type="hidden" id="tallyVerifyType" name="type">
+    <input type="hidden" id="tallyVerifyStatus" name="tallyStatus">
+    <input type="hidden" id="tallyVerifyVoucherNo" name="tallyVoucherNo">
+    <input type="hidden" id="tallyVerifyRemarks" name="remarks">
+</form>
+}
+
+
+

@@ -1,0 +1,498 @@
+﻿@{
+    ViewData["Title"] = "Incentive Master Ledger";
+    var periods = (dynamic)ViewBag.Periods;
+}
+
+<!-- Filters Bar Panel -->
+<section class="panel" style="margin-bottom: 24px; padding: 18px 24px; border-radius: 12px; background: #ffffff; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.02);">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-2">
+            <h4 class="fw-bold mb-0 text-dark" style="font-size: 1.1rem;"><i class="fa-solid fa-filter text-primary me-1"></i> Quick Filters</h4>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <!-- Period Filter -->
+            <div class="d-flex align-items-center gap-2">
+                <label for="filterPeriod" class="small fw-bold text-secondary mb-0">Business Month:</label>
+                <select id="filterPeriod" class="form-select corp-select py-1 px-2" style="width: 170px; height: 36px; font-weight: 600; font-size: 0.85rem;">
+                    <option value="all">All Periods</option>
+                    @foreach (var p in periods)
+                    {
+                        <option value="@p.Month-@p.Year">@p.Label</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="d-flex align-items-center gap-2">
+                <label for="filterStatus" class="small fw-bold text-secondary mb-0">Payment State:</label>
+                <select id="filterStatus" class="form-select corp-select py-1 px-2" style="width: 150px; height: 36px; font-weight: 600; font-size: 0.85rem;">
+                    <option value="all">All States</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Hold">Hold</option>
+                </select>
+            </div>
+            
+            <button type="button" id="resetFiltersBtn" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" style="height: 36px; font-weight: 600; font-size: 0.82rem; border-radius: 6px;">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+            </button>
+            <button type="button" id="exportExcelBtn" class="btn btn-sm btn-success d-flex align-items-center gap-1" style="height: 36px; font-weight: 600; font-size: 0.82rem; border-radius: 6px;">
+                <i class="fa-solid fa-file-excel"></i> Export Excel
+            </button>
+            <button type="button" id="exportCsvBtn" class="btn btn-sm btn-outline-success d-flex align-items-center gap-1" style="height: 36px; font-weight: 600; font-size: 0.82rem; border-radius: 6px;">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- Live Data Table Panel -->
+<div class="panel" style="padding: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 32px rgba(15, 23, 42, 0.04);">
+    <div class="table-responsive corp-table-wrapper" style="border: none;">
+        <table class="corp-table corp-table-sticky-col align-middle w-100" id="ledgerDataTable" style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="width: 110px;">Ledger Ref</th>
+                    <th>Incentive Period</th>
+                    <th>Party / Code</th>
+                    <th class="text-end">Sales Value</th>
+                    <th class="text-end">Slab %</th>
+                    <th class="text-end">On-Bill Disc</th>
+                    <th class="text-end">Slab Applied</th>
+                    <th class="text-end">Gross Incentive</th>
+                    <th class="text-end">TDS (10%/20%)</th>
+                    <th class="text-end col-net-transfer" style="font-weight: 700;">Eligible for Incentive</th>
+                    <th>Payment State</th>
+                    <th class="text-center" style="width: 130px;">Audit / Versions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Populated via Server-Side DataTables -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- CALCULATIONS VERSION DETAILS & DIFF DRAWER / MODAL -->
+<div class="modal fade" id="versionHistoryModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden; background: #ffffff;">
+            <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #093375 0%, #051b3f 100%); color: white;">
+                <div>
+                    <h4 class="modal-title fw-bold" style="font-size: 1.3rem; margin:0;"><i class="fa-solid fa-clock-rotate-left me-2"></i> Incentive Calculation Audits & Versions</h4>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85rem; opacity: 0.9;" id="modalSubtitleText">Review chronological changes and perform side-by-side version comparison</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" style="background: #f8fafc;">
+                <div class="row g-4">
+                    <!-- Left column: Version list -->
+                    <div class="col-lg-5">
+                        <div class="card border-0 shadow-sm p-3" style="border-radius: 10px; background: #ffffff;">
+                            <h5 class="fw-bold mb-3 text-secondary" style="font-size: 0.95rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">Calculation Version Log</h5>
+                            <div class="table-responsive" style="max-height: 380px;">
+                                <table class="table table-hover align-middle" id="versionHistoryGrid" style="font-size: 0.82rem;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Ver</th>
+                                            <th>Gross Amount</th>
+                                            <th>Status</th>
+                                            <th>Uploader</th>
+                                            <th class="text-center">Select</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <div class="mt-3 text-end">
+                                <button type="button" id="compareBtn" class="btn btn-sm btn-outline-primary px-3 fw-bold" style="border-radius: 6px;" disabled><i class="fa-solid fa-code-compare me-1"></i> Compare Selected</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right column: Compare Results Diff Panel -->
+                    <div class="col-lg-7">
+                        <div class="card border-0 shadow-sm p-3" style="border-radius: 10px; background: #ffffff; min-height: 410px;">
+                            <h5 class="fw-bold mb-3 text-secondary" style="font-size: 0.95rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">Side-by-Side Version Diff</h5>
+                            
+                            <div id="diffPlaceholderText" class="text-center py-5 text-muted small d-flex flex-column align-items-center justify-content-center" style="height: 320px;">
+                                <i class="fa-solid fa-copy fa-3x mb-3 text-secondary opacity-30"></i>
+                                <span>Select exactly <strong>two versions</strong> from the log on the left, then click <strong>Compare Selected</strong> to view field-level changes.</span>
+                            </div>
+
+                            <div id="diffResultsPanel" class="d-none">
+                                <div class="table-responsive" style="border-radius: 8px; border: 1px solid var(--line);">
+                                    <table class="table table-bordered mb-0 align-middle text-center" style="font-size: 0.85rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="text-start" style="width: 34%;">Field Parameter</th>
+                                                <th id="diffHeadCompare" class="text-primary fw-bold" style="width: 33%;">Version -</th>
+                                                <th id="diffHeadCurrent" class="text-success fw-bold" style="width: 33%;">Version -</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr id="diffRowSales">
+                                                <td class="text-start fw-semibold">Net Retail Sales</td>
+                                                <td class="compare-val font-monospace">-</td>
+                                                <td class="current-val font-monospace">-</td>
+                                            </tr>
+                                            <tr id="diffRowDiscount">
+                                                <td class="text-start fw-semibold">On-Bill Discount</td>
+                                                <td class="compare-val text-danger font-monospace">-</td>
+                                                <td class="current-val text-danger font-monospace">-</td>
+                                            </tr>
+                                            <tr id="diffRowAchievement">
+                                                <td class="text-start fw-semibold">Slab Rate Applied</td>
+                                                <td class="compare-val font-monospace">-</td>
+                                                <td class="current-val font-monospace">-</td>
+                                            </tr>
+                                            <tr id="diffRowSlab">
+                                                <td class="text-start fw-semibold">Slab Percent / Fixed</td>
+                                                <td class="compare-val fw-semibold text-secondary">-</td>
+                                                <td class="current-val fw-semibold text-secondary">-</td>
+                                            </tr>
+                                            <tr id="diffRowGross">
+                                                <td class="text-start fw-bold" style="background: rgba(13, 82, 214, 0.02);">Gross Incentive</td>
+                                                <td class="compare-val fw-bold" style="background: rgba(13, 82, 214, 0.02);">-</td>
+                                                <td class="current-val fw-bold" style="background: rgba(13, 82, 214, 0.02);">-</td>
+                                            </tr>
+                                            <tr id="diffRowTds">
+                                                <td class="text-start fw-semibold">TDS Amount</td>
+                                                <td class="compare-val font-monospace">-</td>
+                                                <td class="current-val font-monospace">-</td>
+                                            </tr>
+                                            <tr id="diffRowNet" style="background: rgba(22, 163, 74, 0.03);">
+                                                <td class="text-start fw-bold text-success">Eligible for Incentive</td>
+                                                <td class="compare-val fw-bold text-dark font-monospace">-</td>
+                                                <td class="current-val fw-bold text-success font-monospace">-</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light">
+                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal" style="border-radius: 6px;">Done & Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<!-- jQuery DataTables Scripts & CSS dependencies -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+$(document).ready(function () {
+    // 1. Initialise Server-Side DataTables Grid
+    var table = $('#ledgerDataTable').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: '@Url.Action("GetLedgerData", "Ledger")',
+            type: 'POST',
+            data: function (d) {
+                d.filterPeriod = $('#filterPeriod').val();
+                d.filterStatus = $('#filterStatus').val();
+            }
+        },
+        columns: [
+            { 
+                data: 'ledgerRef',
+                render: function (data, type, row) {
+                    return `<span class="font-monospace text-secondary" style="font-size:0.8rem; font-weight:600;">${data}</span>`;
+                }
+            },
+            { data: 'periodLabel' },
+            { 
+                data: 'partyCode',
+                render: function (data, type, row) {
+                    return `
+                        <div>
+                            <span class="party-code-pill">${data}</span>
+                            <span class="d-block small text-dark mt-1" style="font-weight:600; font-size:0.8rem; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.partyName}</span>
+                        </div>
+                    `;
+                }
+            },
+            { 
+                data: 'saleValue',
+                className: 'text-end',
+                render: function (data) {
+                    return `<strong>₹${Number(data).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>`;
+                }
+            },
+            {
+                data: 'achievementPercent',
+                className: 'text-end',
+                render: function (data) {
+                    if (!data || Number(data) === 0) return `<span class="text-muted small">-</span>`;
+                    return `<span class="badge fw-bold" style="background:rgba(30, 64, 175,0.12);color:var(--primary);font-size:0.78rem;">` +
+                        `${Number(data).toFixed(2)}%</span>`;
+                }
+            },
+            { 
+                data: 'onBillDiscount',
+                className: 'text-end text-danger',
+                render: function (data) {
+                    return `₹${Number(data).toLocaleString('en-IN')}`;
+                }
+            },
+            { 
+                data: 'slabApplied',
+                className: 'text-end',
+                render: function (data, type, row) {
+                    return `<span class="badge bg-secondary-light fw-bold" style="font-size:0.75rem;">${data} (v${row.slabVersion})</span>`;
+                }
+            },
+            { 
+                data: 'grossIncentive',
+                className: 'text-end fw-bold text-dark',
+                render: function (data) {
+                    return `₹${Number(data).toLocaleString('en-IN')}`;
+                }
+            },
+            { 
+                data: 'tdsAmount',
+                className: 'text-end text-muted font-monospace',
+                render: function (data, type, row) {
+                    return `₹${Number(data).toLocaleString('en-IN')} <span style="font-size:0.7rem; color:#94a3b8;">(${row.tdsPercent}%)</span>`;
+                }
+            },
+            { 
+                data: 'netTransferAmount',
+                className: 'text-end col-net-transfer',
+                render: function (data, type, row) {
+                    if (row.grossIncentive === 0) {
+                        return `<span class="net-transfer-val text-muted">-</span>`;
+                    }
+                    return `<span class="net-transfer-val">₹${Number(data).toLocaleString('en-IN')}</span>`;
+                }
+            },
+            { 
+                data: 'paymentStatus',
+                render: function (data, type, row) {
+                    if (row.grossIncentive === 0) {
+                        return `<span style="color:#94a3b8; font-style:italic;">-</span>`;
+                    }
+                    var badgeClass = data === 'Paid' ? 'success' : data === 'Hold' ? 'neutral' : 'warning';
+                    return `<span class="status-badge ${badgeClass}">${data}</span>`;
+                }
+            },
+            { 
+                data: 'id',
+                className: 'text-center',
+                orderable: false,
+                render: function (data, type, row) {
+                    return `
+                        <div class="d-flex justify-content-center gap-2">
+                            <a href="/Ledger/Detail/${data}" class="btn btn-xs btn-outline-primary" style="padding: 2px 7px; font-size: 0.72rem; border-radius: 4px;">
+                                <i class="fa-solid fa-eye"></i> Detail
+                            </a>
+                            <button type="button" class="btn btn-xs btn-outline-success open-versions-btn" 
+                                data-id="${data}" 
+                                data-party="${row.partyCode}" 
+                                data-name="${row.partyName}" 
+                                data-year="${row.incentiveYear}" 
+                                data-month="${row.incentiveMonth}" 
+                                style="padding: 2px 7px; font-size: 0.72rem; border-radius: 4px;">
+                                <i class="fa-solid fa-code-branch"></i> v${row.versionNumber}
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        ],
+        order: [[1, 'desc']], // Order by period desc on load
+        pageLength: 10,
+        lengthMenu: [10, 25, 50, 100],
+        language: {
+            processing: '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Loading Live Master Ledger...',
+            search: "🔍 Quick Search:",
+            searchPlaceholder: "Search party code, name, employee, ref..."
+        },
+        dom: '<"d-flex flex-wrap align-items-center justify-content-between p-3 border-bottom border-light bg-light"f<"d-flex gap-2"l>>t<"d-flex flex-wrap align-items-center justify-content-between p-3 bg-light border-top border-light"ip>'
+    });
+
+    // Handle Filters Redirection
+    $('#filterPeriod, #filterStatus').on('change', function () {
+        table.ajax.reload();
+    });
+
+    // Reset Filters
+    $('#resetFiltersBtn').on('click', function () {
+        $('#filterPeriod').val('all');
+        $('#filterStatus').val('all');
+        table.search('').draw();
+    });
+
+    // High-performance exports
+    $('#exportExcelBtn').on('click', function () {
+        var period = $('#filterPeriod').val();
+        var status = $('#filterStatus').val();
+        var search = table.search();
+        window.location.href = `/Ledger/ExportExcel?filterPeriod=${period}&filterStatus=${status}&search=${encodeURIComponent(search)}`;
+    });
+
+    $('#exportCsvBtn').on('click', function () {
+        var period = $('#filterPeriod').val();
+        var status = $('#filterStatus').val();
+        var search = table.search();
+        window.location.href = `/Ledger/ExportCsv?filterPeriod=${period}&filterStatus=${status}&search=${encodeURIComponent(search)}`;
+    });
+
+    // Double-click row redirects to detail page
+    $('#ledgerDataTable tbody').on('dblclick', 'tr', function () {
+        var rowData = table.row(this).data();
+        if (rowData) {
+            window.location.href = `/Ledger/Detail/${rowData.id}`;
+        }
+    });
+
+    // 2. Open Version Auditing Drawer Modal
+    $(document).on('click', '.open-versions-btn', function () {
+        var id = $(this).data('id');
+        var partyCode = $(this).data('party');
+        var partyName = $(this).data('name');
+        var year = $(this).data('year');
+        var month = $(this).data('month');
+
+        $('#modalSubtitleText').html(`Review version history for <strong>${partyName}</strong> (${partyCode}) · Month: ${month}/${year}`);
+        
+        // Reset Diff View
+        $('#diffPlaceholderText').removeClass('d-none');
+        $('#diffResultsPanel').addClass('d-none');
+        $('#compareBtn').prop('disabled', true);
+
+        // Fetch version history log
+        $.get('@Url.Action("GetHistory")', { partyCode: partyCode, year: year, month: month }, function (history) {
+            var tbody = $('#versionHistoryGrid tbody').empty();
+            history.forEach(function (h) {
+                var checkedAttr = h.id === id ? 'checked' : '';
+                var isLatestLabel = h.isLatestVersion ? ' <span class="badge bg-success-light text-success fw-bold" style="font-size:0.6rem;">Latest</span>' : '';
+                tbody.append(`
+                    <tr>
+                        <td><strong>v${h.versionNumber}</strong>${isLatestLabel}</td>
+                        <td>₹${Number(h.grossIncentive).toLocaleString()}</td>
+                        <td><span class="status-badge ${h.paymentStatus === 'Paid' ? 'success' : h.paymentStatus === 'Hold' ? 'neutral' : 'warning'}" style="padding:2px 8px; font-size:0.7rem;">${h.paymentStatus}</span></td>
+                        <td><span class="d-block fw-semibold">${h.uploadedBy}</span><span class="d-block small text-muted" style="font-size:0.7rem;">${h.uploadedAt}</span></td>
+                        <td class="text-center">
+                            <input class="form-check-input version-checkbox" type="checkbox" value="${h.id}" data-ver="${h.versionNumber}">
+                        </td>
+                    </tr>
+                `);
+            });
+
+            // Show modal
+            var modal = new bootstrap.Modal(document.getElementById('versionHistoryModal'));
+            modal.show();
+        });
+    });
+
+    // Version Log checkbox limit (max 2)
+    $(document).on('change', '.version-checkbox', function () {
+        var checked = $('.version-checkbox:checked');
+        if (checked.length > 2) {
+            $(this).prop('checked', false);
+            Swal.fire({ icon: 'warning', title: 'Limit Reached', text: 'You can select up to 2 versions for side-by-side comparison.', confirmButtonColor: 'var(--primary)' });
+            return;
+        }
+
+        $('#compareBtn').prop('disabled', checked.length !== 2);
+    });
+
+    // 3. COMPARE SELECTED VERSIONS
+    $('#compareBtn').on('click', function () {
+        var checked = $('.version-checkbox:checked');
+        if (checked.length !== 2) return;
+
+        var v1 = $(checked[0]);
+        var v2 = $(checked[1]);
+
+        // Keep v1 as the older version to compare logically
+        var currentId, compareId;
+        if (v1.data('ver') > v2.data('ver')) {
+            currentId = v1.val();
+            compareId = v2.val();
+            $('#diffHeadCurrent').text(`Version ${v1.data('ver')} (Newer)`);
+            $('#diffHeadCompare').text(`Version ${v2.data('ver')} (Older)`);
+        } else {
+            currentId = v2.val();
+            compareId = v1.val();
+            $('#diffHeadCurrent').text(`Version ${v2.data('ver')} (Newer)`);
+            $('#diffHeadCompare').text(`Version ${v1.data('ver')} (Older)`);
+        }
+
+        $.get('@Url.Action("GetDiff")', { currentId: currentId, compareId: compareId }, function (res) {
+            // Fill Sales
+            $('#diffRowSales .compare-val').text(`₹${Number(res.compare.saleValue).toLocaleString()}`);
+            $('#diffRowSales .current-val').text(`₹${Number(res.current.saleValue).toLocaleString()}`);
+            applyDiffColor('#diffRowSales', res.current.saleValue, res.compare.saleValue);
+
+            // Fill Discount
+            $('#diffRowDiscount .compare-val').text(`₹${Number(res.compare.onBillDiscount).toLocaleString()}`);
+            $('#diffRowDiscount .current-val').text(`₹${Number(res.current.onBillDiscount).toLocaleString()}`);
+            applyDiffColor('#diffRowDiscount', res.compare.onBillDiscount, res.current.onBillDiscount); // Lower discount is better!
+
+            // Fill Achievement
+            $('#diffRowAchievement .compare-val').text(`${Number(res.compare.achievementPercent).toFixed(1)}%`);
+            $('#diffRowAchievement .current-val').text(`${Number(res.current.achievementPercent).toFixed(1)}%`);
+            applyDiffColor('#diffRowAchievement', res.current.achievementPercent, res.compare.achievementPercent);
+
+            // Fill Slab
+            $('#diffRowSlab .compare-val').text(res.compare.slabApplied);
+            $('#diffRowSlab .current-val').text(res.current.slabApplied);
+            if (res.compare.slabApplied !== res.current.slabApplied) {
+                $('#diffRowSlab td').addClass('text-warning');
+            } else {
+                $('#diffRowSlab td').removeClass('text-warning text-success text-danger');
+            }
+
+            // Fill Gross
+            $('#diffRowGross .compare-val').text(`₹${Number(res.compare.grossIncentive).toLocaleString()}`);
+            $('#diffRowGross .current-val').text(`₹${Number(res.current.grossIncentive).toLocaleString()}`);
+            applyDiffColor('#diffRowGross', res.current.grossIncentive, res.compare.grossIncentive);
+
+            // Fill TDS
+            $('#diffRowTds .compare-val').text(`₹${Number(res.compare.tdsAmount).toLocaleString()} (${res.compare.tdsPercent}%)`);
+            $('#diffRowTds .current-val').text(`₹${Number(res.current.tdsAmount).toLocaleString()} (${res.current.tdsPercent}%)`);
+            applyDiffColor('#diffRowTds', res.compare.tdsAmount, res.current.tdsAmount);
+
+            // Fill Net
+            $('#diffRowNet .compare-val').text(`₹${Number(res.compare.netTransferAmount).toLocaleString()}`);
+            $('#diffRowNet .current-val').text(`₹${Number(res.current.netTransferAmount).toLocaleString()}`);
+            applyDiffColor('#diffRowNet', res.current.netTransferAmount, res.compare.netTransferAmount);
+
+            $('#diffPlaceholderText').addClass('d-none');
+            $('#diffResultsPanel').removeClass('d-none');
+        });
+    });
+
+    function applyDiffColor(rowId, newVal, oldVal) {
+        var row = $(rowId);
+        row.find('.current-val, .compare-val').removeClass('text-success text-danger text-warning');
+        
+        if (newVal > oldVal) {
+            row.find('.current-val').addClass('text-success fw-bold');
+            row.find('.compare-val').addClass('text-danger');
+        } else if (newVal < oldVal) {
+            row.find('.current-val').addClass('text-danger fw-bold');
+            row.find('.compare-val').addClass('text-success');
+        }
+    }
+});
+</script>
+}
+
+@section DataTableScripts {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+}
+
+

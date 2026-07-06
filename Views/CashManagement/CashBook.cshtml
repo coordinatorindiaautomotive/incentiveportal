@@ -1,0 +1,2769 @@
+@model IncentivePortal.Models.CashBookViewModel
+@using IncentivePortal.Models
+@{
+    ViewData["Title"] = "Cash Book Ledger";
+    var branches = ViewData["Branches"] as List<Branch> ?? new();
+    string FormatCr(decimal v) => v >= 10000000m ? $"₹{v/10000000m:N2} Cr" : v >= 100000m ? $"₹{v/100000m:N2} L" : $"₹{v:N0}";
+    
+    var registerCashIns = ViewBag.RegisterCashIns as List<CashInTransaction> ?? new();
+    var registerCashOuts = ViewBag.RegisterCashOuts as List<CashOutTransaction> ?? new();
+    
+    var receiptTypes = ViewBag.ReceiptTypes as List<string> ?? new();
+    var expenseCategories = ViewBag.ExpenseCategories as List<string> ?? new();
+    
+    bool isHO = User.IsInRole(AppRoles.SuperAdmin) || User.IsInRole(AppRoles.HOFinance) || User.IsInRole(AppRoles.Auditor);
+    bool canCreate = !User.IsInRole(AppRoles.Auditor);
+    bool canApprove = User.IsInRole(AppRoles.SuperAdmin) || User.IsInRole(AppRoles.HOFinance);
+    bool canVerifyTally = User.IsInRole(AppRoles.SuperAdmin) || User.IsInRole(AppRoles.HOFinance);
+    bool canEdit = User.IsInRole(AppRoles.SuperAdmin) || User.IsInRole(AppRoles.HOFinance);
+
+    // C# count metrics for Cashier Console (Filter to current branch's counts automatically since lists are pre-filtered in controller)
+    var draftsCount = registerCashIns.Count(x => x.Status == CashTxStatus.Draft) + registerCashOuts.Count(x => x.Status == CashTxStatus.Draft);
+    var submittedCount = registerCashIns.Count(x => x.Status == CashTxStatus.Submitted) + registerCashOuts.Count(x => x.Status == CashTxStatus.Submitted);
+    var approvedCount = registerCashIns.Count(x => x.Status == CashTxStatus.Approved) + registerCashOuts.Count(x => x.Status == CashTxStatus.Approved);
+    var rejectedCount = registerCashIns.Count(x => x.Status == CashTxStatus.Rejected || x.TallySyncStatus == "Wrong") + registerCashOuts.Count(x => x.Status == CashTxStatus.Rejected || x.TallySyncStatus == "Wrong");
+    
+    // C# count metrics for HO review console
+    var hoPendingVerification = registerCashIns.Count(x => x.Status == CashTxStatus.Submitted) + registerCashOuts.Count(x => x.Status == CashTxStatus.Submitted);
+    var hoTallyErrors = registerCashIns.Count(x => x.TallySyncStatus == "Wrong") + registerCashOuts.Count(x => x.TallySyncStatus == "Wrong");
+    var hoReadyToPost = registerCashIns.Count(x => x.Status == CashTxStatus.Approved && string.IsNullOrEmpty(x.TallyVoucherNo)) + registerCashOuts.Count(x => x.Status == CashTxStatus.Approved && string.IsNullOrEmpty(x.TallyVoucherNo));
+}
+
+<!-- Load Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
+<style>
+    .cashbook-table {
+        
+        font-size: 0.84rem;
+        border-collapse: collapse;
+        width: 100%;
+    }
+    .cashbook-table th {
+        background: #0d1636;
+        color: #ffffff;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        padding: 10px 12px;
+        border: 1px solid #1e293b;
+    }
+    .cashbook-table td {
+        padding: 9px 12px;
+        border: 1px solid #e2e8f0;
+        vertical-align: middle;
+    }
+    .debit-col {
+        border-right: 2px solid #004C8F !important;
+    }
+    .debit-bg {
+        background-color: rgba(34, 197, 94, 0.02);
+    }
+    .credit-bg {
+        background-color: rgba(239, 68, 68, 0.02);
+    }
+    .ledger-header-debit {
+        background: linear-gradient(135deg, #15803d 0%, #166534 100%) !important;
+        border-right: 2px solid #0d5c28 !important;
+    }
+    .ledger-header-credit {
+        background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%) !important;
+    }
+    .highlight-amt {
+        font-family: monospace;
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+    .highlight-debit {
+        color: #16a34a;
+    }
+    .highlight-credit {
+        color: #dc2626;
+    }
+    .particulars-text {
+        font-weight: 500;
+        color: #1e293b;
+    }
+    .comments-text {
+        color: #64748b;
+        font-size: 0.76rem;
+        font-style: italic;
+    }
+    
+    #cashbookTabs .nav-link {
+        color: #64748b;
+        background: transparent;
+        transition: all 0.2s ease;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.84rem;
+        border: 1px solid transparent;
+    }
+    #cashbookTabs .nav-link.active {
+        background: #6366f1;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(99,102,241,0.15);
+    }
+    
+    .cash-badge { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:0.72rem;font-weight:700;letter-spacing:.3px; }
+    .cash-badge::before { content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0; }
+    .badge-draft{background:rgba(100,116,139,.12);color:#64748b;}.badge-draft::before{background:#64748b;}
+    .badge-submitted{background:rgba(59,130,246,.12);color:#3b82f6;}.badge-submitted::before{background:#3b82f6;}
+    .badge-verified{background:rgba(20,184,166,.12);color:#14b8a6;}.badge-verified::before{background:#14b8a6;}
+    .badge-approved{background:rgba(34,197,94,.12);color:#22c55e;}.badge-approved::before{background:#22c55e;}
+    .badge-posted{background:rgba(99,102,241,.12);color:#6366f1;}.badge-posted::before{background:#6366f1;}
+    .badge-reconciled{background:rgba(34,197,94,.15);color:#16a34a;}.badge-reconciled::before{background:#16a34a;}
+    .badge-rejected{background:rgba(239,68,68,.12);color:#ef4444;}.badge-rejected::before{background:#ef4444;}
+    .badge-closed{background:rgba(100,116,139,.1);color:#94a3b8;}.badge-closed::before{background:#94a3b8;}
+    
+    .tally-chip{font-size:0.7rem;font-weight:700;color:#6366f1;background:rgba(99,102,241,.1);padding:2px 8px;border-radius:20px;font-family:monospace;}
+    .act-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;border:1px solid #e2e8f0;color:#64748b;transition:all .15s;cursor:pointer;}
+    .act-icon:hover.vi{background:rgba(59,130,246,.1);color:#3b82f6;border-color:rgba(59,130,246,.3);}
+    .act-icon:hover.ap{background:rgba(34,197,94,.1);color:#22c55e;border-color:rgba(34,197,94,.3);}
+    .act-icon:hover.re{background:rgba(239,68,68,.1);color:#ef4444;border-color:rgba(239,68,68,.3);}
+    .act-icon:hover.dl{background:rgba(239,68,68,.1);color:#ef4444;border-color:rgba(239,68,68,.3);}
+
+    @@media print {
+        body { background: #fff !important; color: #000 !important; }
+        .sidebar, .topbar, .no-print, #cashbookTabs { display: none !important; }
+        .content { padding: 0 !important; margin: 0 !important; }
+        .cashbook-table { font-size: 0.78rem !important; }
+        .cashbook-table th { background: #e2e8f0 !important; color: #000 !important; border: 1px solid #94a3b8 !important; }
+        .cashbook-table td { border: 1px solid #cbd5e1 !important; }
+        .print-header { display: block !important; margin-bottom: 20px; }
+    }
+</style>
+
+<!-- Hidden Print Header -->
+<div class="print-header d-none" style="border-bottom: 2px solid var(--primary); padding-bottom: 10px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <h2 style="font-weight:800;color:var(--primary);margin:0;letter-spacing:-0.5px;">THESSBUDDY</h2>
+            <div style="font-size:0.8rem;color:#64748b;font-weight:600;font-style:italic;">ThessBuddy Cash Book</div>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-size:0.8rem;font-weight:700;">Statement Period</div>
+            <div style="font-size:0.85rem;color:#1e293b;">@ViewBag.FilterFrom to @ViewBag.FilterTo</div>
+        </div>
+    </div>
+</div>
+
+<!-- Period Locked Banner -->
+<div id="period-locked-banner" class="alert alert-danger shadow-sm border-0 mb-4 no-print" style="display:none; border-radius:12px; background: rgba(239, 68, 68, 0.07); border: 1px solid rgba(239, 68, 68, 0.25) !important;">
+    <div class="d-flex align-items-center gap-2" style="color: #b91c1c; font-size: 0.88rem;">
+        <i class="fa-solid fa-lock fs-5"></i>
+        <div>
+            <strong>Period Locked:</strong> The current period is locked. Contact HO Finance for modifications.
+        </div>
+    </div>
+</div>
+
+<!-- Header & Role-Based Console Panel -->
+<div class="card border-0 shadow-sm p-4 mb-4 no-print" style="border-radius: 16px; background: #ffffff; border: 1px solid #e2e8f0;">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 pb-3 mb-3 border-bottom">
+        <div>
+            <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:.5px;">Cash Management</div>
+            <h2 style="font-size:1.5rem;font-weight:700;color:#0f172a;margin:0;">
+                <i class="fa-solid fa-book me-2" style="color:#f59e0b;"></i>Cash Book Workspace
+            </h2>
+            <p class="text-muted mb-0" style="font-size:.82rem;">Unified Cash Book ledger, real-time analytics, and dual-register bookkeeping console</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-outline-primary d-flex align-items-center gap-2 px-3" style="height:40px;border-radius:8px;font-size:.88rem;font-weight:600;border-color:var(--primary);color:var(--primary);">
+                <i class="fa-solid fa-print"></i> Print Ledger
+            </button>
+            <a href="@Url.Action("CashBook")" class="btn btn-outline-secondary d-flex align-items-center gap-2" style="height:40px;border-radius:8px;font-size:.88rem;font-weight:600;">
+                <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </a>
+        </div>
+    </div>
+
+    <!-- Console Rows Based on User Role -->
+    <div class="row g-4 align-items-stretch">
+        @if (!isHO)
+        {
+            <!-- BRANCH CASHIER CONSOLE -->
+            <div class="col-12 col-lg-5 border-end pr-lg-4" style="border-color: #cbd5e1 !important;">
+                <div class="h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <h4 class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">
+                            <i class="fa-solid fa-cash-register text-success me-1"></i> Cashier Action Hub
+                        </h4>
+                        <p class="text-muted small mb-3">Record new transactions instantly into the ledger registers</p>
+                    </div>
+                    @if (canCreate)
+                    {
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success flex-fill d-flex align-items-center justify-content-center gap-2" style="height: 48px; border-radius: 8px; font-weight: 700; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2); background-color: #22c55e; border-color: #22c55e;" data-bs-toggle="modal" data-bs-target="#cashInModal" onclick="resetCashInForm()">
+                                <i class="fa-solid fa-circle-plus"></i> Record Cash In
+                            </button>
+                            <button class="btn btn-danger flex-fill d-flex align-items-center justify-content-center gap-2" style="height: 48px; border-radius: 8px; font-weight: 700; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); background-color: #ef4444; border-color: #ef4444;" data-bs-toggle="modal" data-bs-target="#cashOutModal" onclick="resetCashOutForm()">
+                                <i class="fa-solid fa-circle-minus"></i> Record Cash Out
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            <div class="col-12 col-lg-7 ps-lg-4">
+                <h4 class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">
+                    <i class="fa-solid fa-list-check text-primary me-1"></i> My Branch Transaction Status
+                </h4>
+                <div class="row g-2">
+                    <div class="col-6 col-sm-3">
+                        <div class="card border-0 p-3 h-100 text-center" style="border-radius: 10px; background: rgba(148, 163, 184, 0.08); border-bottom: 4px solid #64748b !important; cursor: pointer; transition: all 0.2s;" onclick="filterByStatusAndTab('Draft', 'both')">
+                            <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Drafts Pending</div>
+                            <div class="fs-4 fw-extrabold text-dark mt-1">@draftsCount</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <div class="card border-0 p-3 h-100 text-center" style="border-radius: 10px; background: rgba(59, 130, 246, 0.08); border-bottom: 4px solid #3b82f6 !important; cursor: pointer; transition: all 0.2s;" onclick="filterByStatusAndTab('Submitted', 'both')">
+                            <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Under Review</div>
+                            <div class="fs-4 fw-extrabold text-dark mt-1">@submittedCount</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <div class="card border-0 p-3 h-100 text-center" style="border-radius: 10px; background: rgba(34, 197, 94, 0.08); border-bottom: 4px solid #22c55e !important; cursor: pointer; transition: all 0.2s;" onclick="filterByStatusAndTab('Approved', 'both')">
+                            <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Approved</div>
+                            <div class="fs-4 fw-extrabold text-dark mt-1">@approvedCount</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <div class="card border-0 p-3 h-100 text-center" style="border-radius: 10px; background: rgba(239, 68, 68, 0.08); border-bottom: 4px solid #ef4444 !important; cursor: pointer; transition: all 0.2s;" onclick="filterByStatusAndTab('Rejected', 'both')">
+                            <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Returned</div>
+                            <div class="fs-4 fw-extrabold text-dark mt-1">@rejectedCount</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- ACCOUNTS DEPARTMENT CONSOLE -->
+            <div class="col-12 col-lg-5 border-end pr-lg-4" style="border-color: #cbd5e1 !important;">
+                <div class="h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <h4 class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">
+                            <i class="fa-solid fa-user-shield text-indigo me-1"></i> Accounts Review Hub
+                        </h4>
+                        <p class="text-muted small mb-3">Reconcile transaction registries and post vouchers to Tally</p>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (canApprove)
+                        {
+                            <form method="post" action="/CashManagement/AutoMatch" class="m-0 flex-fill">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-indigo w-100 d-flex align-items-center justify-content-center gap-2" style="background:#4f46e5; color:white; height: 42px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; border: none;">
+                                    <i class="fa-solid fa-arrows-to-eye"></i> Tally Auto-Match
+                                </button>
+                            </form>
+                        }
+                        <a href="@Url.Action("Reconciliation")" class="btn btn-outline-indigo flex-fill d-flex align-items-center justify-content-center gap-1" style="height: 42px; border-radius: 8px; font-weight: 600; font-size: 0.82rem; border-color:#4f46e5; color:#4f46e5; text-decoration: none;">
+                            <i class="fa-solid fa-scale-balanced"></i> Recon Console
+                        </a>
+                        <a href="@Url.Action("PeriodControls")" class="btn btn-outline-secondary flex-fill d-flex align-items-center justify-content-center gap-1" style="height: 42px; border-radius: 8px; font-weight: 600; font-size: 0.82rem; text-decoration: none;">
+                            <i class="fa-solid fa-calendar-days"></i> Period Controls
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-12 col-lg-7 ps-lg-4">
+                <h4 class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">
+                    <i class="fa-solid fa-shield-halved text-indigo me-1"></i> System-Wide Audit Metrics
+                </h4>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <div class="card border-0 p-3 h-100 text-center" style="border-radius: 10px; background: rgba(245, 158, 11, 0.08); border-bottom: 4px solid #f59e0b !important; cursor: pointer; transition: all 0.2s;" onclick="filterByStatusAndTab('Submitted', 'both')">
+                            <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Awaiting Review</div>
+                            <div class="fs-4 fw-extrabold text-dark mt-1">@hoPendingVerification</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card border-0 p-3 h-100 text-center" style="border-radius: 10px; background: rgba(239, 68, 68, 0.08); border-bottom: 4px solid #ef4444 !important; cursor: pointer; transition: all 0.2s;" onclick="filterByTallyStatus()">
+                            <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Tally Mismatches</div>
+                            <div class="fs-4 fw-extrabold text-dark mt-1 text-danger">@hoTallyErrors</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card border-0 p-3 h-100 text-center" style="border-radius: 10px; background: rgba(99, 102, 241, 0.08); border-bottom: 4px solid #6366f1 !important; cursor: pointer; transition: all 0.2s;" onclick="filterByStatusAndTab('Approved', 'both')">
+                            <div class="text-muted small fw-semibold" style="font-size:0.75rem;">Unposted Approved</div>
+                            <div class="fs-4 fw-extrabold text-dark mt-1">@hoReadyToPost</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Pills Tab Toggle System -->
+<div class="mb-4 no-print">
+    <ul class="nav nav-pills gap-1" id="cashbookTabs" role="tablist" style="background:rgba(15,23,42,.04);padding:6px;border-radius:12px;display:inline-flex;">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active px-4 py-2 border-0" id="ledger-tab" data-bs-toggle="pill" data-bs-target="#ledger-pane" type="button" role="tab">
+                <i class="fa-solid fa-book me-1"></i>Ledger Book
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 py-2 border-0" id="analytics-tab" data-bs-toggle="pill" data-bs-target="#analytics-pane" type="button" role="tab">
+                <i class="fa-solid fa-chart-line me-1"></i>Flow Analytics
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 py-2 border-0" id="cashin-tab" data-bs-toggle="pill" data-bs-target="#cashin-pane" type="button" role="tab">
+                <i class="fa-solid fa-arrow-circle-down me-1" style="color:#22c55e;"></i>Cash In Register
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 py-2 border-0" id="cashout-tab" data-bs-toggle="pill" data-bs-target="#cashout-pane" type="button" role="tab">
+                <i class="fa-solid fa-arrow-circle-up me-1" style="color:#ef4444;"></i>Cash Out Register
+            </button>
+        </li>
+    </ul>
+</div>
+
+<!-- Filters Panel (Applies to all) -->
+<div class="panel mb-4 filter-panel no-print" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,.04);">
+    <form method="get" class="d-flex flex-wrap align-items-end gap-3">
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</label>
+            <select name="branchId" class="form-select form-select-sm" style="width:180px;border-radius:8px;">
+                <option value="">All Branches</option>
+                @foreach (var b in branches)
+                {
+                    <option value="@b.Id" selected="@(ViewBag.FilterBranchId?.ToString()==b.Id.ToString()?"selected":null)">@b.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">From</label>
+            <input type="date" name="from" value="@ViewBag.FilterFrom" class="form-control form-control-sm" style="width:145px;border-radius:8px;">
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">To</label>
+            <input type="date" name="to" value="@ViewBag.FilterTo" class="form-control form-control-sm" style="width:145px;border-radius:8px;">
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2" style="height:32px;border-radius:8px;font-weight:600;font-size:.8rem;border-color:var(--primary);color:var(--primary);">
+            <i class="fa-solid fa-filter"></i> Apply Filter
+        </button>
+        <a href="@Url.Action("CashBook")" class="btn btn-sm btn-ghost text-muted" style="height:32px;font-size:.8rem;">Clear</a>
+    </form>
+</div>
+
+<!-- Tab Contents -->
+<div class="tab-content" id="cashbookTabsContent">
+    
+    <!-- 1. LEDGER PANE -->
+    <div class="tab-pane fade show active" id="ledger-pane" role="tabpanel">
+        @{
+            // Build Chronological running statement list
+            var chronoTransactions = registerCashIns
+                .Where(x => x.Status != CashTxStatus.Draft && x.Status != CashTxStatus.Rejected)
+                .Select(x => new {
+                    Date = x.TransactionDate,
+                    RefNo = x.TransactionNo,
+                    Particulars = x.CustomerName,
+                    Type = "Receipt / Cash In",
+                    ItemType = x.ReceiptType,
+                    AmountIn = x.Amount,
+                    AmountOut = 0m,
+                    Reference = x.ReferenceNo,
+                    Status = x.Status,
+                    IsDebit = true
+                })
+                .Union(
+                    registerCashOuts
+                    .Where(x => x.Status != CashTxStatus.Draft && x.Status != CashTxStatus.Rejected)
+                    .Select(x => new {
+                        Date = x.TransactionDate,
+                        RefNo = x.TransactionNo,
+                        Particulars = x.VendorName,
+                        Type = "Payment / Cash Out",
+                        ItemType = x.ExpenseCategory,
+                        AmountIn = 0m,
+                        AmountOut = x.Amount,
+                        Reference = x.ReferenceNo,
+                        Status = x.Status,
+                        IsDebit = false
+                    })
+                )
+                .OrderBy(x => x.Date)
+                .ThenBy(x => x.RefNo)
+                .ToList();
+
+            DateTime.TryParse(ViewBag.FilterFrom, out DateTime fromParsed);
+            DateTime.TryParse(ViewBag.FilterTo, out DateTime toParsed);
+        }
+
+        <!-- KPI Cards -->
+        <div class="row g-3 mb-4 no-print">
+            @{
+                var kpis = new[] {
+                    ("Opening Balance", FormatCr(Model.OpeningBalance), "fa-wallet", "rgba(99,102,241,.1)", "#6366f1"),
+                    ("Total Cash In", FormatCr(Model.TotalDebit), "fa-arrow-down", "rgba(34,197,94,.12)", "#22c55e"),
+                    ("Total Cash Out", FormatCr(Model.TotalCredit), "fa-arrow-up", "rgba(239,68,68,.12)", "#ef4444"),
+                    ("Closing Balance", FormatCr(Model.ClosingBalance), "fa-scale-balanced", "rgba(245,158,11,.12)", "#f59e0b"),
+                };
+            }
+            @foreach (var (label, val, icon, bg, color) in kpis)
+            {
+                <div class="col-md-3">
+                    <div class="stat-card" style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 4px 20px rgba(0,0,0,.03);border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
+                        <div style="background:@bg;color:@color;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
+                            <i class="fa-solid @icon"></i>
+                        </div>
+                        <div>
+                            <div style="font-size:.72rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">@label</div>
+                            <div style="font-size:1.4rem;font-weight:800;color:@color;line-height:1.1;">@val</div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Format Selection Sub-bar -->
+        <div class="d-flex align-items-center justify-content-between mb-3 no-print p-2" style="background: rgba(15,23,42,.015); border: 1px solid #e2e8f0; border-radius: 8px;">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-list-ol text-muted" style="font-size:0.9rem;"></i>
+                <div style="font-size: 0.8rem; font-weight: 600; color: #475569;">Ledger View Format:</div>
+            </div>
+            <div class="btn-group" role="group" style="background: rgba(15,23,42,.04); padding: 3px; border-radius: 8px;">
+                <button type="button" class="btn btn-sm text-white" id="btnShowTAccount" onclick="toggleLedgerView('taccount')" style="background:#6366f1; border-radius: 6px; font-size: 0.74rem; font-weight: 700; border: none; padding: 4px 14px; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <i class="fa-solid fa-columns me-1"></i> Dual-Column (T-Account)
+                </button>
+                <button type="button" class="btn btn-sm text-muted" id="btnShowChrono" onclick="toggleLedgerView('chrono')" style="background:transparent; border-radius: 6px; font-size: 0.74rem; font-weight: 600; border: none; padding: 4px 14px; transition: all 0.2s;">
+                    <i class="fa-solid fa-timeline me-1"></i> Chronological (Running Balance)
+                </button>
+            </div>
+        </div>
+
+        <!-- format 1: Side-by-Side Dual Ledger Table -->
+        <div id="taccount-ledger-container">
+            <div class="panel p-0" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 32px rgba(13,82,214,.04);overflow:hidden;">
+                <div class="table-responsive">
+                    <table class="cashbook-table">
+                        <thead>
+                            <tr>
+                                <th colspan="3" class="ledger-header-debit text-center font-bold">Debit (Cash In / Receipts)</th>
+                                <th colspan="3" class="ledger-header-credit text-center font-bold">Credit (Cash Out / Payments)</th>
+                            </tr>
+                            <tr>
+                                <th style="width: 8%;" class="text-center">Date</th>
+                                <th style="width: 25%;">Particulars</th>
+                                <th style="width: 17%;" class="text-end">Total Amount (₹)</th>
+                                <th style="width: 23%;">Particulars</th>
+                                <th style="width: 12%;" class="text-end">Amount (₹)</th>
+                                <th style="width: 15%;">Comments / Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.Rows)
+                            {
+                                <tr>
+                                    <td class="text-center font-semibold text-muted debit-col" style="font-size: 0.8rem;">@row.Date</td>
+                                    <td class="debit-bg"><span class="particulars-text">@row.DebitParticulars</span></td>
+                                    <td class="text-end debit-bg debit-col">
+                                        @if (row.DebitAmount.HasValue)
+                                        {
+                                            <span class="highlight-amt highlight-debit">@FormatCr(row.DebitAmount.Value)</span>
+                                        }
+                                    </td>
+                                    <td class="credit-bg"><span class="particulars-text">@row.CreditParticulars</span></td>
+                                    <td class="text-end credit-bg">
+                                        @if (row.CreditAmount.HasValue)
+                                        {
+                                            <span class="highlight-amt highlight-credit">@FormatCr(row.CreditAmount.Value)</span>
+                                        }
+                                    </td>
+                                    <td class="credit-bg"><span class="comments-text">@row.CreditComments</span></td>
+                                </tr>
+                            }
+                            
+                            <tr style="border-top: 2px solid #004C8F;">
+                                <td class="text-center font-bold text-success debit-col" style="background:#ecfdf5;">G. Total</td>
+                                <td class="debit-bg font-bold text-success" style="background:#ecfdf5;">Total Debit Generated</td>
+                                <td class="text-end debit-bg debit-col font-bold text-success" style="background:#ecfdf5; font-size: 0.95rem;">
+                                    @FormatCr(Model.GrandTotalDebit)
+                                </td>
+                                <td class="credit-bg font-bold text-danger" style="background:#fef2f2;">G. Total</td>
+                                <td class="text-end credit-bg font-bold text-danger" style="background:#fef2f2; font-size: 0.95rem;">
+                                    @FormatCr(Model.TotalCredit)
+                                </td>
+                                <td class="credit-bg text-muted italic" style="background:#fef2f2; font-size:0.75rem;">Total Outflows</td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="debit-col" colspan="3" style="background:#f8fafc;"></td>
+                                <td class="credit-bg font-bold" style="color:#d97706; background:#fffbeb;">Closing Balance</td>
+                                <td class="text-end credit-bg font-bold" style="color:#d97706; background:#fffbeb; font-size: 0.95rem;">
+                                    @FormatCr(Model.ClosingBalance)
+                                </td>
+                                <td class="credit-bg text-muted italic" style="color:#d97706; background:#fffbeb; font-size:0.72rem;">Carried forward to next period</td>
+                            </tr>
+
+                            <tr style="border-top: 2.5px double #1e293b; border-bottom: 2.5px double #1e293b; background:#f1f5f9; font-weight:800; font-size:0.92rem;">
+                                <td class="text-center debit-col">Total</td>
+                                <td class="debit-bg font-black">Balanced Debit Ledger</td>
+                                <td class="text-end debit-bg debit-col">@FormatCr(Model.GrandTotalDebit)</td>
+                                <td class="credit-bg">Total</td>
+                                <td class="text-end credit-bg">@FormatCr(Model.GrandTotalCredit)</td>
+                                <td class="credit-bg text-muted italic" style="font-size:0.75rem;">Successfully Balanced</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- format 2: Chronological Running Balance Statement Table -->
+        <div id="chrono-ledger-container" class="d-none">
+            <div class="panel p-0" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 32px rgba(13,82,214,.04);overflow:hidden;">
+                <div class="table-responsive">
+                    <table class="cashbook-table">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, #0d1636 0%, #111d47 100%) !important;">
+                                <th style="width: 10%;" class="text-center">Date</th>
+                                <th style="width: 15%;" class="text-center">Voucher No</th>
+                                <th style="width: 35%;">Transaction Particulars</th>
+                                <th style="width: 13%;" class="text-end">Inflow / Cash In (+) (₹)</th>
+                                <th style="width: 13%;" class="text-end">Outflow / Cash Out (-) (₹)</th>
+                                <th style="width: 14%;" class="text-end" style="background: rgba(99,102,241,0.06);">Running Balance (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Opening Balance Brought Forward -->
+                            <tr style="background: rgba(99,102,241,0.02); font-weight: 600;">
+                                <td class="text-center font-semibold text-muted" style="font-size: 0.8rem;">@fromParsed.ToString("dd MMM yyyy")</td>
+                                <td class="text-center"><code>—</code></td>
+                                <td>
+                                    <span class="particulars-text" style="color: #6366f1;">
+                                        <i class="fa-solid fa-wallet me-1"></i> Opening Balance Brought Forward
+                                    </span>
+                                </td>
+                                <td class="text-end">—</td>
+                                <td class="text-end">—</td>
+                                <td class="text-end highlight-amt" style="color: #6366f1;">@FormatCr(Model.OpeningBalance)</td>
+                            </tr>
+
+                            @{
+                                decimal runningBalance = Model.OpeningBalance;
+                            }
+                            @foreach (var tx in chronoTransactions)
+                            {
+                                runningBalance += tx.AmountIn - tx.AmountOut;
+                                <tr>
+                                    <td class="text-center font-semibold text-muted" style="font-size: 0.8rem;">@tx.Date.ToString("dd MMM yyyy")</td>
+                                    <td class="text-center"><code style="font-weight:700; color:@(tx.IsDebit ? "#6366f1" : "#f97316")">@tx.RefNo</code></td>
+                                    <td>
+                                        <div class="d-flex flex-column">
+                                            <span class="particulars-text font-semibold">
+                                                @(tx.IsDebit ? "To " : "By ") @(string.IsNullOrEmpty(tx.Particulars) ? tx.ItemType : tx.Particulars)
+                                            </span>
+                                            <span class="comments-text" style="font-size:0.75rem;">
+                                                <i class="fa-solid fa-tag me-1"></i>@tx.ItemType @(string.IsNullOrEmpty(tx.Reference) ? "" : $" | Ref: {tx.Reference}")
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="text-end debit-bg">
+                                        @if (tx.AmountIn > 0)
+                                        {
+                                            <span class="highlight-amt highlight-debit">+@FormatCr(tx.AmountIn)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td class="text-end credit-bg">
+                                        @if (tx.AmountOut > 0)
+                                        {
+                                            <span class="highlight-amt highlight-credit">-@FormatCr(tx.AmountOut)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td class="text-end font-bold" style="background: rgba(99,102,241,0.01); font-family: monospace; font-size: 0.9rem; color: @(runningBalance >= 0 ? "#16a34a" : "#dc2626")">
+                                        @FormatCr(runningBalance)
+                                    </td>
+                                </tr>
+                            }
+
+                            <!-- Closing Balance Carried Forward -->
+                            <tr style="background: #fffbeb; font-weight: 700; border-top: 2.5px double #d97706; border-bottom: 2.5px double #d97706;">
+                                <td class="text-center font-semibold" style="color: #d97706; font-size: 0.8rem;">@toParsed.ToString("dd MMM yyyy")</td>
+                                <td class="text-center"><code>—</code></td>
+                                <td>
+                                    <span class="particulars-text" style="color: #d97706;">
+                                        <i class="fa-solid fa-scale-balanced me-1"></i> Closing Balance Carried Forward
+                                    </span>
+                                </td>
+                                <td class="text-end">—</td>
+                                <td class="text-end">—</td>
+                                <td class="text-end highlight-amt" style="color: #d97706;">@FormatCr(Model.ClosingBalance)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 2. ANALYTICS PANE -->
+    <div class="tab-pane fade" id="analytics-pane" role="tabpanel">
+        <div class="row g-4 mb-4">
+            <!-- Cumulative Cash Flow Trend -->
+            <div class="col-lg-8">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+                    <div style="font-size:.88rem;font-weight:700;color:var(--ink);margin-bottom:18px;">
+                        <i class="fa-solid fa-chart-area me-2 text-muted"></i>Cumulative Net Cash Flow Trend (Current Period)
+                    </div>
+                    <div style="height: 320px; position: relative;">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Inflow vs Outflow Comparison -->
+            <div class="col-lg-4">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.03);height:100%;">
+                    <div style="font-size:.88rem;font-weight:700;color:var(--ink);margin-bottom:18px;">
+                        <i class="fa-solid fa-chart-bar me-2 text-muted"></i>Volume Comparison (In vs Out)
+                    </div>
+                    <div style="height: 320px; position: relative; display:flex; align-items:center; justify-content:center;">
+                        <canvas id="compareChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <!-- Inflows by Receipt Type -->
+            <div class="col-lg-6">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+                    <div style="font-size:.88rem;font-weight:700;color:var(--ink);margin-bottom:18px;">
+                        <i class="fa-solid fa-chart-pie me-2 text-muted"></i>Receipt Type Inflow Distribution
+                    </div>
+                    <div style="height: 280px; position: relative; display:flex; align-items:center; justify-content:center;">
+                        <canvas id="inflowsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Outflows by Expense Category -->
+            <div class="col-lg-6">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+                    <div style="font-size:.88rem;font-weight:700;color:var(--ink);margin-bottom:18px;">
+                        <i class="fa-solid fa-chart-pie me-2 text-muted"></i>Expense Category Outflow Distribution
+                    </div>
+                    <div style="height: 280px; position: relative; display:flex; align-items:center; justify-content:center;">
+                        <canvas id="outflowsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 3. CASH IN REGISTER PANE -->
+    <div class="tab-pane fade" id="cashin-pane" role="tabpanel">
+        <div class="panel mb-4" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+            <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom">
+                <div style="font-size:.88rem;font-weight:700;color:var(--ink);">
+                    <i class="fa-solid fa-arrow-down me-2" style="color:#22c55e;"></i>Cash In Transaction Records
+                </div>
+                <div class="d-flex gap-2">
+                    @if (canCreate)
+                    {
+                        <button class="btn btn-sm btn-primary d-flex align-items-center gap-2 px-3"
+                                style="background:#22c55e;border:none;height:32px;font-weight:600;font-size:.78rem;border-radius:6px;"
+                                data-bs-toggle="modal" data-bs-target="#cashInModal">
+                            <i class="fa-solid fa-plus"></i> New Cash In
+                        </button>
+                    }
+                    <div class="input-group input-group-sm" style="width: 240px;">
+                        <input type="text" id="ciSearchInput" placeholder="Search Inflows..." class="form-control" style="border-top-left-radius:20px; border-bottom-left-radius:20px; font-size:.8rem; border-right: none;" oninput="filterTable(this.value,'ciTableTbody')">
+                        <button class="btn btn-outline-secondary" type="button" style="border-top-right-radius:20px; border-bottom-right-radius:20px; border-left: none; background: #fff; color: #94a3b8; border-color: #cbd5e1;" onclick="clearSearchFilter('ciSearchInput', 'ciTableTbody')">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size:.82rem;">
+                    <thead style="background:#f8fafc;">
+                        <tr>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;padding:12px 16px;">Transaction ID</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Date</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Type</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Party</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Amount</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Mode</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Reference</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Status</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Tally</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ciTableTbody">
+                        @if (!registerCashIns.Any())
+                        {
+                            <tr><td colspan="11" class="text-center py-5 text-muted">
+                                <i class="fa-solid fa-inbox fa-2x mb-2 d-block" style="opacity:.2;"></i>No inflow records found in this period
+                            </td></tr>
+                        }
+                        @foreach (var tx in registerCashIns)
+                        {
+                            <tr>
+                                <td><code style="font-size:.78rem;color:#6366f1;font-weight:700;">@tx.TransactionNo</code></td>
+                                <td style="font-weight:500;">@tx.Branch?.Name</td>
+                                <td>@tx.TransactionDate.ToString("dd MMM yyyy")</td>
+                                <td><span style="font-size:.75rem;color:#64748b;">@tx.ReceiptType</span></td>
+                                <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@tx.CustomerName">@tx.CustomerName</td>
+                                <td style="font-weight:700;color:#22c55e;font-family:monospace;">@FormatCr(tx.Amount)</td>
+                                <td><span style="font-size:.72rem;background:rgba(59,130,246,.1);color:#3b82f6;padding:2px 8px;border-radius:20px;font-weight:600;">@tx.PaymentMode</span></td>
+                                <td style="font-size:.75rem;color:#94a3b8;max-width:100px;overflow:hidden;text-overflow:ellipsis;">@tx.ReferenceNo</td>
+                                <td><span class="cash-badge badge-@tx.Status.ToLower()">@tx.Status</span></td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        @if (tx.TallySyncStatus == "Correct")
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem; padding:3px 8px; border-radius:12px; align-self: start;">
+                                                <i class="fa-solid fa-circle-check me-1"></i>Tally OK
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(tx.TallyVoucherNo))
+                                            {
+                                                <span class="tally-chip" style="font-size: 0.68rem; align-self: start;"><i class="fa-solid fa-receipt me-1"></i>@tx.TallyVoucherNo</span>
+                                            }
+                                        }
+                                        else if (tx.TallySyncStatus == "Wrong")
+                                        {
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:0.7rem; padding:3px 8px; border-radius:12px; align-self: start;" title="@tx.ApprovalRemarks">
+                                                <i class="fa-solid fa-circle-xmark me-1"></i>Tally Error
+                                            </span>
+                                            <span style="font-size:0.68rem; color:#ef4444; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="@tx.ApprovalRemarks">@tx.ApprovalRemarks</span>
+                                        }
+                                        else
+                                        {
+                                            @if (!string.IsNullOrEmpty(tx.TallyVoucherNo))
+                                            {
+                                                <span class="tally-chip"><i class="fa-solid fa-link me-1"></i>@tx.TallyVoucherNo</span>
+                                            }
+                                            else
+                                            {
+                                                <span style="color:#cbd5e1;font-size:.75rem;">—</span>
+                                            }
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        <button class="act-icon vi" title="View"
+                                                onclick="viewCashTx('Cash In', '@tx.TransactionNo','@(tx.Branch?.Name?.Replace("'", "\\'"))','@tx.TransactionDate.ToString("dd MMM yyyy")','@tx.ReceiptType','@(tx.CustomerName.Replace("'", "\\'"))','@(tx.DealerCode?.Replace("'", "\\'") ?? "")','@FormatCr(tx.Amount)','@tx.PaymentMode','@(tx.BankName?.Replace("'", "\\'") ?? "")','@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")','@tx.Status','@(tx.TallyVoucherNo ?? "—")','@(tx.Narration?.Replace("'", "\\'").Replace("\r", "").Replace("\n", " ") ?? "")')">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+                                        @if (canEdit)
+                                        {
+                                            <button class="act-icon text-warning" style="border-color: rgba(245, 158, 11, .3);" title="Edit"
+                                                    onclick="editCashIn('@tx.Id', '@tx.TransactionDate.ToString("yyyy-MM-dd")', '@tx.BranchId', '@tx.ReceiptType', '@(tx.CustomerName.Replace("'", "\\'"))', '@(tx.DealerCode?.Replace("'", "\\'") ?? "")', '@tx.Amount', '@tx.PaymentMode', '@(tx.BankName?.Replace("'", "\\'") ?? "")', '@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")', '@(tx.Narration?.Replace("'", "\\'").Replace("\r", "").Replace("\n", " ") ?? "")')">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                        }
+                                        @if (canVerifyTally)
+                                        {
+                                            <button class="act-icon text-success" style="border-color: rgba(34,197,94,.3);" title="Verify Tally Entry"
+                                                    onclick="checkTallyEntry('@tx.Id', 'CashIn', 'Correct', '@(tx.TallyVoucherNo ?? "")')">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+                                            <button class="act-icon text-danger" style="border-color: rgba(239,68,68,.3);" title="Report Tally Discrepancy"
+                                                    onclick="checkTallyEntry('@tx.Id', 'CashIn', 'Wrong')">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                        }
+                                        @if (canApprove && (tx.Status == CashTxStatus.Submitted || tx.Status == CashTxStatus.Verified))
+                                        {
+                                            <button class="act-icon ap" title="Approve"
+                                                    onclick="quickAction('/CashManagement/ApproveCashIn','@tx.Id','@CashTxStatus.Approved','Approve this Cash In transaction?')">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+                                            <button class="act-icon re" title="Reject"
+                                                    onclick="quickAction('/CashManagement/ApproveCashIn','@tx.Id','@CashTxStatus.Rejected','Reject this transaction?')">
+                                                <i class="fa-solid fa-times"></i>
+                                            </button>
+                                        }
+                                        @if (canEdit && tx.Status == CashTxStatus.Approved)
+                                        {
+                                            <button class="act-icon" style="color:#6366f1;" title="Post to Tally"
+                                                    onclick="quickAction('/CashManagement/ApproveCashIn','@tx.Id','@CashTxStatus.Posted','Post this to Tally?')">
+                                                <i class="fa-solid fa-upload"></i>
+                                            </button>
+                                        }
+                                        @if (canCreate && tx.Status == CashTxStatus.Draft)
+                                        {
+                                            <form method="post" action="/CashManagement/DeleteCashIn" class="d-inline" onsubmit="return confirm('Delete this draft?')">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@tx.Id">
+                                                <button type="submit" class="act-icon dl" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 4. CASH OUT REGISTER PANE -->
+    <div class="tab-pane fade" id="cashout-pane" role="tabpanel">
+        <div class="panel mb-4" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+            <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom">
+                <div style="font-size:.88rem;font-weight:700;color:var(--ink);">
+                    <i class="fa-solid fa-arrow-up me-2" style="color:#ef4444;"></i>Cash Out Payment Records
+                </div>
+                <div class="d-flex gap-2">
+                    @if (canCreate)
+                    {
+                        <button class="btn btn-sm btn-primary d-flex align-items-center gap-2 px-3"
+                                style="background:#ef4444;border:none;height:32px;font-weight:600;font-size:.78rem;border-radius:6px;"
+                                data-bs-toggle="modal" data-bs-target="#cashOutModal">
+                            <i class="fa-solid fa-plus"></i> New Cash Out
+                        </button>
+                    }
+                    <div class="input-group input-group-sm" style="width: 240px;">
+                        <input type="text" id="coSearchInput" placeholder="Search Outflows..." class="form-control" style="border-top-left-radius:20px; border-bottom-left-radius:20px; font-size:.8rem; border-right: none;" oninput="filterTable(this.value,'coTableTbody')">
+                        <button class="btn btn-outline-secondary" type="button" style="border-top-right-radius:20px; border-bottom-right-radius:20px; border-left: none; background: #fff; color: #94a3b8; border-color: #cbd5e1;" onclick="clearSearchFilter('coSearchInput', 'coTableTbody')">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size:.82rem;">
+                    <thead style="background:#f8fafc;">
+                        <tr>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;padding:12px 16px;">Payment ID</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Date</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Category</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Vendor</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Amount</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Cost Center</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">GL Account</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Status</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Tally</th>
+                            <th style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="coTableTbody">
+                        @if (!registerCashOuts.Any())
+                        {
+                            <tr><td colspan="11" class="text-center py-5 text-muted">
+                                <i class="fa-solid fa-inbox fa-2x mb-2 d-block" style="opacity:.2;"></i>No outflow records found in this period
+                            </td></tr>
+                        }
+                        @foreach (var tx in registerCashOuts)
+                        {
+                            <tr>
+                                <td><code style="font-size:.78rem;color:#f97316;font-weight:700;">@tx.TransactionNo</code></td>
+                                <td style="font-weight:500;">@tx.Branch?.Name</td>
+                                <td>@tx.TransactionDate.ToString("dd MMM yyyy")</td>
+                                <td><span style="font-size:.75rem;color:#64748b;">@tx.ExpenseCategory</span></td>
+                                <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@tx.VendorName">@tx.VendorName</td>
+                                <td style="font-weight:700;color:#ef4444;font-family:monospace;">@FormatCr(tx.Amount)</td>
+                                <td style="font-size:.75rem;color:#94a3b8;">@(string.IsNullOrEmpty(tx.CostCenter) ? "—" : tx.CostCenter)</td>
+                                <td style="font-size:.75rem;color:#94a3b8;">@(string.IsNullOrEmpty(tx.GlAccount) ? "—" : tx.GlAccount)</td>
+                                <td><span class="cash-badge badge-@tx.Status.ToLower()">@tx.Status</span></td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        @if (tx.TallySyncStatus == "Correct")
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:0.7rem; padding:3px 8px; border-radius:12px; align-self: start;">
+                                                <i class="fa-solid fa-circle-check me-1"></i>Tally OK
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(tx.TallyVoucherNo))
+                                            {
+                                                <span class="tally-chip" style="font-size: 0.68rem; align-self: start;"><i class="fa-solid fa-receipt me-1"></i>@tx.TallyVoucherNo</span>
+                                            }
+                                        }
+                                        else if (tx.TallySyncStatus == "Wrong")
+                                        {
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:0.7rem; padding:3px 8px; border-radius:12px; align-self: start;" title="@tx.ApprovalRemarks">
+                                                <i class="fa-solid fa-circle-xmark me-1"></i>Tally Error
+                                            </span>
+                                            <span style="font-size:0.68rem; color:#ef4444; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="@tx.ApprovalRemarks">@tx.ApprovalRemarks</span>
+                                        }
+                                        else
+                                        {
+                                            @if (!string.IsNullOrEmpty(tx.TallyVoucherNo))
+                                            {
+                                                <span class="tally-chip"><i class="fa-solid fa-link me-1"></i>@tx.TallyVoucherNo</span>
+                                            }
+                                            else
+                                            {
+                                                <span style="color:#cbd5e1;font-size:.75rem;">—</span>
+                                            }
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        <button class="act-icon vi" title="View"
+                                                onclick="viewCashTx('Cash Out', '@tx.TransactionNo','@(tx.Branch?.Name?.Replace("'", "\\'"))','@tx.TransactionDate.ToString("dd MMM yyyy")','@tx.ExpenseCategory','@(tx.VendorName.Replace("'", "\\'"))','—','@FormatCr(tx.Amount)','@tx.PaymentMode','@(tx.BankName?.Replace("'", "\\'") ?? "")','@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")','@tx.Status','@(tx.TallyVoucherNo ?? "—")','@(tx.Narration?.Replace("'", "\\'").Replace("\r", "").Replace("\n", " ") ?? "")','@(tx.CostCenter?.Replace("'", "\\'") ?? "")','@(tx.GlAccount?.Replace("'", "\\'") ?? "")','@(tx.PaymentInstrument?.Replace("'", "\\'") ?? "")')">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+                                        @if (canEdit)
+                                        {
+                                            <button class="act-icon text-warning" style="border-color: rgba(245, 158, 11, .3);" title="Edit"
+                                                    onclick="editCashOut('@tx.Id', '@tx.TransactionDate.ToString("yyyy-MM-dd")', '@tx.BranchId', '@tx.ExpenseCategory', '@(tx.VendorName.Replace("'", "\\'"))', '@(tx.CostCenter?.Replace("'", "\\'") ?? "")', '@(tx.GlAccount?.Replace("'", "\\'") ?? "")', '@tx.Amount', '@tx.PaymentMode', '@(tx.PaymentInstrument?.Replace("'", "\\'") ?? "")', '@(tx.BankName?.Replace("'", "\\'") ?? "")', '@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")', '@(tx.Narration?.Replace("'", "\\'").Replace("\r", "").Replace("\n", " ") ?? "")')">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                        }
+                                        @if (canVerifyTally)
+                                        {
+                                            <button class="act-icon text-success" style="border-color: rgba(34,197,94,.3);" title="Verify Tally Entry"
+                                                    onclick="checkTallyEntry('@tx.Id', 'CashOut', 'Correct', '@(tx.TallyVoucherNo ?? "")')">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+                                            <button class="act-icon text-danger" style="border-color: rgba(239,68,68,.3);" title="Report Tally Discrepancy"
+                                                    onclick="checkTallyEntry('@tx.Id', 'CashOut', 'Wrong')">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                        }
+                                        @if (canApprove && (tx.Status == CashTxStatus.Submitted || tx.Status == CashTxStatus.Verified))
+                                        {
+                                            <button class="act-icon ap" title="Approve"
+                                                    onclick="quickAction('/CashManagement/ApproveCashOut','@tx.Id','@CashTxStatus.Approved','Approve this payment?')">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+                                            <button class="act-icon re" title="Reject"
+                                                    onclick="quickAction('/CashManagement/ApproveCashOut','@tx.Id','@CashTxStatus.Rejected','Reject this payment?')">
+                                                <i class="fa-solid fa-times"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+</div>
+
+<!-- ========================================== -->
+<!-- TRANSACTION CREATION MODALS -->
+<!-- ========================================== -->
+
+<!-- New Cash In Modal -->
+<div class="modal fade" id="cashInModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:14px;">
+            <div class="modal-header border-0 pb-0" style="padding:24px 28px 12px;">
+                <div>
+                    <h5 class="modal-title fw-bold" style="font-size:1.1rem;">
+                        <i class="fa-solid fa-arrow-circle-down me-2" style="color:#22c55e;"></i>New Cash In Transaction
+                    </h5>
+                    <p class="text-muted mb-0" style="font-size:.78rem;">Fill in all required fields to record a cash receipt.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            @{
+                var parties = ViewBag.Parties as List<Party> ?? new();
+            }
+            <form method="post" action="/CashManagement/CreateCashIn" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="cashInTxId" value="0" />
+                <div class="modal-body" style="padding:20px 28px;">
+                    <!-- Common Details Section -->
+                    <div class="d-flex flex-column gap-3 pb-3 mb-4 border-bottom" style="border-color: #cbd5e1 !important;">
+                        <!-- Segmented Entry Mode Select Button Group -->
+                        <div>
+                            <label class="form-label fw-bold text-secondary mb-2" style="font-size: .8rem;">Select Entry Mode</label>
+                            <div class="btn-group w-100" role="group" aria-label="Transaction Type Selector" style="background: rgba(15, 23, 42, 0.04); padding: 4px; border-radius: 10px;">
+                                <button type="button" class="btn btn-sm btn-light flex-fill py-2 font-semibold active select-type-btn" data-type-selector="collection" style="border-radius: 8px; font-size: 0.8rem; border: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1); background-color: #ffffff;">
+                                    <i class="fa-solid fa-hand-holding-dollar me-1 text-success"></i> Customer Collection
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light flex-fill py-2 font-semibold select-type-btn" data-type-selector="dms" style="border-radius: 8px; font-size: 0.8rem; border: none; background: transparent; box-shadow: none;">
+                                    <i class="fa-solid fa-calculator me-1 text-indigo"></i> DMS Cash Sale
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light flex-fill py-2 font-semibold select-type-btn" data-type-selector="other" style="border-radius: 8px; font-size: 0.8rem; border: none; background: transparent; box-shadow: none;">
+                                    <i class="fa-solid fa-ellipsis me-1 text-warning"></i> Others / Advance
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Transaction Date <span class="text-danger">*</span></label>
+                            <input type="date" name="TransactionDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required style="border-radius:8px; height: 42px;">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Branch <span class="text-danger">*</span></label>
+                            <select name="BranchId" class="form-select" required style="border-radius:8px; height: 42px;" @(!isHO?"disabled":"")>
+                                @foreach (var b in branches)
+                                {
+                                    <option value="@b.Id">@b.Name (@b.Code)</option>
+                                }
+                            </select>
+                            @if (!isHO && branches.Count == 1)
+                            {
+                                <input type="hidden" name="BranchId" value="@branches[0].Id">
+                            }
+                        </div>
+                        <!-- Hidden raw select dropdown so it binds to C# model correctly -->
+                        <div class="d-none">
+                            <select name="ReceiptType" id="cashInReceiptType" class="form-select" required>
+                                @if (receiptTypes.Any())
+                                {
+                                    @foreach (var type in receiptTypes)
+                                    {
+                                        <option value="@type">@type</option>
+                                    }
+                                }
+                                else
+                                {
+                                    <option>Customer Payment</option><option>Dealer Collection</option>
+                                    <option>Cash Collection</option><option>Commission</option>
+                                    <option>Advance</option><option>Refund</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Inflow Line Items -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-dark m-0" style="font-size: .95rem;">
+                            <i class="fa-solid fa-list-check me-2" style="color:#22c55e;"></i>Inflow Entries
+                            <span class="badge bg-success-subtle text-success ms-2" id="cashInRunningTotalBadge" style="font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.15);">Total: ₹0.00</span>
+                        </h6>
+                        <button type="button" id="addCashInRowBtn" class="btn btn-sm btn-outline-success px-3 d-flex align-items-center gap-1" style="border-radius:20px; font-weight:600; font-size:.78rem; border-color:#22c55e; color:#22c55e;">
+                            <i class="fa-solid fa-plus"></i> Add Entry
+                        </button>
+                    </div>
+
+                    <div id="cashInRowsContainer" style="max-height: 420px; overflow-y: auto; padding-right: 4px;">
+                        <!-- Dynamic Rows injected via Javascript -->
+                    </div>
+
+                    <!-- Common Attachment Section -->
+                    <div class="mt-4 pt-3 border-top" style="border-color: #cbd5e1 !important;">
+                        <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Supporting Document</label>
+                        <input type="file" name="AttachmentFile" class="form-control" accept=".pdf,.jpg,.png,.jpeg" style="border-radius:8px; height: 42px;">
+                        <div class="form-text text-muted" style="font-size: .72rem; margin-top: 4px;">Optional. Applies to all cash receipts listed above.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0" style="padding:12px 28px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:8px;font-weight:600;">Cancel</button>
+                    <button type="submit" name="action" value="draft" class="btn btn-outline-primary" style="border-radius:8px;font-weight:600;">
+                         <i class="fa-solid fa-floppy-disk me-1"></i>Save Draft
+                    </button>
+                    <button type="submit" name="action" value="submit" class="btn btn-primary" style="background:var(--primary);border:none;border-radius:8px;font-weight:600;box-shadow:0 4px 12px rgba(30, 64, 175,.2);">
+                        <i class="fa-solid fa-paper-plane me-1"></i>Submit for Approval
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
+</div>
+
+<!-- New Cash Out Modal -->
+<div class="modal fade" id="cashOutModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:14px;">
+            <div class="modal-header border-0 pb-0" style="padding:24px 28px 12px;">
+                <div>
+                    <h5 class="modal-title fw-bold" style="font-size:1.1rem;">
+                        <i class="fa-solid fa-arrow-circle-up me-2" style="color:#ef4444;"></i>New Cash Out Payment
+                    </h5>
+                    <p class="text-muted mb-0" style="font-size:.78rem;">Record an outgoing payment or expense.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/CashManagement/CreateCashOut" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="cashOutTxId" value="0" />
+                <div class="modal-body bg-light-subtle" style="padding:20px 28px;">
+                    <!-- Common Details Section (Single Column Stack) -->
+                    <div class="d-flex flex-column gap-3 pb-3 mb-4 border-bottom" style="border-color: #cbd5e1 !important;">
+                        <div>
+                            <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Payment Date <span class="text-danger">*</span></label>
+                            <input type="date" name="TransactionDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required style="border-radius:8px; height: 42px;">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Branch <span class="text-danger">*</span></label>
+                            <select name="BranchId" class="form-select" required style="border-radius:8px; height: 42px;" @(!isHO?"disabled":"")>
+                                @foreach (var b in branches)
+                                {
+                                    <option value="@b.Id">@b.Name (@b.Code)</option>
+                                }
+                            </select>
+                            @if (!isHO && branches.Count == 1)
+                            {
+                                <input type="hidden" name="BranchId" value="@branches[0].Id">
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Expense Line Items -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-dark m-0" style="font-size: .95rem;">
+                            <i class="fa-solid fa-list-check me-2" style="color:var(--primary);"></i>Expense Entries
+                            <span class="badge bg-danger-subtle text-danger ms-2" id="runningTotalBadge" style="font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.15);">Total: ₹0.00</span>
+                        </h6>
+                        <button type="button" id="addExpenseRowBtn" class="btn btn-sm btn-outline-primary px-3 d-flex align-items-center gap-1" style="border-radius:20px; font-weight:600; font-size:.78rem; border-color:var(--primary); color:var(--primary);">
+                            <i class="fa-solid fa-plus"></i> Add Entry
+                        </button>
+                    </div>
+
+                    <div id="expenseRowsContainer" style="max-height: 420px; overflow-y: auto; padding-right: 4px;">
+                        <!-- Dynamic Rows injected via Javascript -->
+                    </div>
+
+                    <!-- Common Attachment Section (Single Column Stack) -->
+                    <div class="mt-4 pt-3 border-top" style="border-color: #cbd5e1 !important;">
+                        <label class="form-label fw-semibold text-secondary" style="font-size:.8rem; margin-bottom: 4px;">Bill / Invoice Attachment</label>
+                        <input type="file" name="AttachmentFile" class="form-control" accept=".pdf,.jpg,.png,.jpeg" style="border-radius:8px; height: 42px;">
+                        <div class="form-text text-muted" style="font-size: .72rem; margin-top: 4px;">Optional. Applies to all expense entries listed above.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0" style="padding:12px 28px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:8px;font-weight:600;">Cancel</button>
+                    <button type="submit" name="action" value="draft" class="btn btn-outline-primary" style="border-radius:8px;font-weight:600;">
+                        <i class="fa-solid fa-floppy-disk me-1"></i>Save Draft
+                    </button>
+                    <button type="submit" name="action" value="submit" class="btn btn-primary" style="background:var(--primary);border:none;border-radius:8px;font-weight:600;">
+                        <i class="fa-solid fa-paper-plane me-1"></i>Submit for Approval
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- DETAILS VIEWING MODAL -->
+<!-- ========================================== -->
+<div class="modal fade" id="viewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:14px;">
+            <div class="modal-header border-0 pb-0" style="padding:24px 28px 12px;">
+                <h5 class="modal-title fw-bold" id="viewModalTitle" style="font-size:1.1rem;color:#1e293b;"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="viewModalBody" style="padding:20px 28px;"></div>
+            <div class="modal-footer border-0" style="padding:12px 28px 24px;">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:8px;font-weight:600;">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="post" id="actionForm" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="actionId" name="id">
+    <input type="hidden" id="actionStatus" name="newStatus">
+    <input type="hidden" name="remarks" value="">
+</form>
+
+@section Scripts {
+<script>
+    // Fetch and display Period Lock Status
+    document.addEventListener("DOMContentLoaded", function () {
+        fetch('/CashManagement/PeriodStatus')
+            .then(response => response.json())
+            .then(data => {
+                if (data.isLocked) {
+                    const banner = document.getElementById('period-locked-banner');
+                    if (banner) banner.style.display = 'block';
+                }
+            })
+            .catch(err => console.error("Error fetching period status:", err));
+    });
+
+    // Tab persistence script
+    const activeTabKey = 'cashbookActiveTab';
+    const tabElList = document.querySelectorAll('button[data-bs-toggle="pill"]');
+    tabElList.forEach(tabEl => {
+        tabEl.addEventListener('shown.bs.tab', event => {
+            localStorage.setItem(activeTabKey, event.target.id);
+        });
+    });
+    
+    const savedActiveTabId = localStorage.getItem(activeTabKey);
+    if (savedActiveTabId) {
+        const savedTab = document.getElementById(savedActiveTabId);
+        if (savedTab) {
+            new bootstrap.Tab(savedTab).show();
+        }
+    }
+
+    // Toggle format views for Ledger Book
+    function toggleLedgerView(view) {
+        const tAccountDiv = document.getElementById('taccount-ledger-container');
+        const chronoDiv = document.getElementById('chrono-ledger-container');
+        const btnT = document.getElementById('btnShowTAccount');
+        const btnC = document.getElementById('btnShowChrono');
+
+        if (view === 'taccount') {
+            tAccountDiv.classList.remove('d-none');
+            chronoDiv.classList.add('d-none');
+            
+            btnT.style.background = '#6366f1';
+            btnT.style.color = '#ffffff';
+            btnT.classList.add('text-white');
+            btnT.classList.remove('text-muted');
+            btnT.style.fontWeight = '700';
+            btnT.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+
+            btnC.style.background = 'transparent';
+            btnC.style.color = '#64748b';
+            btnC.classList.remove('text-white');
+            btnC.classList.add('text-muted');
+            btnC.style.fontWeight = '600';
+            btnC.style.boxShadow = 'none';
+        } else {
+            tAccountDiv.classList.add('d-none');
+            chronoDiv.classList.remove('d-none');
+            
+            btnC.style.background = '#6366f1';
+            btnC.style.color = '#ffffff';
+            btnC.classList.add('text-white');
+            btnC.classList.remove('text-muted');
+            btnC.style.fontWeight = '700';
+            btnC.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+
+            btnT.style.background = 'transparent';
+            btnT.style.color = '#64748b';
+            btnT.classList.remove('text-white');
+            btnT.classList.add('text-muted');
+            btnT.style.fontWeight = '600';
+            btnT.style.boxShadow = 'none';
+        }
+    }
+
+    // Dynamic controllers for Cash In modal selections
+    document.addEventListener("DOMContentLoaded", function() {
+        const cashInModal = document.getElementById('cashInModal');
+        if (!cashInModal) return;
+
+        const receiptTypeSelect = document.getElementById('cashInReceiptType');
+        const container = document.getElementById('cashInRowsContainer');
+        const addBtn = document.getElementById('addCashInRowBtn');
+        const dateInput = cashInModal.querySelector('[name="TransactionDate"]');
+        const selectTypeBtns = cashInModal.querySelectorAll('.select-type-btn');
+
+        const partiesList = [
+            @foreach (var p in parties)
+            {
+                <text>{ code: '@p.PartyCode', name: '@p.PartyName.Replace("'", "\\'")' },</text>
+            }
+        ];
+
+        // Track which submit button was clicked
+        let _cashInSubmitAction = 'draft';
+        cashInModal.querySelectorAll('button[type="submit"][name="action"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                _cashInSubmitAction = this.value || 'draft';
+            });
+        });
+
+        function isAdvanceType(val) {
+            return val && val.toLowerCase().includes('advance');
+        }
+
+        function isDmsCashType(val) {
+            if (!val) return false;
+            const cleaned = val.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleaned.includes('dms');
+        }
+
+        function isReceiptType(val) {
+            if (!val) return false;
+            return val.toLowerCase().trim() === 'receipt';
+        }
+
+        function handleReceiptTypeChange() {
+            // Handled dynamically by row layout templates
+        }
+
+        function updateCashInRunningTotal() {
+            const rows = document.querySelectorAll('#cashInRowsContainer .cashin-row-item');
+            let total = 0;
+            rows.forEach(row => {
+                const amtInput = row.querySelector('[name="Amount"]');
+                if (amtInput) {
+                    const val = parseFloat(amtInput.value);
+                    if (!isNaN(val) && val > 0) {
+                        total += val;
+                    }
+                }
+            });
+            const badge = document.getElementById('cashInRunningTotalBadge');
+            if (badge) {
+                badge.textContent = 'Total: ₹' + total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+        }
+
+        function calculateRunningSumForRow(rowId) {
+            const dateVal = dateInput.value;
+            const hiddenDealer = document.getElementById(`hidden-dealer-${rowId}`);
+            if (!hiddenDealer) return;
+            const dealerCodeVal = hiddenDealer.value;
+            
+            const alertDiv = document.getElementById(`running-sum-alert-${rowId}`);
+            const alertText = document.getElementById(`running-sum-text-${rowId}`);
+            
+            if (dateVal && dealerCodeVal) {
+                let sum = 0;
+                rawIns.forEach(tx => {
+                    if (tx.status !== 'Rejected' && tx.status !== 'Draft') {
+                        if (tx.date === dateVal && tx.dealerCode && tx.dealerCode.toLowerCase() === dealerCodeVal.toLowerCase()) {
+                            sum += tx.amount;
+                        }
+                    }
+                });
+                
+                if (alertText) {
+                    alertText.innerHTML = `Total already received for <strong>${dealerCodeVal}</strong> on selected date: <strong>₹${sum.toLocaleString('en-IN')}</strong>`;
+                }
+                if (alertDiv) alertDiv.classList.remove('d-none');
+            } else {
+                if (alertDiv) alertDiv.classList.add('d-none');
+            }
+        }
+
+        function addCashInRow(mode) {
+            const rowId = 'row-ci-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            
+            // Build options list for collection dropdown
+            let optionsHtml = `
+                <button type="button" class="dropdown-item rounded py-1.5 text-start font-semibold" data-value="" data-name="" style="font-size:0.76rem; color:#94a3b8; border: none; background: transparent;">
+                    -- Clear Selection --
+                </button>
+            `;
+            partiesList.forEach(p => {
+                optionsHtml += `
+                    <button type="button" class="dropdown-item rounded py-1.5 text-start d-flex justify-content-between align-items-center" data-value="${p.code}" data-name="${p.name}" style="font-size:0.78rem; border: none; background: transparent; transition: background 0.15s;">
+                        <span class="font-bold text-indigo" style="font-family: monospace;">${p.code}</span>
+                        <span class="text-muted text-end ms-2" style="font-size:0.72rem; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${p.name}">${p.name}</span>
+                    </button>
+                `;
+            });
+
+            let rowHtml = '';
+            if (mode === 'collection') {
+                rowHtml = `
+                    <div class="cashin-row-item border rounded-3 p-3 mb-3 bg-light" id="${rowId}" data-row-mode="collection" style="border-color: #cbd5e1 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.01);">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Customer Code <span class="text-danger">*</span></label>
+                                <div class="dropdown w-100">
+                                    <button class="form-select form-select-sm text-start d-flex justify-content-between align-items-center" type="button" id="btn-dealer-${rowId}" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius:6px; background-color: #fff; font-size: 0.78rem; height: 38px;">
+                                        <span>-- Select Code --</span>
+                                    </button>
+                                    <div class="dropdown-menu p-3 w-100 shadow border-0" style="max-height: 240px; overflow-y: auto; border-radius: 8px; min-width: 280px; z-index: 1060; border: 1px solid #e2e8f0 !important;">
+                                        <input type="text" id="search-dealer-${rowId}" class="form-control form-control-sm mb-2" placeholder="Search..." style="border-radius: 4px; font-size: 0.76rem;">
+                                        <div id="options-dealer-${rowId}" style="display:flex; flex-direction:column; gap:2px;">
+                                            ${optionsHtml}
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="hidden-dealer-${rowId}" name="DealerCode" required />
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Customer Name</label>
+                                <input type="text" id="name-customer-${rowId}" name="CustomerName" class="form-control form-control-sm" readonly required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Amount (₹) <span class="text-danger">*</span></label>
+                                <input type="number" id="amt-${rowId}" name="Amount" class="form-control form-control-sm" placeholder="0.00" step="0.01" min="1" required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Payment Mode <span class="text-danger">*</span></label>
+                                <select id="paymode-${rowId}" name="PaymentMode" class="form-select form-select-sm" required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                                    <option>NEFT</option><option>RTGS</option><option>IMPS</option>
+                                    <option>Cheque</option><option>Cash</option><option>UPI</option><option>DD</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Bank Name</label>
+                                <input type="text" name="BankName" class="form-control form-control-sm" placeholder="Bank name" style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Receipt / Ref No. <span class="text-danger">*</span></label>
+                                <input type="text" name="ReferenceNo" class="form-control form-control-sm" placeholder="Ref/UTR/Receipt No" required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Narration</label>
+                                <input type="text" name="Narration" class="form-control form-control-sm" placeholder="Details..." style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-1 text-end pb-1 remove-btn-col">
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn d-flex align-items-center justify-content-center" style="border-radius:6px; height: 38px; width: 100%; border-color: rgba(239, 68, 68, 0.2); color:#ef4444;" onclick="removeCashInRow('${rowId}')" title="Remove Entry">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="col-12 d-none" id="running-sum-alert-${rowId}">
+                                <div style="font-size:0.72rem; color:#15803d; background: rgba(34,197,94,.06); padding:4px 8px; border-radius:4px; margin-top:4px;">
+                                    <i class="fa-solid fa-info-circle me-1"></i><span id="running-sum-text-${rowId}">Total received on this date: ₹0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (mode === 'dms') {
+                rowHtml = `
+                    <div class="cashin-row-item border rounded-3 p-3 mb-3 bg-light" id="${rowId}" data-row-mode="dms" style="border-color: #cbd5e1 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.01);">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-12 mb-2">
+                                <div style="background: rgba(99,102,241,.05); border: 1px dashed #6366f1; border-radius: 6px; padding: 10px 14px; font-size: 0.78rem;">
+                                    <span class="fw-bold text-indigo"><i class="fa-solid fa-server me-1"></i> DMS Server Sale Validation:</span>
+                                    <span class="text-muted italic ms-1" id="dms-validation-text-${rowId}">₹0 (Checking...)</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Total Amount (₹)</label>
+                                <input type="number" id="amt-${rowId}" name="Amount" class="form-control form-control-sm" readonly placeholder="Auto-summed" step="0.01" min="1" required style="border-radius:6px; height: 38px; font-size:0.78rem; background: #e2e8f0;">
+                            </div>
+                            <div class="col-md-8">
+                                <div style="background: rgba(15, 23, 42, 0.02); border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px;">
+                                    <div class="row g-1 text-center">
+                                        <div class="col">
+                                            <label style="font-size:0.68rem; font-weight:600; color:#64748b; display:block; margin-bottom:2px;">Cash</label>
+                                            <input type="number" id="dmsAmtCash-${rowId}" class="form-control form-control-sm dms-breakdown-input-${rowId}" placeholder="0.00" min="0" step="0.01" style="font-size:0.74rem; height:28px;">
+                                        </div>
+                                        <div class="col">
+                                            <label style="font-size:0.68rem; font-weight:600; color:#64748b; display:block; margin-bottom:2px;">UPI</label>
+                                            <input type="number" id="dmsAmtUpi-${rowId}" class="form-control form-control-sm dms-breakdown-input-${rowId}" placeholder="0.00" min="0" step="0.01" style="font-size:0.74rem; height:28px;">
+                                        </div>
+                                        <div class="col">
+                                            <label style="font-size:0.68rem; font-weight:600; color:#64748b; display:block; margin-bottom:2px;">Card</label>
+                                            <input type="number" id="dmsAmtCard-${rowId}" class="form-control form-control-sm dms-breakdown-input-${rowId}" placeholder="0.00" min="0" step="0.01" style="font-size:0.74rem; height:28px;">
+                                        </div>
+                                        <div class="col">
+                                            <label style="font-size:0.68rem; font-weight:600; color:#64748b; display:block; margin-bottom:2px;">Bank</label>
+                                            <input type="number" id="dmsAmtBank-${rowId}" class="form-control form-control-sm dms-breakdown-input-${rowId}" placeholder="0.00" min="0" step="0.01" style="font-size:0.74rem; height:28px;">
+                                        </div>
+                                        <div class="col">
+                                            <label style="font-size:0.68rem; font-weight:600; color:#64748b; display:block; margin-bottom:2px;">Cheque</label>
+                                            <input type="number" id="dmsAmtCheque-${rowId}" class="form-control form-control-sm dms-breakdown-input-${rowId}" placeholder="0.00" min="0" step="0.01" style="font-size:0.74rem; height:28px;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-11">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Narration</label>
+                                <input type="text" name="Narration" class="form-control form-control-sm" placeholder="Details..." style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-1 text-end pb-1 remove-btn-col">
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn d-flex align-items-center justify-content-center" style="border-radius:6px; height: 38px; width: 100%; border-color: rgba(239, 68, 68, 0.2); color:#ef4444;" onclick="removeCashInRow('${rowId}')" title="Remove Entry">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                rowHtml = `
+                    <div class="cashin-row-item border rounded-3 p-3 mb-3 bg-light" id="${rowId}" data-row-mode="other" style="border-color: #cbd5e1 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.01);">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Dealer Code</label>
+                                <input type="text" name="DealerCode" class="form-control form-control-sm" placeholder="e.g. JA-001" style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Customer / Party Name <span class="text-danger">*</span></label>
+                                <input type="text" name="CustomerName" class="form-control form-control-sm" placeholder="Party Name" required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Amount (₹) <span class="text-danger">*</span></label>
+                                <input type="number" id="amt-${rowId}" name="Amount" class="form-control form-control-sm" placeholder="0.00" step="0.01" min="1" required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Payment Mode <span class="text-danger">*</span></label>
+                                <select name="PaymentMode" class="form-select form-select-sm" required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                                    <option>NEFT</option><option>RTGS</option><option>IMPS</option>
+                                    <option>Cheque</option><option>Cash</option><option>UPI</option><option>DD</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Bank Name</label>
+                                <input type="text" name="BankName" class="form-control form-control-sm" placeholder="Bank name" style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Reference / UTR No. <span class="text-danger">*</span></label>
+                                <input type="text" name="ReferenceNo" class="form-control form-control-sm" placeholder="NEFT/UTR/Cheque No" required style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Narration</label>
+                                <input type="text" name="Narration" class="form-control form-control-sm" placeholder="Details..." style="border-radius:6px; height: 38px; font-size:0.78rem;">
+                            </div>
+                            <div class="col-md-1 text-end pb-1 remove-btn-col">
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn d-flex align-items-center justify-content-center" style="border-radius:6px; height: 38px; width: 100%; border-color: rgba(239, 68, 68, 0.2); color:#ef4444;" onclick="removeCashInRow('${rowId}')" title="Remove Entry">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.insertAdjacentHTML('beforeend', rowHtml);
+
+            // Bind individual row event listeners
+            const row = document.getElementById(rowId);
+            
+            // Dropdown search
+            const searchInput = document.getElementById(`search-dealer-${rowId}`);
+            if (searchInput) {
+                searchInput.addEventListener('input', function(e) {
+                    const items = document.querySelectorAll(`#options-dealer-${rowId} .dropdown-item`);
+                    const searchVal = e.target.value.toLowerCase();
+                    items.forEach(item => {
+                        const text = item.textContent.toLowerCase();
+                        item.style.display = text.includes(searchVal) ? 'flex' : 'none';
+                    });
+                });
+            }
+
+            // Dropdown selection
+            const optionsDiv = document.getElementById(`options-dealer-${rowId}`);
+            if (optionsDiv) {
+                optionsDiv.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.dropdown-item');
+                    if (!btn) return;
+                    const code = btn.getAttribute('data-value') || '';
+                    const name = btn.getAttribute('data-name') || '';
+                    
+                    const dropdownBtn = document.getElementById(`btn-dealer-${rowId}`);
+                    if (dropdownBtn) {
+                        const span = dropdownBtn.querySelector('span');
+                        if (span) span.textContent = code ? `${code} - ${name}` : '-- Select Code --';
+                    }
+                    
+                    document.getElementById(`hidden-dealer-${rowId}`).value = code;
+                    document.getElementById(`name-customer-${rowId}`).value = name;
+                    
+                    calculateRunningSumForRow(rowId);
+                });
+            }
+
+            // DMS auto-sum listener
+            if (mode === 'dms') {
+                const inputs = row.querySelectorAll(`.dms-breakdown-input-${rowId}`);
+                inputs.forEach(input => {
+                    input.addEventListener('input', function() {
+                        let total = 0;
+                        inputs.forEach(inp => {
+                            total += parseFloat(inp.value) || 0;
+                        });
+                        const amtInput = document.getElementById(`amt-${rowId}`);
+                        if (amtInput) {
+                            amtInput.value = total > 0 ? total.toFixed(2) : '';
+                        }
+                        updateCashInRunningTotal();
+                    });
+                });
+            } else {
+                const amtInput = document.getElementById(`amt-${rowId}`);
+                if (amtInput) {
+                    amtInput.addEventListener('input', updateCashInRunningTotal);
+                }
+            }
+
+            updateRemoveButtonsVisibility();
+            updateCashInRunningTotal();
+        }
+
+        function fetchDmsSaleAmount() {
+            const dmsRows = document.querySelectorAll('#cashInRowsContainer .cashin-row-item[data-row-mode="dms"]');
+            if (dmsRows.length === 0) return;
+
+            const branchSelect = cashInModal.querySelector('[name="BranchId"]');
+            if (!dateInput || !branchSelect) return;
+
+            const dateVal = dateInput.value;
+            const branchId = branchSelect.value;
+            if (!dateVal || !branchId) return;
+
+            dmsRows.forEach(row => {
+                const validationText = document.getElementById(`dms-validation-text-${row.id}`);
+                if (validationText) {
+                    validationText.textContent = "Fetching total sale...";
+                    validationText.className = "text-muted italic ms-1";
+                }
+            });
+
+            fetch(`/CashManagement/GetDmsSale?branchId=${branchId}&date=${dateVal}`)
+                .then(response => response.json())
+                .then(data => {
+                    dmsRows.forEach(row => {
+                        const validationText = document.getElementById(`dms-validation-text-${row.id}`);
+                        if (validationText) {
+                            if (data.success) {
+                                const formattedAmt = Math.round(data.totalSale).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                                validationText.innerHTML = `<strong class="text-success">₹${formattedAmt}</strong> (Total Sale on ${dateVal} for branch ${data.branchCode}, invoices: ${data.totalInvoices})`;
+                            } else {
+                                validationText.innerHTML = `<span class="text-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i> ${data.message}</span>`;
+                            }
+                        }
+                    });
+                })
+                .catch(err => {
+                    dmsRows.forEach(row => {
+                        const validationText = document.getElementById(`dms-validation-text-${row.id}`);
+                        if (validationText) {
+                            validationText.innerHTML = `<span class="text-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i> Failed to connect to Tally database.</span>`;
+                        }
+                    });
+                });
+        }
+
+        function removeCashInRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (row) {
+                row.remove();
+            }
+            updateRemoveButtonsVisibility();
+            updateCashInRunningTotal();
+        }
+
+        function updateRemoveButtonsVisibility() {
+            const rows = document.querySelectorAll('#cashInRowsContainer .cashin-row-item');
+            const isEditMode = document.getElementById('cashInTxId').value !== '0';
+            rows.forEach(row => {
+                const btn = row.querySelector('.remove-row-btn');
+                if (btn) {
+                    if (isEditMode || rows.length <= 1) {
+                        btn.style.display = 'none';
+                    } else {
+                        btn.style.display = '';
+                    }
+                }
+            });
+        }
+
+        // Bind events
+        if (addBtn) {
+            addBtn.addEventListener('click', function() {
+                const activeBtn = document.querySelector('.select-type-btn.active');
+                const mode = activeBtn ? activeBtn.getAttribute('data-type-selector') : 'collection';
+                addCashInRow(mode);
+            });
+        }
+
+        if (dateInput) {
+            dateInput.addEventListener('change', function() {
+                const rows = document.querySelectorAll('#cashInRowsContainer .cashin-row-item');
+                rows.forEach(row => {
+                    const rowId = row.id;
+                    const hiddenDealer = document.getElementById(`hidden-dealer-${rowId}`);
+                    if (hiddenDealer && hiddenDealer.value) {
+                        calculateRunningSumForRow(rowId);
+                    }
+                });
+
+                // Fetch DMS sale amount if DMS mode is active
+                const hasDms = document.querySelector('#cashInRowsContainer .cashin-row-item[data-row-mode="dms"]');
+                if (hasDms) {
+                    fetchDmsSaleAmount();
+                }
+            });
+        }
+
+        const branchSelect = cashInModal.querySelector('[name="BranchId"]');
+        if (branchSelect) {
+            branchSelect.addEventListener('change', function() {
+                const hasDms = document.querySelector('#cashInRowsContainer .cashin-row-item[data-row-mode="dms"]');
+                if (hasDms) {
+                    fetchDmsSaleAmount();
+                }
+            });
+        }
+
+        function isRowEmpty(row) {
+            const textInputs = row.querySelectorAll('input[type="text"], input[type="number"]');
+            for (let i = 0; i < textInputs.length; i++) {
+                if (textInputs[i].readOnly) continue;
+                if (textInputs[i].id && textInputs[i].id.startsWith('search-dealer-')) continue;
+                const val = textInputs[i].value;
+                if (val && val.trim() !== '' && val !== '0' && val !== '0.00') {
+                    return false;
+                }
+            }
+            const hiddenDealer = row.querySelector('input[type="hidden"]');
+            if (hiddenDealer && hiddenDealer.value && hiddenDealer.value.trim() !== '') {
+                return false;
+            }
+            return true;
+        }
+
+        // Bind segmented type buttons click listeners
+        selectTypeBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // If editing, ignore click
+                const isEditMode = document.getElementById('cashInTxId').value !== '0';
+                if (isEditMode) return;
+
+                // Toggle active styling
+                selectTypeBtns.forEach(b => {
+                    b.classList.remove('active');
+                    b.style.background = 'transparent';
+                    b.style.boxShadow = 'none';
+                });
+                this.classList.add('active');
+                this.style.background = '#ffffff';
+                this.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+
+                const selector = this.getAttribute('data-type-selector');
+                const options = Array.from(receiptTypeSelect.options);
+                let targetValue = '';
+
+                if (selector === 'dms') {
+                    const match = options.find(o => isDmsCashType(o.value));
+                    targetValue = match ? match.value : 'DMS Cash'; 
+                } else if (selector === 'other') {
+                    const match = options.find(o => isAdvanceType(o.value) || o.value.toLowerCase().includes('refund') || o.value.toLowerCase().includes('commission'));
+                    targetValue = match ? match.value : 'Advance';
+                } else {
+                    const match = options.find(o => !isDmsCashType(o.value) && !isAdvanceType(o.value) && (o.value.toLowerCase().includes('payment') || o.value.toLowerCase().includes('collection') || o.value.toLowerCase().trim() === 'receipt'));
+                    targetValue = match ? match.value : (options[0] ? options[0].value : 'Customer Payment');
+                }
+
+                if (targetValue && !options.some(o => o.value === targetValue)) {
+                    const opt = document.createElement('option');
+                    opt.value = targetValue;
+                    opt.textContent = targetValue;
+                    receiptTypeSelect.appendChild(opt);
+                }
+
+                receiptTypeSelect.value = targetValue;
+                
+                // Clear container only if the row is single and completely empty, otherwise append
+                const rows = container.querySelectorAll('.cashin-row-item');
+                if (rows.length === 1 && isRowEmpty(rows[0])) {
+                    container.innerHTML = '';
+                    addCashInRow(selector);
+                } else if (rows.length === 0) {
+                    addCashInRow(selector);
+                } else {
+                    addCashInRow(selector);
+                }
+            });
+        });
+
+        // Validate and Format Narration on submit (Batch processing)
+        const form = cashInModal.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const rows = document.querySelectorAll('#cashInRowsContainer .cashin-row-item');
+                if (rows.length === 0) {
+                    Swal.fire('Error', 'Please add at least one transaction entry.', 'error');
+                    return;
+                }
+                
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                const action = _cashInSubmitAction || 'draft';
+                
+                const txId = document.getElementById('cashInTxId').value;
+                const date = form.querySelector('[name="TransactionDate"]').value;
+                const branchId = form.querySelector('[name="BranchId"]').value;
+                const attachmentFile = form.querySelector('[name="AttachmentFile"]').files[0];
+                const token = form.querySelector('[name="__RequestVerificationToken"]').value;
+
+                // Active mode at top selector buttons
+                const activeBtn = document.querySelector('.select-type-btn.active');
+                const modeSelector = activeBtn ? activeBtn.getAttribute('data-type-selector') : 'collection';
+                
+                Swal.fire({
+                    title: 'Saving receipts...',
+                    html: 'Processing entry <b>1</b> of <b>' + rows.length + '</b>...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                try {
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i];
+                        const rowId = row.id;
+                        const currentTxId = i === 0 ? txId : '0';
+                        const rowMode = row.getAttribute('data-row-mode') || 'collection';
+
+                        if (rows.length > 1) {
+                            const bElement = Swal.getHtmlContainer().querySelector('b');
+                            if (bElement) bElement.textContent = (i + 1);
+                        }
+
+                        // Determine ReceiptType based on row mode
+                        let receiptTypeVal = 'Customer Payment';
+                        const options = Array.from(receiptTypeSelect.options);
+                        if (rowMode === 'dms') {
+                            const match = options.find(o => isDmsCashType(o.value));
+                            receiptTypeVal = match ? match.value : 'DMS Cash';
+                        } else if (rowMode === 'other') {
+                            const match = options.find(o => isAdvanceType(o.value));
+                            receiptTypeVal = match ? match.value : 'Advance';
+                        } else {
+                            const match = options.find(o => !isDmsCashType(o.value) && !isAdvanceType(o.value));
+                            receiptTypeVal = match ? match.value : 'Customer Payment';
+                        }
+
+                        // Gather inputs from row
+                        let dealerCodeVal = '';
+                        let customerNameVal = '';
+                        let paymentModeVal = 'NEFT';
+                        let bankNameVal = '';
+                        let referenceNoVal = '';
+                        let narrationVal = '';
+                        const amountVal = row.querySelector('[name="Amount"]').value;
+
+                        if (rowMode === 'collection') {
+                            dealerCodeVal = document.getElementById(`hidden-dealer-${rowId}`).value;
+                            customerNameVal = document.getElementById(`name-customer-${rowId}`).value;
+                            paymentModeVal = row.querySelector('[name="PaymentMode"]').value;
+                            bankNameVal = row.querySelector('[name="BankName"]').value;
+                            referenceNoVal = row.querySelector('[name="ReferenceNo"]').value;
+                            narrationVal = row.querySelector('[name="Narration"]').value;
+                        } else if (rowMode === 'dms') {
+                            dealerCodeVal = '';
+                            customerNameVal = 'DMS Cash Sale';
+                            paymentModeVal = 'Multiple Modes';
+                            bankNameVal = '';
+                            
+                            // Gather DMS breakdown
+                            const cash = parseFloat(document.getElementById(`dmsAmtCash-${rowId}`).value) || 0;
+                            const upi = parseFloat(document.getElementById(`dmsAmtUpi-${rowId}`).value) || 0;
+                            const card = parseFloat(document.getElementById(`dmsAmtCard-${rowId}`).value) || 0;
+                            const bank = parseFloat(document.getElementById(`dmsAmtBank-${rowId}`).value) || 0;
+                            const cheque = parseFloat(document.getElementById(`dmsAmtCheque-${rowId}`).value) || 0;
+                            
+                            let parts = [];
+                            if (cash > 0) parts.push(`Cash: ₹${cash.toLocaleString('en-IN')}`);
+                            if (upi > 0) parts.push(`UPI: ₹${upi.toLocaleString('en-IN')}`);
+                            if (card > 0) parts.push(`Card: ₹${card.toLocaleString('en-IN')}`);
+                            if (bank > 0) parts.push(`Bank Transfer: ₹${bank.toLocaleString('en-IN')}`);
+                            if (cheque > 0) parts.push(`Cheque: ₹${cheque.toLocaleString('en-IN')}`);
+                            
+                            const rawNarration = row.querySelector('[name="Narration"]').value;
+                            narrationVal = rawNarration + '\n---\n' + 'DMS Sale Mode Breakdown: ' + parts.join(', ');
+                            referenceNoVal = 'DMS-' + Date.now().toString().slice(-6);
+                        } else {
+                            dealerCodeVal = row.querySelector('[name="DealerCode"]').value;
+                            customerNameVal = row.querySelector('[name="CustomerName"]').value;
+                            paymentModeVal = row.querySelector('[name="PaymentMode"]').value;
+                            bankNameVal = row.querySelector('[name="BankName"]').value;
+                            referenceNoVal = row.querySelector('[name="ReferenceNo"]').value;
+                            narrationVal = row.querySelector('[name="Narration"]').value;
+                        }
+
+                        const formData = new FormData();
+                        formData.append('__RequestVerificationToken', token);
+                        formData.append('Id', currentTxId);
+                        formData.append('TransactionDate', date);
+                        formData.append('BranchId', branchId);
+                        formData.append('ReceiptType', receiptTypeVal);
+                        formData.append('DealerCode', dealerCodeVal);
+                        formData.append('CustomerName', customerNameVal);
+                        formData.append('Amount', amountVal);
+                        formData.append('PaymentMode', paymentModeVal);
+                        formData.append('BankName', bankNameVal);
+                        formData.append('ReferenceNo', referenceNoVal);
+                        formData.append('Narration', narrationVal);
+                        formData.append('action', action);
+
+                        if (attachmentFile && i === 0) {
+                            formData.append('AttachmentFile', attachmentFile);
+                        }
+
+                        const response = await fetch('/CashManagement/CreateCashIn', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Server error while saving entry ' + (i + 1) + ' (HTTP ' + response.status + ')');
+                        }
+
+                        // Try to parse JSON response (AJAX path from CashBook)
+                        const contentType = response.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            const result = await response.json();
+                            if (!result.success) {
+                                throw new Error(result.message || 'Failed to save entry ' + (i + 1));
+                            }
+                        }
+                        // If HTML (redirect response from standard form path), treat as success
+                    }
+
+                    Swal.close();
+                    Swal.fire({
+                        title: 'Success!',
+                        text: rows.length === 1 ? 'Cash In transaction saved successfully!' : 'All ' + rows.length + ' Cash In transactions saved successfully!',
+                        icon: 'success',
+                        confirmButtonColor: 'var(--primary)'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+
+                } catch (err) {
+                    Swal.close();
+                    Swal.fire('Error', err.message || 'An error occurred while saving the transactions.', 'error');
+                }
+            });
+        }
+
+        // Expose internal functions globally
+        window.handleReceiptTypeChange = handleReceiptTypeChange;
+        window.isDmsCashType = isDmsCashType;
+        window.isAdvanceType = isAdvanceType;
+        window.isReceiptType = isReceiptType;
+        window.addCashInRow = addCashInRow;
+        window.removeCashInRow = removeCashInRow;
+        window.updateRemoveButtonsVisibility = updateRemoveButtonsVisibility;
+        window.updateCashInRunningTotal = updateCashInRunningTotal;
+        window.calculateRunningSumForRow = calculateRunningSumForRow;
+        window.fetchDmsSaleAmount = fetchDmsSaleAmount;
+
+        // Initialize state
+        resetCashInForm();
+    });
+
+    // Client-side search filters
+    function filterTable(val, id) {
+        document.querySelectorAll('#' + id + ' tr').forEach(r => r.style.display = r.textContent.toLowerCase().includes(val.toLowerCase()) ? '' : 'none');
+    }
+
+    // SWAL Action approval trigger
+    function quickAction(url, id, status, msg) {
+        Swal.fire({ 
+            title: msg, 
+            icon: 'question', 
+            showCancelButton: true, 
+            confirmButtonText: 'Yes, proceed',
+            confirmButtonColor: 'var(--primary)', 
+            cancelButtonColor: '#6c757d' 
+        }).then(r => { 
+            if (r.isConfirmed) { 
+                const f = document.getElementById('actionForm');
+                f.action = url;
+                document.getElementById('actionId').value = id;
+                document.getElementById('actionStatus').value = status;
+                f.submit(); 
+            }
+        });
+    }
+
+    // Dynamic Tx detail visualizer
+    const WORKFLOW_STEPS = ['Draft', 'Submitted', 'Verified', 'Approved', 'Posted', 'Reconciled', 'Closed'];
+
+    function viewCashTx(modeTitle, refNo, branch, date, typeName, payee, dealer, amount, mode, bank, txRef, txStatus, tally, narration, cc = '', gl = '', inst = '') {
+        document.getElementById('viewModalTitle').innerHTML = `<i class="fa-solid ${modeTitle === 'Cash In' ? 'fa-arrow-circle-down text-success' : 'fa-arrow-circle-up text-danger'} me-2"></i>${modeTitle} Details: <span style="font-family:monospace;color:#6366f1;">${refNo}</span>`;
+        
+        let fields = [
+            ['Branch', branch], ['Date', date],
+            [modeTitle === 'Cash In' ? 'Receipt Type' : 'Expense Category', typeName],
+            [modeTitle === 'Cash In' ? 'Customer' : 'Vendor', payee],
+            ['Amount', `<strong style="color:${modeTitle === 'Cash In' ? '#22c55e' : '#ef4444'};font-size:1.1rem;">${amount}</strong>`],
+            ['Payment Mode', `<span style="background:rgba(59,130,246,.1);color:#3b82f6;padding:2px 10px;border-radius:20px;font-size:.8rem;font-weight:600;">${mode}</span>`],
+            ['Bank', bank || '—'], ['Reference No.', txRef],
+            ['Status', `<span class="cash-badge badge-${txStatus.toLowerCase()}">${txStatus}</span>`],
+            ['Tally Voucher', tally !== '—' ? `<span class="tally-chip">${tally}</span>` : '<span style="color:#cbd5e1;">Not Posted</span>']
+        ];
+
+        if (modeTitle === 'Cash Out') {
+            fields.push(['Cost Center', cc || '—']);
+            fields.push(['GL Account', gl || '—']);
+            fields.push(['Instrument Type', inst || '—']);
+        } else {
+            fields.push(['Dealer Code', dealer || '—']);
+        }
+
+        fields.push(['Narration', narration || '—']);
+
+        const activeIdx = WORKFLOW_STEPS.indexOf(txStatus);
+        const workflowHtml = WORKFLOW_STEPS.map((step, i) => {
+            const isActive = i === activeIdx;
+            const isDone = activeIdx > i;
+            const bg = isActive ? 'var(--primary)' : isDone ? 'rgba(34,197,94,.15)' : '#f1f5f9';
+            const color = isActive ? '#fff' : isDone ? '#16a34a' : '#94a3b8';
+            return `<span style="padding:4px 10px;border-radius:20px;font-size:.72rem;font-weight:700;background:${bg};color:${color};">${step}</span>${i < WORKFLOW_STEPS.length - 1 ? '<i class="fa-solid fa-chevron-right" style="font-size:8px;color:#cbd5e1;margin:0 2px;"></i>' : ''}`;
+        }).join('');
+
+        document.getElementById('viewModalBody').innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                ${fields.map(([k, v]) => `
+                <div style="background:#f8fafc;border-radius:8px;padding:12px;">
+                    <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.5px;margin-bottom:4px;">${k}</div>
+                    <div style="font-size:.86rem;font-weight:600;color:#1e293b;">${v}</div>
+                </div>`).join('')}
+            </div>
+            <div style="margin-top:16px;background:#fff3cd;border:1px solid #ffc10733;border-radius:8px;padding:12px 16px;">
+                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#856404;margin-bottom:8px;"><i class="fa-solid fa-diagram-next me-1"></i>Workflow Progress</div>
+                <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${workflowHtml}</div>
+            </div>`;
+
+        new bootstrap.Modal(document.getElementById('viewModal')).show();
+    }
+
+    // ==========================================
+    // CHART GENERATION — Lazy Init (only on first analytics tab show)
+    // ==========================================
+    let chartsInitialized = false;
+
+    function initCharts() {
+        if (chartsInitialized) return;
+        chartsInitialized = true;
+
+        // Parse raw data from Razor into JavaScript arrays safely
+        const rawIns = [
+            @if (registerCashIns != null)
+            {
+                @foreach (var tx in registerCashIns)
+                {
+                    <text>{ id: @tx.Id, refNo: '@tx.TransactionNo', date: '@tx.TransactionDate.ToString("yyyy-MM-dd")', type: '@tx.ReceiptType', amount: @tx.Amount, status: '@tx.Status', customer: '@tx.CustomerName.Replace("'", "\\'")', dealerCode: '@(tx.DealerCode?.Replace("'", "\\'") ?? "")', mode: '@tx.PaymentMode', bank: '@(tx.BankName?.Replace("'", "\\'") ?? "")', txRef: '@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")', narration: '@(tx.Narration?.Replace("'", "\\'") ?? "")', tally: '@(tx.TallyVoucherNo ?? "—")' },</text>
+                }
+            }
+        ];
+
+        const rawOuts = [
+            @if (registerCashOuts != null)
+            {
+                @foreach (var tx in registerCashOuts)
+                {
+                    <text>{ id: @tx.Id, refNo: '@tx.TransactionNo', date: '@tx.TransactionDate.ToString("yyyy-MM-dd")', category: '@tx.ExpenseCategory', amount: @tx.Amount, status: '@tx.Status', vendor: '@tx.VendorName.Replace("'", "\\'")', mode: '@tx.PaymentMode', bank: '@(tx.BankName?.Replace("'", "\\'") ?? "")', txRef: '@(tx.ReferenceNo?.Replace("'", "\\'") ?? "")', narration: '@(tx.Narration?.Replace("'", "\\'") ?? "")', costCenter: '@tx.CostCenter', glAccount: '@tx.GlAccount', instrument: '@tx.PaymentInstrument', tally: '@(tx.TallyVoucherNo ?? "—")' },</text>
+                }
+            }
+        ];
+
+        const opBal = @Model.OpeningBalance;
+
+        // Process daily net flow and cumulative trend
+        const dailyMap = {};
+        rawIns.forEach(tx => {
+            if (tx.status !== 'Draft' && tx.status !== 'Rejected') {
+                const d = tx.date;
+                dailyMap[d] = (dailyMap[d] || 0) + tx.amount;
+            }
+        });
+        rawOuts.forEach(tx => {
+            if (tx.status !== 'Draft' && tx.status !== 'Rejected') {
+                const d = tx.date;
+                dailyMap[d] = (dailyMap[d] || 0) - tx.amount;
+            }
+        });
+
+        const sortedDates = Object.keys(dailyMap).sort();
+        const trendLabels = ['Op. Balance'];
+        const trendData = [opBal];
+        let cumBal = opBal;
+
+        sortedDates.forEach(d => {
+            cumBal += dailyMap[d];
+            const dateParts = d.split('-');
+            if (dateParts.length === 3) {
+                const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                trendLabels.push(dateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }));
+            } else {
+                trendLabels.push(d);
+            }
+            trendData.push(cumBal);
+        });
+
+        // Chart 1: Line Area Trend Chart
+        new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: {
+                labels: trendLabels,
+                datasets: [{
+                    label: 'Running Balance (₹)',
+                    data: trendData,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.3,
+                    pointBackgroundColor: '#6366f1',
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        grid: { color: 'rgba(148, 163, 184, 0.08)' },
+                        ticks: { font: { family: 'Inter', size: 10 } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { family: 'Inter', size: 10 } }
+                    }
+                }
+            }
+        });
+
+        // Chart 2: Inflow vs Outflow comparison
+        const inTotal = rawIns.reduce((sum, tx) => (tx.status !== 'Draft' && tx.status !== 'Rejected' ? sum + tx.amount : sum), 0);
+        const outTotal = rawOuts.reduce((sum, tx) => (tx.status !== 'Draft' && tx.status !== 'Rejected' ? sum + tx.amount : sum), 0);
+
+        new Chart(document.getElementById('compareChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Inflows', 'Outflows'],
+                datasets: [{
+                    data: [inTotal, outTotal],
+                    backgroundColor: ['#22c55e', '#ef4444'],
+                    borderRadius: 8,
+                    barThickness: 45
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: 'rgba(148, 163, 184, 0.08)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        // Chart 3: Doughnut Inflows receipt types distribution
+        const inTypesMap = {};
+        rawIns.forEach(tx => {
+            if (tx.status !== 'Draft' && tx.status !== 'Rejected') {
+                inTypesMap[tx.type] = (inTypesMap[tx.type] || 0) + tx.amount;
+            }
+        });
+        const inLabels = Object.keys(inTypesMap);
+        const inData = Object.values(inTypesMap);
+
+        new Chart(document.getElementById('inflowsChart'), {
+            type: 'doughnut',
+            data: {
+                labels: inLabels.length ? inLabels : ['No Inflows'],
+                datasets: [{
+                    data: inData.length ? inData : [1],
+                    backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#14b8a6', '#6366f1', '#64748b'],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { font: { family: 'Inter', size: 11 } } }
+                }
+            }
+        });
+
+        // Chart 4: Doughnut Outflows expense categories distribution
+        const outCategoriesMap = {};
+        rawOuts.forEach(tx => {
+            if (tx.status !== 'Draft' && tx.status !== 'Rejected') {
+                outCategoriesMap[tx.category] = (outCategoriesMap[tx.category] || 0) + tx.amount;
+            }
+        });
+        const outLabels = Object.keys(outCategoriesMap);
+        const outData = Object.values(outCategoriesMap);
+
+        new Chart(document.getElementById('outflowsChart'), {
+            type: 'doughnut',
+            data: {
+                labels: outLabels.length ? outLabels : ['No Outflows'],
+                datasets: [{
+                    data: outData.length ? outData : [1],
+                    backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#3b82f6', '#8b5cf6', '#0ea5e9', '#ec4899', '#64748b'],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { font: { family: 'Inter', size: 11 } } }
+                }
+            }
+        });
+    } // end initCharts()
+
+    // Lazy: only init charts when analytics tab first becomes visible
+    document.getElementById('analytics-tab').addEventListener('shown.bs.tab', () => {
+        initCharts();
+    });
+
+
+    function checkTallyEntry(id, type, tallyStatus, currentVoucherNo = '') {
+        if (tallyStatus === 'Correct') {
+            Swal.fire({
+                title: 'Verify with Tally',
+                text: 'Please enter the Tally Voucher Number to mark this entry as correct:',
+                input: 'text',
+                inputValue: currentVoucherNo,
+                inputPlaceholder: 'Tally Voucher No. (e.g. TLY-1234)',
+                showCancelButton: true,
+                confirmButtonText: 'Confirm & Verify',
+                confirmButtonColor: '#22c55e',
+                cancelButtonColor: '#6c757d'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    const f = document.getElementById('tallyVerificationForm');
+                    document.getElementById('tallyVerifyId').value = id;
+                    document.getElementById('tallyVerifyType').value = type;
+                    document.getElementById('tallyVerifyStatus').value = tallyStatus;
+                    document.getElementById('tallyVerifyVoucherNo').value = result.value || '';
+                    document.getElementById('tallyVerifyRemarks').value = '';
+                    f.submit();
+                }
+            });
+        } else {
+            Swal.fire({
+                title: 'Report Tally Discrepancy',
+                text: 'Please describe the discrepancy or error details (required):',
+                input: 'textarea',
+                inputPlaceholder: 'e.g. Amount mismatch, reference incorrect in Tally...',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'You must enter remarks for wrong entries!'
+                    }
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Report Discrepancy',
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6c757d'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    const f = document.getElementById('tallyVerificationForm');
+                    document.getElementById('tallyVerifyId').value = id;
+                    document.getElementById('tallyVerifyType').value = type;
+                    document.getElementById('tallyVerifyStatus').value = tallyStatus;
+                    document.getElementById('tallyVerifyVoucherNo').value = '';
+                    document.getElementById('tallyVerifyRemarks').value = result.value;
+                    f.submit();
+                }
+            });
+        }
+    }
+
+    function editCashIn(id, date, branchId, receiptType, customerName, dealerCode, amount, paymentMode, bankName, referenceNo, narration) {
+        document.getElementById('cashInTxId').value = id;
+        const titleEl = document.querySelector('#cashInModal .modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square me-2" style="color:#f59e0b;"></i>Edit Cash In Transaction`;
+        }
+        const modal = document.getElementById('cashInModal');
+        modal.querySelector('[name="TransactionDate"]').value = date;
+        modal.querySelector('[name="BranchId"]').value = branchId;
+        
+        // Make sure select option exists
+        const select = modal.querySelector('[name="ReceiptType"]');
+        let exists = Array.from(select.options).some(o => o.value === receiptType);
+        if (!exists) {
+            const opt = document.createElement('option');
+            opt.value = receiptType;
+            opt.textContent = receiptType;
+            select.appendChild(opt);
+        }
+        select.value = receiptType;
+        
+        // Update segmented selector buttons active style
+        const selectTypeBtns = modal.querySelectorAll('.select-type-btn');
+        selectTypeBtns.forEach(btn => {
+            btn.classList.remove('active');
+            btn.style.background = 'transparent';
+            btn.style.boxShadow = 'none';
+        });
+        
+        let activeSelector = 'collection'; // default
+        if (window.isDmsCashType && window.isDmsCashType(receiptType)) {
+            activeSelector = 'dms';
+        } else if (window.isAdvanceType && (window.isAdvanceType(receiptType) || receiptType.toLowerCase().includes('refund') || receiptType.toLowerCase().includes('commission'))) {
+            activeSelector = 'other';
+        }
+        
+        const activeBtn = Array.from(selectTypeBtns).find(b => b.getAttribute('data-type-selector') === activeSelector);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+            activeBtn.style.background = '#ffffff';
+            activeBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+        }
+
+        // Add a clean row for edit mode
+        const container = document.getElementById('cashInRowsContainer');
+        if (container) {
+            container.innerHTML = '';
+            if (window.addCashInRow) {
+                window.addCashInRow(activeSelector);
+            }
+        }
+
+        const row = container.querySelector('.cashin-row-item');
+        if (row) {
+            const rowId = row.id;
+            
+            // Populating fields inside the dynamically injected row
+            row.querySelector('[name="Amount"]').value = amount;
+            row.querySelector('[name="Narration"]').value = narration;
+            
+            if (activeSelector === 'collection') {
+                const hiddenDealer = document.getElementById(`hidden-dealer-${rowId}`);
+                if (hiddenDealer) hiddenDealer.value = dealerCode;
+                
+                const customerNameInput = document.getElementById(`name-customer-${rowId}`);
+                if (customerNameInput) customerNameInput.value = customerName;
+                
+                const dropdownBtn = document.getElementById(`btn-dealer-${rowId}`);
+                if (dropdownBtn) {
+                    const span = dropdownBtn.querySelector('span');
+                    if (span) span.textContent = dealerCode ? `${dealerCode} - ${customerName}` : '-- Select Code --';
+                }
+                
+                row.querySelector('[name="PaymentMode"]').value = paymentMode;
+                row.querySelector('[name="BankName"]').value = bankName;
+                row.querySelector('[name="ReferenceNo"]').value = referenceNo;
+            } else if (activeSelector === 'dms') {
+                // Populate breakdown inputs if breakdown is in narration
+                const matchBreakdown = narration.match(/(?:DMS Sale|Receipt) Mode Breakdown:\s*(.*)/);
+                if (matchBreakdown && matchBreakdown[1]) {
+                    const parts = matchBreakdown[1].split(', ');
+                    parts.forEach(part => {
+                        const innerMatch = part.match(/(Cash|UPI|Card|Bank Transfer|Cheque):\s*₹([\d,.]+)/);
+                        if (innerMatch) {
+                            const mode = innerMatch[1];
+                            const val = parseFloat(innerMatch[2].replace(/,/g, ''));
+                            if (mode === 'Cash') {
+                                const inp = document.getElementById(`dmsAmtCash-${rowId}`);
+                                if (inp) inp.value = val;
+                            }
+                            if (mode === 'UPI') {
+                                const inp = document.getElementById(`dmsAmtUpi-${rowId}`);
+                                if (inp) inp.value = val;
+                            }
+                            if (mode === 'Card') {
+                                const inp = document.getElementById(`dmsAmtCard-${rowId}`);
+                                if (inp) inp.value = val;
+                            }
+                            if (mode === 'Bank Transfer') {
+                                const inp = document.getElementById(`dmsAmtBank-${rowId}`);
+                                if (inp) inp.value = val;
+                            }
+                            if (mode === 'Cheque') {
+                                const inp = document.getElementById(`dmsAmtCheque-${rowId}`);
+                                if (inp) inp.value = val;
+                            }
+                        }
+                    });
+                    row.querySelector('[name="Amount"]').setAttribute('readonly', 'readonly');
+                } else {
+                    row.querySelector('[name="Amount"]').removeAttribute('readonly');
+                }
+            } else {
+                row.querySelector('[name="DealerCode"]').value = dealerCode;
+                row.querySelector('[name="CustomerName"]').value = customerName;
+                row.querySelector('[name="PaymentMode"]').value = paymentMode;
+                row.querySelector('[name="BankName"]').value = bankName;
+                row.querySelector('[name="ReferenceNo"]').value = referenceNo;
+            }
+        }
+
+        if (window.handleReceiptTypeChange) window.handleReceiptTypeChange();
+        new bootstrap.Modal(modal).show();
+    }
+
+    function resetCashInForm() {
+        const idEl = document.getElementById('cashInTxId');
+        if (idEl) idEl.value = '0';
+        const titleEl = document.querySelector('#cashInModal .modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = `<i class="fa-solid fa-arrow-circle-down me-2" style="color:#22c55e;"></i>New Cash In Transaction`;
+        }
+        const form = document.querySelector('#cashInModal form');
+        if (form) {
+            form.reset();
+            const dateInput = form.querySelector('[name="TransactionDate"]');
+            if (dateInput) dateInput.value = new Date().toISOString().substring(0, 10);
+            
+            // Reset segmented buttons
+            const selectTypeBtns = form.querySelectorAll('.select-type-btn');
+            selectTypeBtns.forEach(btn => {
+                btn.classList.remove('active');
+                btn.style.background = 'transparent';
+                btn.style.boxShadow = 'none';
+            });
+            const firstBtn = form.querySelector('.select-type-btn[data-type-selector="collection"]');
+            if (firstBtn) {
+                firstBtn.classList.add('active');
+                firstBtn.style.background = '#ffffff';
+                firstBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            }
+        }
+        
+        // Clear container and inject single clean collection row
+        const container = document.getElementById('cashInRowsContainer');
+        if (container) {
+            container.innerHTML = '';
+            if (window.addCashInRow) {
+                window.addCashInRow('collection');
+            }
+        }
+        
+        if (window.handleReceiptTypeChange) window.handleReceiptTypeChange();
+    }
+
+    // Expose layout filter functions globally
+    function filterByStatusAndTab(status, tabType) {
+        let tabId = 'cashin-tab';
+        if (tabType === 'cashout') {
+            tabId = 'cashout-tab';
+        }
+        
+        const tabEl = document.getElementById(tabId);
+        if (tabEl) {
+            const tabObj = bootstrap.Tab.getOrCreateInstance(tabEl);
+            if (tabObj) tabObj.show();
+        }
+        
+        const ciSearchInput = document.getElementById('ciSearchInput');
+        const coSearchInput = document.getElementById('coSearchInput');
+        
+        if (ciSearchInput) {
+            ciSearchInput.value = status;
+            filterTable(status, 'ciTableTbody');
+        }
+        if (coSearchInput) {
+            coSearchInput.value = status;
+            filterTable(status, 'coTableTbody');
+        }
+    }
+
+    function filterByTallyStatus() {
+        const tabEl = document.getElementById('cashin-tab');
+        if (tabEl) {
+            const tabObj = bootstrap.Tab.getOrCreateInstance(tabEl);
+            if (tabObj) tabObj.show();
+        }
+        
+        const ciSearchInput = document.getElementById('ciSearchInput');
+        const coSearchInput = document.getElementById('coSearchInput');
+        
+        if (ciSearchInput) {
+            ciSearchInput.value = 'Tally Error';
+            filterTable('Tally Error', 'ciTableTbody');
+        }
+        if (coSearchInput) {
+            coSearchInput.value = 'Tally Error';
+            filterTable('Tally Error', 'coTableTbody');
+        }
+    }
+
+    function clearSearchFilter(inputId, tbodyId) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.value = '';
+            filterTable('', tbodyId);
+        }
+    }
+
+    window.filterByStatusAndTab = filterByStatusAndTab;
+    window.filterByTallyStatus = filterByTallyStatus;
+    window.clearSearchFilter = clearSearchFilter;
+
+    const expenseCategories = [
+        @if (expenseCategories != null && expenseCategories.Count > 0)
+        {
+            @Html.Raw(string.Join(",", expenseCategories.Select(x => $"'{x.Replace("'", "\\'")}'")))
+        }
+        else
+        {
+            @Html.Raw("'Salary','Rent','Electricity','Travel','Marketing','Professional Fee','Maintenance','Stationery','Other'")
+        }
+    ];
+
+    const paymentModes = ['NEFT', 'RTGS', 'Cheque', 'Cash', 'Online', 'UPI', 'POS Machine', 'By Hand'];
+
+    function updateRunningTotal() {
+        const rows = document.querySelectorAll('#expenseRowsContainer .expense-row-item');
+        let total = 0;
+        rows.forEach(row => {
+            const amtInput = row.querySelector('[name="Amount"]');
+            if (amtInput) {
+                const val = parseFloat(amtInput.value);
+                if (!isNaN(val) && val > 0) {
+                    total += val;
+                }
+            }
+        });
+        const badge = document.getElementById('runningTotalBadge');
+        if (badge) {
+            badge.textContent = 'Total: ₹' + total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    }
+
+    function addExpenseRow(category = '', amount = '', narration = '', paymentMode = 'NEFT') {
+        const container = document.getElementById('expenseRowsContainer');
+        const rowId = 'row-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        
+        let categoryOptions = '';
+        expenseCategories.forEach(cat => {
+            const selected = cat === category ? 'selected' : '';
+            categoryOptions += `<option value="${cat}" ${selected}>${cat}</option>`;
+        });
+
+        let paymentModeOptions = '';
+        paymentModes.forEach(pm => {
+            const selected = pm === paymentMode ? 'selected' : '';
+            paymentModeOptions += `<option value="${pm}" ${selected}>${pm}</option>`;
+        });
+
+        const rowHtml = `
+            <div class="expense-row-item border rounded-3 p-3 mb-3 bg-light" id="${rowId}" style="border-color: #cbd5e1 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.01);">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Expense Category <span class="text-danger">*</span></label>
+                        <select name="ExpenseCategory" class="form-select form-select-sm" required style="border-radius:6px; height: 38px;">
+                            ${categoryOptions}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Amount (₹) <span class="text-danger">*</span></label>
+                        <input type="number" name="Amount" class="form-control form-control-sm" placeholder="0.00" step="0.01" min="1" required value="${amount}" style="border-radius:6px; height: 38px;">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Payment Mode <span class="text-danger">*</span></label>
+                        <select name="PaymentMode" class="form-select form-select-sm" required style="border-radius:6px; height: 38px;">
+                            ${paymentModeOptions}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold text-secondary" style="font-size:.75rem; margin-bottom: 4px;">Narration</label>
+                        <input type="text" name="Narration" class="form-control form-control-sm" placeholder="Payment details..." value="${narration}" style="border-radius:6px; height: 38px;">
+                    </div>
+                    <div class="col-md-1 text-end pb-1 remove-btn-col">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn d-flex align-items-center justify-content-center" style="border-radius:6px; height: 38px; width: 100%; border-color: rgba(239, 68, 68, 0.2); color:#ef4444;" onclick="removeExpenseRow('${rowId}')" title="Remove Entry">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', rowHtml);
+        updateRemoveButtonsVisibility();
+        updateRunningTotal();
+    }
+
+    function removeExpenseRow(rowId) {
+        const row = document.getElementById(rowId);
+        if (row) {
+            row.remove();
+        }
+        updateRemoveButtonsVisibility();
+        updateRunningTotal();
+    }
+
+    function updateRemoveButtonsVisibility() {
+        const rows = document.querySelectorAll('.expense-row-item');
+        const isEditMode = document.getElementById('cashOutTxId').value !== '0';
+        rows.forEach(row => {
+            const btn = row.querySelector('.remove-row-btn');
+            if (btn) {
+                if (isEditMode || rows.length <= 1) {
+                    btn.style.display = 'none';
+                } else {
+                    btn.style.display = '';
+                }
+            }
+        });
+    }
+
+    function editCashOut(id, date, branchId, expenseCategory, vendorName, costCenter, glAccount, amount, paymentMode, paymentInstrument, bankName, referenceNo, narration) {
+        document.getElementById('cashOutTxId').value = id;
+        const titleEl = document.querySelector('#cashOutModal .modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square me-2" style="color:#f59e0b;"></i>Edit Cash Out Payment`;
+        }
+        const modal = document.getElementById('cashOutModal');
+        modal.querySelector('[name="TransactionDate"]').value = date;
+        modal.querySelector('[name="BranchId"]').value = branchId;
+        
+        const container = document.getElementById('expenseRowsContainer');
+        container.innerHTML = '';
+        addExpenseRow(expenseCategory, amount, narration, paymentMode);
+        
+        document.getElementById('addExpenseRowBtn').style.display = 'none';
+        updateRemoveButtonsVisibility();
+        
+        new bootstrap.Modal(modal).show();
+    }
+
+    function resetCashOutForm() {
+        const idEl = document.getElementById('cashOutTxId');
+        if (idEl) idEl.value = '0';
+        const titleEl = document.querySelector('#cashOutModal .modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = `<i class="fa-solid fa-arrow-circle-up me-2" style="color:#ef4444;"></i>New Cash Out Payment`;
+        }
+        const form = document.querySelector('#cashOutModal form');
+        if (form) {
+            form.reset();
+            const dateInput = form.querySelector('[name="TransactionDate"]');
+            if (dateInput) dateInput.value = new Date().toISOString().substring(0, 10);
+        }
+        
+        document.getElementById('addExpenseRowBtn').style.display = '';
+        
+        const container = document.getElementById('expenseRowsContainer');
+        container.innerHTML = '';
+        addExpenseRow();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const addBtn = document.getElementById('addExpenseRowBtn');
+        if (addBtn) {
+            addBtn.addEventListener('click', function () {
+                addExpenseRow();
+            });
+        }
+
+        const container = document.getElementById('expenseRowsContainer');
+        if (container) {
+            container.addEventListener('input', function (e) {
+                if (e.target && e.target.name === 'Amount') {
+                    updateRunningTotal();
+                }
+            });
+        }
+
+        const form = document.querySelector('#cashOutModal form');
+        if (form) {
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                
+                const rows = document.querySelectorAll('.expense-row-item');
+                if (rows.length === 0) {
+                    Swal.fire('Error', 'Please add at least one expense entry.', 'error');
+                    return;
+                }
+                
+                if (!form.checkValidity()) {
+                    form.reportValidity();
+                    return;
+                }
+
+                const clickedBtn = document.activeElement;
+                const action = clickedBtn ? clickedBtn.value : 'draft';
+                
+                const txId = document.getElementById('cashOutTxId').value;
+                const date = form.querySelector('[name="TransactionDate"]').value;
+                const branchId = form.querySelector('[name="BranchId"]').value;
+                const attachmentFile = form.querySelector('[name="AttachmentFile"]').files[0];
+                const token = form.querySelector('[name="__RequestVerificationToken"]').value;
+
+                Swal.fire({
+                    title: 'Saving payments...',
+                    html: 'Processing entry <b>1</b> of <b>' + rows.length + '</b>...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                try {
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i];
+                        const currentTxId = i === 0 ? txId : '0'; 
+
+                        if (rows.length > 1) {
+                            const bElement = Swal.getHtmlContainer().querySelector('b');
+                            if (bElement) bElement.textContent = (i + 1);
+                        }
+
+                        const formData = new FormData();
+                        formData.append('__RequestVerificationToken', token);
+                        formData.append('Id', currentTxId);
+                        formData.append('TransactionDate', date);
+                        formData.append('BranchId', branchId);
+                        formData.append('PaymentMode', row.querySelector('[name="PaymentMode"]').value);
+                        formData.append('PaymentInstrument', '');
+                        formData.append('BankName', '');
+                        formData.append('ReferenceNo', '');
+                        
+                        formData.append('ExpenseCategory', row.querySelector('[name="ExpenseCategory"]').value);
+                        formData.append('VendorName', '');
+                        formData.append('Amount', row.querySelector('[name="Amount"]').value);
+                        formData.append('CostCenter', '');
+                        formData.append('GlAccount', '');
+                        formData.append('Narration', row.querySelector('[name="Narration"]').value);
+                        formData.append('action', action);
+
+                        if (attachmentFile && i === 0) {
+                            formData.append('AttachmentFile', attachmentFile);
+                        }
+
+                        const response = await fetch('/CashManagement/CreateCashOut', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to save entry ' + (i + 1));
+                        }
+                    }
+
+                    Swal.close();
+                    Swal.fire({
+                        title: 'Success!',
+                        text: rows.length === 1 ? 'Cash Out transaction saved successfully!' : 'All ' + rows.length + ' Cash Out transactions saved successfully!',
+                        icon: 'success',
+                        confirmButtonColor: 'var(--primary)'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+
+                } catch (err) {
+                    Swal.close();
+                    Swal.fire('Error', err.message || 'An error occurred while saving the transactions.', 'error');
+                }
+            });
+        }
+        
+        resetCashOutForm();
+    });
+</script>
+
+<form method="post" id="tallyVerificationForm" action="/CashManagement/VerifyTally" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="tallyVerifyId" name="id">
+    <input type="hidden" id="tallyVerifyType" name="type">
+    <input type="hidden" id="tallyVerifyStatus" name="tallyStatus">
+    <input type="hidden" id="tallyVerifyVoucherNo" name="tallyVoucherNo">
+    <input type="hidden" id="tallyVerifyRemarks" name="remarks">
+</form>
+}
+
+
+

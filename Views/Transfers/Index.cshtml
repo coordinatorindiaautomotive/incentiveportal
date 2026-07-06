@@ -1,0 +1,2134 @@
+﻿@model IReadOnlyList<IncentivePortal.Models.SsIncentive>
+@inject IncentivePortal.Data.IncentiveDbContext Db
+@{
+    ViewData["Title"] = "Corporate Transfer Reconciliation Control";
+    var branchMap = Db.Branches.Where(b => !b.IsDeleted).ToDictionary(b => b.Code, b => b.Name);
+    var uniqueLocations = Model.Select(x => x.SourceLocation).Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x).ToList();
+}
+
+<style>
+    @@keyframes success-pulse {
+        0% { background-color: rgba(22, 163, 74, 0.25); }
+        100% { background-color: transparent; }
+    }
+    .reconcile-success-pulse {
+        animation: success-pulse 2.0s ease-out;
+    }
+    .transfer-row {
+        transition: all 0.25s ease;
+    }
+    .filter-tab.active {
+        box-shadow: 0 4px 10px rgba(13, 82, 214, 0.15);
+    }
+    .dealer-select-btn {
+        transition: all 0.2s ease;
+    }
+    .dealer-select-btn:hover {
+        background-color: rgba(37, 99, 235, 0.08) !important;
+        color: #2563eb !important;
+        transform: translateX(4px);
+    }
+</style>
+
+<!-- Control & Upload Center Row -->
+<div class="row g-4 mb-4">
+    <!-- Left Column: Period Selection & Reconciliation Progress -->
+    <div class="col-12 col-xl-6 d-flex">
+        <div class="card border-0 shadow-sm p-4 w-100" style="border-radius: 16px; background: #ffffff; border: 1px solid #e2e8f0;">
+            <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
+                <h3 class="fs-5 fw-bold text-dark mb-0 d-flex align-items-center">
+                    <i class="fa-solid fa-calendar-check text-primary me-2"></i> Reconciliation Period
+                </h3>
+                <span id="detected-period-badge" class="badge bg-light border text-dark p-2 animate-pulse" style="font-size: 0.82rem; font-weight: 600; border-radius: 6px;">
+                    Loading Period...
+                </span>
+            </div>
+            
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-sm-6">
+                    <label for="reconcile-month" class="small fw-bold text-secondary mb-1 d-block">Reconciliation Month</label>
+                    <select id="reconcile-month" name="reconcileMonth" class="form-select corp-select py-2 px-3 fw-semibold w-100" style="height: 44px; border-radius: 8px;">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" selected="@(ViewBag.DefaultMonth == m)">@System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(m)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6">
+                    <label for="reconcile-year" class="small fw-bold text-secondary mb-1 d-block">Reconciliation Year</label>
+                    <select id="reconcile-year" name="reconcileYear" class="form-select corp-select py-2 px-3 fw-semibold w-100" style="height: 44px; border-radius: 8px;">
+                        @for (int y = 2024; y <= 2028; y++)
+                        {
+                            <option value="@y" selected="@(ViewBag.DefaultYear == y)">@y</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <!-- Reconciliation Progress Visualizer -->
+            <div class="mt-4 pt-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small fw-bold text-secondary">Period Progress</span>
+                    <span class="badge bg-primary-subtle text-primary fw-bold" id="progress-percentage-badge" style="font-size: 0.85rem; border-radius: 6px; background-color: rgba(37, 99, 235, 0.1);">0% Completed</span>
+                </div>
+                <div class="progress" style="height: 8px; border-radius: 4px; background-color: #f1f5f9;">
+                    <div id="reconciliation-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <div class="mt-2">
+                    <span class="text-muted small" style="font-size: 0.82rem;" id="progress-text-summary">₹0 reconciled of ₹0 accrued</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Statement Payout Upload -->
+    <div class="col-12 col-xl-6 d-flex">
+        <div class="card border-0 shadow-sm p-4 w-100" style="border-radius: 16px; background: linear-gradient(135deg, rgba(13, 82, 214, 0.02) 0%, rgba(6, 182, 212, 0.02) 100%); border: 1px solid rgba(13, 82, 214, 0.12);">
+            <div class="d-flex align-items-center mb-3 border-bottom pb-2">
+                <h3 class="fs-5 fw-bold text-dark mb-0 d-flex align-items-center">
+                    <i class="fa-solid fa-file-excel text-primary me-2"></i> Bank Statement Upload Center
+                </h3>
+            </div>
+            
+            <p class="text-muted small mb-3">Upload your bank settlement statement Excel sheets (`.xlsx`) to auto-match UTRs and reconcile transaction payouts.</p>
+
+            @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+            {
+                <form asp-action="UploadReconciliation" method="post" enctype="multipart/form-data" class="d-flex flex-column gap-3 m-0" id="bulk-reconcile-form">
+                    @Html.AntiForgeryToken()
+                    <!-- Pass selected Month/Year inside the form automatically -->
+                    <input type="hidden" name="reconcileMonth" id="upload-form-month" value="@ViewBag.DefaultMonth" />
+                    <input type="hidden" name="reconcileYear" id="upload-form-year" value="@ViewBag.DefaultYear" />
+                    
+                    <!-- Mapping Mode Selection -->
+                    <div class="d-flex align-items-center gap-4 mb-1">
+                        <label class="small fw-bold text-secondary mb-0">Mapping Option:</label>
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="radio" name="mappingMode" id="mapping-mode-auto" value="auto" checked style="cursor: pointer;" />
+                            <label class="form-check-label small fw-semibold text-dark" for="mapping-mode-auto" style="cursor: pointer;">Auto Mapping</label>
+                        </div>
+                        <div class="form-check form-check-inline m-0">
+                            <input class="form-check-input" type="radio" name="mappingMode" id="mapping-mode-manual" value="manual" style="cursor: pointer;" />
+                            <label class="form-check-label small fw-semibold text-dark" for="mapping-mode-manual" style="cursor: pointer;">Manual Column Mapping</label>
+                        </div>
+                    </div>
+
+                    <!-- Manual Column Mapping Section -->
+                    <div id="manual-mapping-section" class="p-3 border rounded bg-white shadow-inner" style="display: none; border-radius: 8px; border-color: rgba(13, 82, 214, 0.15) !important;">
+                        <h4 class="fs-6 fw-bold text-dark mb-3"><i class="fa-solid fa-gears text-primary me-2"></i> Map Excel Columns</h4>
+                        <div class="row g-3">
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">Beneficiary Account No *</label>
+                                <select name="mapAccountNo" id="map-account-no" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">STATUS *</label>
+                                <select name="mapStatus" id="map-status" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">UTR NO *</label>
+                                <select name="mapUtr" id="map-utr" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">Debit Narration (Party Code)</label>
+                                <select name="mapPartyCode" id="map-party-code" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">Beneficiary Name</label>
+                                <select name="mapName" id="map-name" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">Bene IFSC Code</label>
+                                <select name="mapIfsc" id="map-ifsc" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">Amount</label>
+                                <select name="mapAmount" id="map-amount" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                            <div class="col-6 col-sm-4">
+                                <label class="small fw-semibold text-muted d-block mb-1">Payment Date</label>
+                                <select name="mapDate" id="map-date" class="form-select form-select-sm mapping-dropdown" disabled></select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="w-100 mb-3">
+                        <div id="reconcileDropZone" class="mb-3 text-center p-4" style="border: 2px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.25s ease;" onclick="$('#reconcile-file-input').click();">
+                            <i class="fa-regular fa-file-excel fa-3x text-success mb-3"></i>
+                            <h6 class="fw-bold text-dark mb-1">Drag & Drop Excel File Here</h6>
+                            <p class="text-muted small mb-3">or click to browse local folders</p>
+                            <input type="file" name="file" id="reconcile-file-input" style="display: none;" required accept=".xlsx" onclick="event.stopPropagation();" />
+                            <span id="selectedReconFileName" class="badge bg-secondary px-3 py-2 fw-semibold d-none" style="font-size: 0.78rem; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" id="btnReconcileSubmit" class="btn btn-primary d-flex align-items-center justify-content-center gap-2" style="height: 44px; border-radius: 8px; font-weight: 600; padding: 0 20px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);" disabled>
+                            <i class="fa-solid fa-circle-check"></i> Reconcile Excel
+                        </button>
+                    </div>
+                </form>
+                <div class="text-muted small mt-2 d-flex align-items-center gap-1" style="font-size: 0.78rem;" id="recon-info-text">
+                    <i class="fa-solid fa-circle-info text-primary"></i>
+                    <span>Excel must contain columns: `Beneficiary Account No`, `STATUS`, and `UTR NO` (or map them manually).</span>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-secondary d-flex align-items-center gap-2 mb-0" role="alert" style="border-radius: 8px;">
+                    <i class="fa-solid fa-lock text-muted"></i>
+                    <span class="small text-muted">You do not have permission to upload bank statements. View-only access is active.</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Metrics & Quick Insights Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3" style="border-radius: 12px; background: rgba(13, 82, 214, 0.04); border-left: 5px solid var(--color-1) !important;">
+            <div class="text-muted small fw-bold">Total Accrued Payouts</div>
+            <div class="fs-3 fw-bold text-dark mt-1" id="metric-accrued-amount">₹0</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3" style="border-radius: 12px; background: rgba(245, 158, 11, 0.04); border-left: 5px solid #f59e0b !important;">
+            <div class="text-muted small fw-bold">Pending Payouts</div>
+            <div class="fs-3 fw-bold text-dark mt-1" id="metric-pending-count">0</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3" style="border-radius: 12px; background: rgba(22, 163, 74, 0.04); border-left: 5px solid #16a34a !important;">
+            <div class="text-muted small fw-bold">Reconciled / Completed</div>
+            <div class="fs-3 fw-bold text-dark mt-1" id="metric-reconciled-count">0</div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Transfers Ledger -->
+<div class="panel">
+    <div class="panel-header border-bottom pb-3 mb-3">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 w-100">
+            <div>
+                <h2>Transfer Ledger Registry</h2>
+                <p>Accrued liabilities and real-time bank settlement status records</p>
+            </div>
+            <!-- Client-Side Instant Search -->
+            <div class="position-relative">
+                <i class="fa-solid fa-magnifying-glass position-absolute text-muted" style="left: 12px; top: 12px; font-size: 0.9rem;"></i>
+                <input type="text" id="transferSearchInput" class="form-control corp-input py-1 ps-5 pe-3" style="width: 280px; height: 38px; border-radius: 8px;" placeholder="Search Code, Name, UTR..." />
+            </div>
+        </div>
+        
+        <!-- Multi-Filter Toolbar Grid -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-3 pt-3 border-top w-100">
+            <!-- Dynamic Status Filter Tabs -->
+            <div class="btn-group" role="group" aria-label="Status Filter">
+                <button type="button" class="btn btn-outline-secondary filter-tab" data-status="all" style="height: 38px; border-radius: 8px 0 0 8px; font-weight: 600; font-size: 0.88rem;">
+                    All <span class="badge bg-secondary ms-1 text-white px-2 py-1" id="tab-count-all" style="font-size: 0.72rem;">0</span>
+                </button>
+                <button type="button" class="btn btn-outline-warning active filter-tab" data-status="Pending" style="height: 38px; font-weight: 600; font-size: 0.88rem;">
+                    Pending <span class="badge bg-warning text-dark ms-1 px-2 py-1" id="tab-count-pending" style="font-size: 0.72rem;">0</span>
+                </button>
+                <button type="button" class="btn btn-outline-success filter-tab" data-status="Completed" style="height: 38px; font-weight: 600; font-size: 0.88rem;">
+                    Reconciled <span class="badge bg-success ms-1 text-white px-2 py-1" id="tab-count-completed" style="font-size: 0.72rem;">0</span>
+                </button>
+                <button type="button" class="btn btn-outline-danger filter-tab" data-status="Failed" style="height: 38px; border-radius: 0 8px 8px 0; font-weight: 600; font-size: 0.88rem;">
+                    Failed / Reversed <span class="badge bg-danger ms-1 text-white px-2 py-1" id="tab-count-failed" style="font-size: 0.72rem;">0</span>
+                </button>
+            </div>
+
+            <!-- Transfer Mode Filter -->
+            <div class="d-flex align-items-center">
+                <select id="transferModeFilter" class="form-select corp-select py-1 px-2" style="width: 150px; height: 38px; font-weight: 600; border-radius: 8px; font-size: 0.88rem;">
+                    <option value="all">Modes: All</option>
+                    <option value="NEFT">NEFT</option>
+                    <option value="RTGS">RTGS</option>
+                    <option value="IMPS">IMPS</option>
+                    <option value="UPI">UPI</option>
+                </select>
+            </div>
+
+            <!-- Branch Multiselect Filter -->
+            <div class="d-flex align-items-center">
+                <div class="custom-multiselect dropdown" id="branchMultiselect">
+                    <button class="form-select corp-select text-start dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="min-width: 180px; height: 38px; font-weight: 600; font-size: 0.88rem; border-radius: 8px; background-color: #fff; border: 1px solid #ced4da;">
+                        <span class="selected-label">Branches: All</span>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow-lg" style="min-width: 260px; max-height: 320px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <input type="text" class="form-control form-control-sm mb-2 search-input" placeholder="🔍 Search branch..." style="font-size: 0.85rem;" />
+                        <div class="options-container">
+                            <div class="form-check mb-1 select-all-wrapper">
+                                <input class="form-check-input select-all-cb" type="checkbox" id="branch_all" checked style="cursor: pointer;" />
+                                <label class="form-check-label fw-bold" for="branch_all" style="cursor: pointer;">Select All / Clear</label>
+                            </div>
+                            <hr class="my-2" />
+                            @foreach (var code in uniqueLocations)
+                            {
+                                var branchName = branchMap.ContainsKey(code) ? branchMap[code] : code;
+                                <div class="form-check mb-1 option-item">
+                                    <input class="form-check-input option-cb branch-cb" type="checkbox" value="@code" id="cb_branch_@code" checked style="cursor: pointer;" />
+                                    <label class="form-check-label small" for="cb_branch_@code" style="cursor: pointer;"><strong>@code</strong> - @branchName</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payout Amount Filters -->
+            <div class="d-flex align-items-center gap-2 bg-light px-3 py-1 border" style="border-radius: 8px; height: 38px;">
+                <span class="text-muted small fw-semibold" style="font-size: 0.82rem; white-space: nowrap;">Amount:</span>
+                <input type="number" id="minAmountFilter" class="form-control border-0 bg-transparent p-0 font-monospace text-end" style="width: 75px; font-size: 0.85rem; outline: none; box-shadow: none;" placeholder="Min ₹" />
+                <span class="text-muted small">—</span>
+                <input type="number" id="maxAmountFilter" class="form-control border-0 bg-transparent p-0 font-monospace text-end" style="width: 75px; font-size: 0.85rem; outline: none; box-shadow: none;" placeholder="Max ₹" />
+            </div>
+
+            <!-- Reset Button -->
+            <button type="button" id="btnResetFilters" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="height: 38px; width: 38px; border-radius: 8px;" title="Reset All Filters">
+                <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+
+            <!-- Export Excel Button -->
+            <button type="button" onclick="exportTableToCSV('#transfersGrid', 'Bank_Transfers.csv')" class="btn btn-outline-success d-flex align-items-center justify-content-center gap-2 px-3" style="height: 38px; border-radius: 8px; font-weight: 600;" title="Export to Excel">
+                <i class="fa-solid fa-download"></i> Export Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Floating Bulk Reconciliation Control Bar (Admin Only) -->
+    @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+    {
+    <div id="bulk-reconcile-panel" class="p-3 mb-3 border-0 shadow-sm" style="display: none; border-radius: 8px; background: linear-gradient(135deg, rgba(30, 64, 175, 0.08) 0%, rgba(14, 165, 233, 0.08) 100%); border-left: 5px solid var(--primary) !important; margin: 0 20px;">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary text-white" id="selected-count-badge" style="font-size: 0.95rem; font-weight: 700; border-radius: 6px;">0</span>
+                <span class="fw-bold text-dark" style="font-size: 0.95rem;">transfer(s) selected for bulk manual reconciliation</span>
+            </div>
+            <form id="bulk-reconcile-action-form" method="post" action="@Url.Action("BulkReconcile", "Transfers")" class="d-flex flex-wrap align-items-center gap-3 m-0">
+                @Html.AntiForgeryToken()
+                <div class="d-flex align-items-center gap-2">
+                    <label for="bulk-utr-input" class="small fw-bold text-secondary mb-0">Common UTR:</label>
+                    <input type="text" id="bulk-utr-input" class="form-control corp-input py-1 px-3" style="max-width: 200px; height: 38px; font-weight: 600;" placeholder="Enter UTR Reference" required />
+                </div>
+                <button type="submit" class="btn btn-primary d-flex align-items-center gap-2" style="height: 38px; font-weight: 600; box-shadow: 0 4px 12px rgba(30, 64, 175, 0.2); background-color: var(--primary); border-color: var(--primary);">
+                    <i class="fa-solid fa-circle-check"></i> Reconcile Selected
+                </button>
+            </form>
+        </div>
+    </div>
+    }
+
+    <div class="table-responsive corp-table-wrapper" id="ledger-table-container">
+        <table class="table table-hover corp-table align-middle" id="transfersGrid">
+            <thead>
+                <tr>
+                    <th style="width: 45px; text-align: center;">
+                        @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                        {
+                            <input type="checkbox" id="selectAllTransfers" class="form-check-input" style="cursor: pointer;" />
+                        }
+                        else
+                        {
+                            <span class="text-muted" style="font-size: 0.78rem;">#</span>
+                        }
+                    </th>
+                    <th>Party Code</th>
+                    <th>Beneficiary Name</th>
+                    <th>Transfer Mode</th>
+                    <th class="text-end">Eligible for Incentive</th>
+                    <th class="text-end">Transferred Amount</th>
+                    <th>Status</th>
+                    <th>UTR Reference</th>
+                    <th>Settlement Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            @if (Model.Count == 0)
+            {
+                <tr id="empty-table-row">
+                    <td colspan="9" class="text-center py-4 text-muted">No transfer records registered</td>
+                </tr>
+            }
+            @foreach (var item in Model)
+            {
+                var statusClass = (item.PaymentStatus == "Success" || item.PaymentStatus == "Paid" || item.PaymentStatus == "Reconciled") ? "success" : (item.PaymentStatus == "Pending" ? "warning" : (item.PaymentStatus == "Failed" ? "danger" : (item.PaymentStatus == "Credit Party" ? "credit-party" : "neutral")));
+                var transferMode = item.NetTransferAmount >= 200000 ? "RTGS" : "NEFT";
+                <tr class="transfer-row" data-id="@item.Id" data-status="@item.PaymentStatus" data-partycode="@item.PartyCode" data-partyname="@item.PartyName" data-utr="@(item.UTRNumber ?? "")" data-amount="@item.NetTransferAmount" data-transferred="@item.TransferredAmount" data-month="@item.Month" data-year="@item.Year" data-mode="@transferMode" data-location="@item.SourceLocation">
+                    <td style="text-align: center;">
+                        @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                        {
+                            @if ((item.PaymentStatus == "Pending" || item.PaymentStatus == "Failed" || item.PaymentStatus == "Reversed" || item.PaymentStatus == "Credit Party") 
+                                 && !string.IsNullOrWhiteSpace(item.BankAccountNumber) && item.BankAccountNumber != "-" 
+                                 && !string.IsNullOrWhiteSpace(item.IFSC) && item.IFSC != "-")
+                            {
+                                <input type="checkbox" class="form-check-input transfer-select-item" data-id="@item.Id" style="cursor: pointer;" />
+                            }
+                            else
+                            {
+                                <input type="checkbox" class="form-check-input transfer-select-item" disabled style="opacity: 0.25; cursor: not-allowed;" />
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted" style="font-size: 0.78rem;">—</span>
+                        }
+                    </td>
+                    <td><span class="party-code-badge" style="background: rgba(13, 82, 214, 0.1); color: var(--color-1); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85rem;">@item.PartyCode</span></td>
+                    <td class="party-name-cell">
+                        <strong>@item.PartyName</strong>
+                        @if (string.IsNullOrWhiteSpace(item.BankAccountNumber) || item.BankAccountNumber == "-" || string.IsNullOrWhiteSpace(item.IFSC) || item.IFSC == "-")
+                        {
+                            <span class="d-block text-danger small fw-bold mt-1" style="font-size: 0.76rem;"><i class="fa-solid fa-circle-exclamation me-1"></i> Not Link Ac No</span>
+                        }
+                        else
+                        {
+                            <span class="d-block text-muted small mt-1" style="font-size: 0.74rem; opacity: 0.85;"><i class="fa-solid fa-credit-card me-1"></i> A/c: @item.BankAccountNumber | IFSC: @item.IFSC</span>
+                        }
+                    </td>
+                    <td><span class="badge bg-light text-dark border">@transferMode</span></td>
+                    <td class="text-end fw-bold text-amount">₹@item.NetTransferAmount.ToString("N0")</td>
+                    <td class="text-end fw-bold text-success text-transferred-amount">@(item.TransferredAmount > 0 ? "₹" + item.TransferredAmount.ToString("N0") : "-")</td>
+                    <td class="status-cell"><span class="status-badge @statusClass">@item.PaymentStatus</span></td>
+                    <td class="utr-cell"><code>@(item.UTRNumber ?? "-")</code></td>
+                    <td class="date-cell">@(item.PaymentDate?.ToString("dd-MMM-yyyy") ?? "-")</td>
+                    <td class="action-cell">
+                        @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                        {
+                            @if (item.PaymentStatus == "Pending" || item.PaymentStatus == "Failed" || item.PaymentStatus == "Reversed" || item.PaymentStatus == "Credit Party")
+                            {
+                                @if (!string.IsNullOrWhiteSpace(item.BankAccountNumber) && item.BankAccountNumber != "-" && !string.IsNullOrWhiteSpace(item.IFSC) && item.IFSC != "-")
+                                {
+                                    <form asp-action="Reconcile" method="post" data-ajax="true" class="d-flex gap-2 align-items-center m-0">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <input name="utr" class="form-control corp-input py-1 utr-input-field" style="max-width: 150px; font-size: 0.85rem; height: 32px;" placeholder="UTR" required value="@item.UTRNumber" />
+                                        <button class="btn btn-sm btn-outline-primary submit-single-reconcile" style="height: 32px; padding: 2px 10px;" title="Reconcile manually"><i class="fa-solid fa-check"></i></button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="text-danger small fw-bold"><i class="fa-solid fa-circle-exclamation me-1"></i> Missing bank details</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted small"><i class="fa-solid fa-lock me-1"></i> Locked</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted small"><i class="fa-solid fa-eye me-1"></i> View Only</span>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Beautiful Empty State Block -->
+    <div id="no-data-alert" class="text-center py-5" style="display: none; border-radius: 12px; margin: 20px; border: 1px dashed #e2e8f0; background: #fafafa;">
+        <div class="mb-3">
+            <i class="fa-solid fa-folder-open text-muted" style="font-size: 3.5rem; opacity: 0.35;"></i>
+        </div>
+        <h4 class="fw-bold text-secondary">No Matching Payouts Found</h4>
+        <p class="text-muted small mx-auto mb-0" style="max-width: 450px;">
+            We couldn't find any transfer records matching the current filters for <strong id="empty-state-period" class="text-primary">February 2026</strong>.
+        </p>
+        <p class="text-muted small mx-auto mt-1" style="max-width: 450px;">
+            Try adjusting your search query, selecting another status tab, changing the amount range, or uploading a statement excel.
+        </p>
+    </div>
+</div>
+
+<!-- Unreconciled Bank Statement Registry Panel -->
+<div class="panel mt-4" id="unmatched-statement-card">
+    <div class="panel-header border-bottom pb-3 mb-3">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 w-100">
+            <div>
+                <h2 class="d-flex align-items-center fs-5 fw-bold text-dark mb-1">
+                    <i class="fa-solid fa-file-invoice-dollar text-primary me-2"></i> Unreconciled Bank Statement Registry
+                </h2>
+                <p class="text-muted small mb-0">Transactions from uploaded bank statements that could not be matched automatically. Perform CRUD edits or manual mapping here.</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                {
+                    <button class="btn btn-sm btn-primary d-flex align-items-center gap-2" id="btnAddUnmatchedRecord" style="height: 38px; border-radius: 8px; font-weight: 600;">
+                        <i class="fa-solid fa-plus"></i> Add Statement Row
+                    </button>
+                }
+                <span class="badge bg-danger text-white px-3 py-2 fw-semibold" id="unmatched-count-badge" style="font-size: 0.82rem; border-radius: 6px;">0 Unreconciled Rows</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive corp-table-wrapper" id="unmatched-table-container" style="display: none; margin: 0 10px;">
+        <table class="table table-hover corp-table align-middle" id="unmatched-statement-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px; text-align: center;">Row</th>
+                    <th>Beneficiary Name</th>
+                    <th>Account No</th>
+                    <th>IFSC</th>
+                    <th class="text-end">Amount</th>
+                    <th>Status</th>
+                    <th>UTR</th>
+                    <th>Date</th>
+                    <th>Mapped Dealer</th>
+                    <th style="width: 140px; text-align: center;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Populated dynamically via AJAX -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Empty State for Unmatched -->
+    <div id="unmatched-empty-state" class="text-center py-5" style="border-radius: 12px; margin: 20px; border: 1px dashed #e2e8f0; background: #fafafa;">
+        <div class="mb-2">
+            <i class="fa-solid fa-circle-check text-success" style="font-size: 3rem; opacity: 0.8;"></i>
+        </div>
+        <h4 class="fw-bold text-success">All Statement Rows Reconciled!</h4>
+        <p class="text-muted small mx-auto mb-0" style="max-width: 450px;">
+            There are no unmatched bank statement transactions for the selected month and year. Everything is matched and locked!
+        </p>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    var defaultMonth = @ViewBag.DefaultMonth;
+    var defaultYear = @ViewBag.DefaultYear;
+
+    // Current Active Filters
+    var currentSearch = "";
+    var currentStatusFilter = "Pending";
+    var currentModeFilter = "all";
+    var currentBranchesFilter = [];
+
+    // Populate initial branches
+    $('#branchMultiselect .branch-cb').each(function() {
+        currentBranchesFilter.push($(this).val());
+    });
+
+    // Load month and year from sessionStorage if available
+    var savedMonth = sessionStorage.getItem('reconcile_month');
+    var savedYear = sessionStorage.getItem('reconcile_year');
+    if (savedMonth) {
+        $('#reconcile-month').val(savedMonth);
+    }
+    if (savedYear) {
+        $('#reconcile-year').val(savedYear);
+    }
+
+    // Sync upload forms on load
+    $('#upload-form-month').val($('#reconcile-month').val());
+    $('#upload-form-year').val($('#reconcile-year').val());
+
+    function updateBadge() {
+        var monthText = $('#reconcile-month option:selected').text();
+        var yearText = $('#reconcile-year option:selected').text();
+        $('#detected-period-badge')
+            .removeClass('bg-secondary text-white')
+            .addClass('bg-light border text-dark')
+            .html('📅 Reconciling: <strong class="text-primary">' + monthText + ' ' + yearText + '</strong>')
+            .fadeIn(200);
+    }
+
+    updateBadge();
+
+    $('#reconcile-month, #reconcile-year').on('change', function() {
+        var m = $('#reconcile-month').val();
+        var y = $('#reconcile-year').val();
+        
+        // Sync to upload form inputs
+        $('#upload-form-month').val(m);
+        $('#upload-form-year').val(y);
+        
+        // Save to sessionStorage
+        sessionStorage.setItem('reconcile_month', m);
+        sessionStorage.setItem('reconcile_year', y);
+        
+        updateBadge();
+        applyFilters();
+        loadUnmatchedRecords();
+    });
+
+    $('#reconcile-file-input').on('change', function() {
+        var filename = $(this).val().split('\\').pop();
+        if (!filename) return;
+        
+        var monthVals = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        };
+        var match = filename.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s']*(20\d{2}|\d{2})/i);
+        if (match) {
+            var m = match[1].toLowerCase().substring(0, 3);
+            var yText = match[2];
+            var year = yText.length === 2 ? "20" + yText : yText;
+            var mVal = monthVals[m];
+            if (mVal) {
+                var fileMonth = parseInt(mVal);
+                var fileYear = parseInt(year);
+                var currentMonth = parseInt($('#reconcile-month').val());
+                var currentYear = parseInt($('#reconcile-year').val());
+
+                if (fileMonth !== currentMonth || fileYear !== currentYear) {
+                    var monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                    var detectedPeriod = monthNames[fileMonth] + " " + fileYear;
+                    var chosenPeriod = monthNames[currentMonth] + " " + currentYear;
+                    
+                    Swal.fire({
+                        title: 'Period Conflict Detected',
+                        text: "File appears to be for " + detectedPeriod + " but you've selected " + chosenPeriod + " — use file's period instead?",
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Yes, use file period',
+                        cancelButtonText: 'No, keep my selection',
+                        confirmButtonColor: '#2563eb',
+                        cancelButtonColor: '#64748b'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            $('#reconcile-month').val(fileMonth);
+                            $('#reconcile-year').val(fileYear);
+                            sessionStorage.setItem('reconcile_month', fileMonth);
+                            sessionStorage.setItem('reconcile_year', fileYear);
+                            
+                            // Sync to upload form inputs
+                            $('#upload-form-month').val(fileMonth);
+                            $('#upload-form-year').val(fileYear);
+                            
+                            updateBadge();
+                            applyFilters();
+                        }
+                    });
+                }
+            }
+        }
+    });
+
+    // =========================================================
+    // INSTANT SEARCH AND MULTI-FILTER ENGINE
+    // =========================================================
+    function applyFilters() {
+        var query = currentSearch.toLowerCase().trim();
+        var filterMonth = parseInt($('#reconcile-month').val());
+        var filterYear = parseInt($('#reconcile-year').val());
+        var minAmount = $('#minAmountFilter').val() !== "" ? parseFloat($('#minAmountFilter').val()) : null;
+        var maxAmount = $('#maxAmountFilter').val() !== "" ? parseFloat($('#maxAmountFilter').val()) : null;
+        
+        var rows = $('.transfer-row');
+        var visibleCount = 0;
+
+        // 1. Calculate metrics and tab counts *only for the chosen period*
+        var countAll = 0;
+        var countPending = 0;
+        var countCompleted = 0;
+        var countFailed = 0;
+        
+        var totalAccrued = 0;
+        var totalReconciled = 0;
+
+        rows.each(function() {
+            var row = $(this);
+            var status = row.attr('data-status');
+            var amount = parseFloat(row.attr('data-amount')) || 0;
+            var rowMonth = parseInt(row.attr('data-month'));
+            var rowYear = parseInt(row.attr('data-year'));
+            var rowLocation = row.attr('data-location') || "";
+
+            var matchesPeriod = (rowMonth === filterMonth && rowYear === filterYear);
+            var matchesLocation = currentBranchesFilter.includes(rowLocation);
+
+            if (matchesPeriod && matchesLocation) {
+                countAll++;
+                if (status === 'Pending' || status === 'Credit Party') {
+                    countPending++;
+                } else if (status === 'Completed' || status === 'Reconciled' || status === 'Success' || status === 'Paid') {
+                    countCompleted++;
+                } else if (status === 'Failed' || status === 'Reversed') {
+                    countFailed++;
+                }
+
+                totalAccrued += amount;
+                if (status === 'Completed' || status === 'Reconciled' || status === 'Success' || status === 'Paid' || status === 'Credit Party') {
+                    totalReconciled += amount;
+                }
+            }
+        });
+
+        // Update tab badge numbers
+        $('#tab-count-all').text(countAll);
+        $('#tab-count-pending').text(countPending);
+        $('#tab-count-completed').text(countCompleted);
+        $('#tab-count-failed').text(countFailed);
+
+        // Indian Currency Format Helper
+        function formatINR(num) {
+            return '₹' + num.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+        }
+
+        // Animate metrics change or update instantly
+        $('#metric-accrued-amount').text(formatINR(totalAccrued));
+        $('#metric-pending-count').text(countPending);
+        $('#metric-reconciled-count').text(countCompleted);
+
+        // Reconciliation Progress Bar
+        var progressPercent = totalAccrued > 0 ? Math.round((totalReconciled / totalAccrued) * 100) : 0;
+        $('#progress-percentage-badge').text(progressPercent + '% Completed');
+        $('#reconciliation-progress-bar').css('width', progressPercent + '%').attr('aria-valuenow', progressPercent);
+        $('#progress-text-summary').html('<strong>' + formatINR(totalReconciled) + '</strong> reconciled of <strong>' + formatINR(totalAccrued) + '</strong> accrued');
+
+        rows.each(function() {
+            var row = $(this);
+            var status = row.attr('data-status');
+            var partyCode = row.attr('data-partycode').toLowerCase();
+            var partyName = row.attr('data-partyname').toLowerCase();
+            var utr = row.attr('data-utr').toLowerCase();
+            var amount = parseFloat(row.attr('data-amount')) || 0;
+            var rowMonth = parseInt(row.attr('data-month'));
+            var rowYear = parseInt(row.attr('data-year'));
+            var mode = row.attr('data-mode') || "";
+            var rowLocation = row.attr('data-location') || "";
+
+            // Period check
+            var matchesPeriod = (rowMonth === filterMonth && rowYear === filterYear);
+
+            // Location check
+            var matchesLocation = currentBranchesFilter.includes(rowLocation);
+
+            // Status check
+            var matchesStatus = true;
+            if (currentStatusFilter !== 'all') {
+                if (currentStatusFilter === 'Completed') {
+                    matchesStatus = (status === 'Completed' || status === 'Reconciled' || status === 'Success' || status === 'Paid');
+                } else if (currentStatusFilter === 'Failed') {
+                    matchesStatus = (status === 'Failed' || status === 'Reversed');
+                } else if (currentStatusFilter === 'Pending') {
+                    matchesStatus = (status === 'Pending' || status === 'Credit Party');
+                } else {
+                    matchesStatus = (status === currentStatusFilter);
+                }
+            }
+
+            // Transfer Mode check
+            var matchesMode = true;
+            if (currentModeFilter !== 'all') {
+                matchesMode = (mode.toUpperCase() === currentModeFilter.toUpperCase());
+            }
+
+            // Amount Range check
+            var matchesAmount = true;
+            if (minAmount !== null && amount < minAmount) {
+                matchesAmount = false;
+            }
+            if (maxAmount !== null && amount > maxAmount) {
+                matchesAmount = false;
+            }
+
+            // Search Text check
+            var matchesSearch = true;
+            if (query !== "") {
+                matchesSearch = partyCode.indexOf(query) > -1 || 
+                                partyName.indexOf(query) > -1 || 
+                                utr.indexOf(query) > -1 || 
+                                amount.toString().indexOf(query) > -1;
+            }
+
+            // Toggle visibility
+            if (matchesPeriod && matchesLocation && matchesStatus && matchesMode && matchesAmount && matchesSearch) {
+                row.show();
+                visibleCount++;
+            } else {
+                row.hide();
+                row.find('.transfer-select-item').prop('checked', false);
+            }
+        });
+
+        // Toggle master checkbox state
+        updateSelectAllCheckboxState();
+        updateBulkPanelState();
+
+        // 3. Handle Empty State UI
+        if (visibleCount === 0) {
+            $('#ledger-table-container').hide();
+            var monthText = $('#reconcile-month option:selected').text();
+            var yearText = $('#reconcile-year').val();
+            $('#empty-state-period').text(monthText + ' ' + yearText);
+            $('#no-data-alert').show();
+        } else {
+            $('#no-data-alert').hide();
+            $('#ledger-table-container').show();
+        }
+    }
+
+    // Search input keyup hook
+    $('#transferSearchInput').on('keyup', function() {
+        currentSearch = $(this).val();
+        applyFilters();
+    });
+
+    // Transfer mode dropdown change hook
+    $('#transferModeFilter').on('change', function() {
+        currentModeFilter = $(this).val();
+        applyFilters();
+    });
+
+    // Min and Max Payout amount input change/keyup hooks
+    $('#minAmountFilter, #maxAmountFilter').on('keyup change', function() {
+        applyFilters();
+    });
+
+    // Status filter tabs click hook
+    $('.filter-tab').on('click', function() {
+        $('.filter-tab').removeClass('active');
+        $(this).addClass('active');
+        currentStatusFilter = $(this).attr('data-status');
+        applyFilters();
+    });
+
+    // Prevent dropdown menu from closing when clicking inside
+    $('.custom-multiselect .dropdown-menu').on('click', function(e) {
+        e.stopPropagation();
+    });
+
+    function updateMultiselectLabel(wrapperId, defaultText) {
+        var wrapper = $('#' + wrapperId);
+        var checked = wrapper.find('.option-cb:checked');
+        var total = wrapper.find('.option-cb').length;
+        var labelSpan = wrapper.find('.selected-label');
+        
+        if (checked.length === total) {
+            labelSpan.text(defaultText);
+        } else if (checked.length === 0) {
+            labelSpan.text('Branches: None');
+        } else if (checked.length === 1) {
+            labelSpan.text('Branch: ' + checked.val());
+        } else {
+            labelSpan.text(checked.length + ' Branches Selected');
+        }
+    }
+
+    // Handle Select All / Clear checkbox change
+    $('#branchMultiselect .select-all-cb').on('change', function() {
+        var isChecked = $(this).is(':checked');
+        var wrapper = $(this).closest('.custom-multiselect');
+        
+        wrapper.find('.option-cb').prop('checked', isChecked);
+        updateMultiselectLabel('branchMultiselect', 'Branches: All');
+        
+        // Update branches array and filter
+        currentBranchesFilter = [];
+        if (isChecked) {
+            wrapper.find('.option-cb').each(function() {
+                currentBranchesFilter.push($(this).val());
+            });
+        }
+        applyFilters();
+    });
+
+    // Handle individual option checkbox changes
+    $('#branchMultiselect .option-cb').on('change', function() {
+        var wrapper = $(this).closest('.custom-multiselect');
+        var id = wrapper.attr('id');
+        
+        // Check if all are checked to sync the Select All checkbox
+        var total = wrapper.find('.option-cb').length;
+        var checkedCount = wrapper.find('.option-cb:checked').length;
+        wrapper.find('.select-all-cb').prop('checked', total === checkedCount);
+        
+        updateMultiselectLabel(id, 'Branches: All');
+        
+        // Update branches array and filter
+        currentBranchesFilter = [];
+        wrapper.find('.option-cb:checked').each(function() {
+            currentBranchesFilter.push($(this).val());
+        });
+        applyFilters();
+    });
+
+    // Handle inline search filtering inside the dropdown
+    $('#branchMultiselect .search-input').on('input', function() {
+        var query = $(this).val().toLowerCase().trim();
+        var wrapper = $(this).closest('.custom-multiselect');
+        
+        wrapper.find('.option-item').each(function() {
+            var labelText = $(this).find('label').text().toLowerCase();
+            if (labelText.indexOf(query) > -1) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+
+    // Reset Filters click hook
+    $('#btnResetFilters').on('click', function() {
+        $('#transferSearchInput').val('');
+        currentSearch = "";
+        
+        $('#transferModeFilter').val('all');
+        currentModeFilter = "all";
+        
+        $('#minAmountFilter').val('');
+        $('#maxAmountFilter').val('');
+        
+        // Reset status tab to Pending
+        $('.filter-tab').removeClass('active');
+        $('.filter-tab[data-status="Pending"]').addClass('active');
+        currentStatusFilter = "Pending";
+
+        // Reset Branch multiselect to All
+        $('#branchMultiselect .option-cb').prop('checked', true);
+        $('#branchMultiselect .select-all-cb').prop('checked', true);
+        updateMultiselectLabel('branchMultiselect', 'Branches: All');
+        currentBranchesFilter = [];
+        $('#branchMultiselect .branch-cb').each(function() {
+            currentBranchesFilter.push($(this).val());
+        });
+        
+        applyFilters();
+    });
+
+    // Run applyFilters on initial load
+    applyFilters();
+    loadUnmatchedRecords();
+
+    function updateSelectAllCheckboxState() {
+        var visiblePending = $('.transfer-row:visible .transfer-select-item').not(':disabled');
+        if (visiblePending.length > 0 && visiblePending.length === visiblePending.filter(':checked').length) {
+            $('#selectAllTransfers').prop('checked', true);
+        } else {
+            $('#selectAllTransfers').prop('checked', false);
+        }
+    }
+
+    // Toggle manual mapping section
+    $('input[name="mappingMode"]').on('change', function() {
+        if ($(this).val() === 'manual') {
+            $('#manual-mapping-section').slideDown(250);
+            loadHeadersForMapping();
+        } else {
+            $('#manual-mapping-section').slideUp(200);
+            $('.mapping-dropdown').prop('required', false).prop('disabled', true).html('');
+        }
+    });
+
+    $('#reconcile-file-input').on('change', function() {
+        if ($('input[name="mappingMode"]:checked').val() === 'manual') {
+            loadHeadersForMapping();
+        }
+    });
+
+    function loadHeadersForMapping() {
+        var fileInput = $('#reconcile-file-input')[0];
+        if (fileInput.files.length === 0) {
+            $('.mapping-dropdown').html('<option value="">-- Choose File First --</option>').prop('disabled', true);
+            return;
+        }
+
+        var formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+        var token = $('input[name="__RequestVerificationToken"]').val();
+
+        Swal.fire({
+            title: 'Parsing Headers...',
+            text: 'Extracting column headers from the uploaded file...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: '/Transfers/ParseHeaders',
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            headers: {
+                "RequestVerificationToken": token
+            },
+            success: function(r) {
+                Swal.close();
+                if (r.ok && r.headers && r.headers.length > 0) {
+                    var optionsHtml = '<option value="">-- Select Column --</option>';
+                    r.headers.forEach(function(h) {
+                        optionsHtml += '<option value="' + h.index + '">' + h.name + ' (Col ' + h.index + ')</option>';
+                    });
+                    
+                    $('.mapping-dropdown').html(optionsHtml).prop('disabled', false);
+                    
+                    // Enable required property for mandatory fields
+                    $('#map-account-no, #map-status, #map-utr').prop('required', true);
+
+                    // Client-side auto matching logic
+                    r.headers.forEach(function(h) {
+                        var name = h.name.toLowerCase().trim();
+                        
+                        if (name === "beneficiary account no" || name === "account no" || name === "beneficiary account no." || name === "account number" || name.includes("bene account") || name.includes("beneficiary account")) {
+                            $('#map-account-no').val(h.index);
+                        }
+                        else if (name === "status" || name === "status code" || name.includes("status")) {
+                            $('#map-status').val(h.index);
+                        }
+                        else if (name === "utr no" || name === "utr number" || name === "utr" || name.includes("utr") || name.includes("ref no") || name.includes("reference_no") || name.includes("reference no")) {
+                            $('#map-utr').val(h.index);
+                        }
+                        else if (name.includes("debit narration") || name.includes("party code") || name.includes("dealer code") || name.includes("customer ref")) {
+                            $('#map-party-code').val(h.index);
+                        }
+                        else if (name === "beneficiary name" || name === "name" || name.includes("bene name") || name.includes("beneficiary name")) {
+                            $('#map-name').val(h.index);
+                        }
+                        else if (name.includes("ifsc") || name.includes("ifsc code") || name.includes("branch identifier")) {
+                            $('#map-ifsc').val(h.index);
+                        }
+                        else if (name === "amount" || name === "amt" || name === "transaction amount" || name.includes("amount")) {
+                            $('#map-amount').val(h.index);
+                        }
+                        else if (name === "pymt_date" || name === "payment date" || name.includes("date")) {
+                            $('#map-date').val(h.index);
+                        }
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Could not find any headers in the uploaded Excel.',
+                        confirmButtonColor: '#2563eb'
+                    });
+                }
+            },
+            error: function(xhr) {
+                Swal.close();
+                var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error reading file headers.";
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed',
+                    text: msg,
+                    confirmButtonColor: '#2563eb'
+                });
+            }
+        });
+    }
+
+    // Excel Reconciliation Submit handler
+    $('#bulk-reconcile-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        var fileInput = $('#reconcile-file-input')[0];
+        if (fileInput.files.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'No file chosen',
+                text: 'Please select a statement Excel file first.',
+                confirmButtonColor: '#2563eb'
+            });
+            return;
+        }
+
+        if ($('input[name="mappingMode"]:checked').val() === 'manual') {
+            var acct = $('#map-account-no').val();
+            var status = $('#map-status').val();
+            var utr = $('#map-utr').val();
+            if (!acct || !status || !utr) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing Mappings',
+                    text: 'Please select columns for Beneficiary Account No, STATUS, and UTR NO.',
+                    confirmButtonColor: '#2563eb'
+                });
+                return;
+            }
+        }
+
+        var formData = new FormData(this);
+        
+        Swal.fire({
+            title: 'Reconciling Statement...',
+            text: 'Analyzing sheets, running priority-based matching, and verifying party bank master details...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: $(this).attr('action'),
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function(r) {
+                Swal.close();
+
+                function showFinalSummary(message, logs) {
+                    var logHtml = '<div style="text-align: left; max-height: 250px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid #e2e8f0;"><ul style="list-style: none; padding-left: 0; margin-bottom: 0;">';
+                    logs.forEach(function(log) {
+                        var isFailed = log.indexOf("Unmatched") > -1;
+                        var isProposed = log.indexOf("Proposed") > -1;
+                        var color = isFailed ? "#dc2626" : (isProposed ? "#d97706" : "#16a34a");
+                        var icon = isFailed ? '<i class="fa-solid fa-circle-xmark me-2"></i>' : (isProposed ? '<i class="fa-solid fa-circle-info me-2"></i>' : '<i class="fa-solid fa-circle-check me-2"></i>');
+                        logHtml += '<li style="color: ' + color + '; margin-bottom: 5px; display: flex; align-items: center;">' + icon + '<span>' + log + '</span></li>';
+                    });
+                    logHtml += '</ul></div>';
+
+                    Swal.fire({
+                        title: 'Reconciliation Summary',
+                        html: '<p style="font-size: 0.95rem; margin-bottom: 15px; color: #475569;">' + message + '</p>' + logHtml,
+                        icon: 'success',
+                        confirmButtonText: '<i class="fa-solid fa-circle-check"></i> Done & Refresh',
+                        confirmButtonColor: '#2563eb',
+                        width: '650px'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                }
+
+                if (r.autoCreated && r.autoCreated.length > 0) {
+                    var tableHtml = '<div class="text-start mb-2" style="font-size: 0.85rem; color: #475569;">' + r.autoCreated.length + ' bank credits matched dealers with no existing payout record. Review below:</div>';
+                    tableHtml += '<div style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 5px;">';
+                    tableHtml += '<table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.78rem; text-align: left;">';
+                    tableHtml += '<thead class="table-light"><tr><th>Dealer</th><th>Account No</th><th style="text-align: right;">Amount</th><th>UTR</th></tr></thead>';
+                    tableHtml += '<tbody>';
+                    r.autoCreated.forEach(function(item) {
+                        var code = item.partyCode || item.PartyCode || '';
+                        var name = item.partyName || item.PartyName || '';
+                        var acct = item.bankAccountNumber || item.BankAccountNumber || '';
+                        var amt = item.netTransferAmount || item.NetTransferAmount || 0;
+                        var utr = item.utrNumber || item.UTRNumber || '';
+                        tableHtml += '<tr>';
+                        tableHtml += '<td><strong>' + code + '</strong><br/><span class="text-muted" style="font-size: 0.72rem;">' + name + '</span></td>';
+                        tableHtml += '<td><code>' + acct + '</code></td>';
+                        tableHtml += '<td style="text-align: right; font-weight: bold; color: #16a34a;">₹' + amt.toLocaleString('en-IN') + '</td>';
+                        tableHtml += '<td><code>' + (utr || '-') + '</code></td>';
+                        tableHtml += '</tr>';
+                    });
+                    tableHtml += '</tbody></table></div>';
+                    tableHtml += '<div class="text-start mt-3" style="font-size: 0.82rem; font-weight: 600; color: #1e293b;">Do you want to create and reconcile these payouts now?</div>';
+
+                    Swal.fire({
+                        title: 'Create Missing Payouts?',
+                        html: tableHtml,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Yes, create them',
+                        cancelButtonText: 'No, skip them',
+                        confirmButtonColor: '#2563eb',
+                        cancelButtonColor: '#64748b',
+                        width: '650px'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            Swal.fire({
+                                title: 'Creating Payouts...',
+                                allowOutsideClick: false,
+                                didOpen: () => {
+                                    Swal.showLoading();
+                                }
+                            });
+                            
+                            var token = $('input[name="__RequestVerificationToken"]').val();
+                            $.ajax({
+                                url: '/Transfers/ConfirmAutoCreatedPayouts',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                headers: {
+                                    "RequestVerificationToken": token
+                                },
+                                data: JSON.stringify(r.autoCreated),
+                                success: function(confirmRes) {
+                                    Swal.close();
+                                    showFinalSummary(r.message + " " + confirmRes.message, r.logs);
+                                },
+                                error: function(xhr) {
+                                    Swal.close();
+                                    var errorMsg = xhr.responseJSON ? xhr.responseJSON.message : "Error creating payouts.";
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: 'Failed',
+                                        text: errorMsg,
+                                        confirmButtonColor: '#2563eb'
+                                    }).then(() => {
+                                        showFinalSummary(r.message, r.logs);
+                                    });
+                                }
+                            });
+                        } else {
+                            showFinalSummary(r.message + " Skipped auto-creating new payouts.", r.logs);
+                        }
+                    });
+                } else {
+                    showFinalSummary(r.message, r.logs);
+                }
+            },
+            error: function(xhr) {
+                var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error processing file upload.";
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Upload Failed',
+                    text: msg,
+                    confirmButtonColor: '#2563eb'
+                });
+            }
+        });
+    });
+
+    // =========================================================
+    // BULK RECONCILIATION ENGINE
+    // =========================================================
+    var selectedIds = [];
+
+    function updateBulkPanelState() {
+        selectedIds = [];
+        $('.transfer-row:visible .transfer-select-item:checked').each(function() {
+            selectedIds.push(Number($(this).data('id')));
+        });
+
+        if (selectedIds.length > 0) {
+            $('#selected-count-badge').text(selectedIds.length);
+            $('#bulk-reconcile-panel').slideDown(250);
+        } else {
+            $('#bulk-reconcile-panel').slideUp(200);
+        }
+    }
+
+    // Select-all checkbox handler (only pending & visible)
+    $('#selectAllTransfers').on('change', function() {
+        var isChecked = $(this).is(':checked');
+        $('.transfer-row:visible .transfer-select-item').not(':disabled').prop('checked', isChecked);
+        updateBulkPanelState();
+    });
+
+    $(document).on('change', '.transfer-select-item', function() {
+        updateSelectAllCheckboxState();
+        updateBulkPanelState();
+    });
+
+    // =========================================================
+    // REAL-TIME IN-PLACE INDIVIDUAL AJAX MANUAL RECONCILIATION
+    // =========================================================
+    $(document).on('submit', 'form[data-ajax="true"]', function(e) {
+        e.preventDefault();
+        var form = $(this);
+        var actionUrl = form.attr('action');
+        var formData = form.serialize();
+        var row = form.closest('.transfer-row');
+        var rowId = row.attr('data-id');
+        var utrValue = form.find('input[name="utr"]').val().trim();
+
+        if (!utrValue) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'UTR Required',
+                text: 'Please enter a valid UTR Reference.',
+                confirmButtonColor: '#2563eb'
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Reconciling...',
+            text: 'Saving transaction UTR reference and closing ledger record...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: actionUrl,
+            type: 'POST',
+            data: formData,
+            success: function(r) {
+                Swal.close();
+                if (r.ok) {
+                    // 1. Alert user of successful update
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Reconciled',
+                        text: r.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+
+                    // 2. Perform in-place DOM updates (No Page Reload!)
+                    row.attr('data-status', 'Completed');
+                    row.attr('data-utr', utrValue);
+                    
+                    // Replace checkbox with disabled one
+                    var chkCell = row.find('td').first();
+                    chkCell.html('<input type="checkbox" class="form-check-input transfer-select-item" disabled style="opacity: 0.25; cursor: not-allowed;" />');
+                    
+                    // Update UTR cell
+                    row.find('.utr-cell').html('<code>' + utrValue + '</code>');
+                    
+                    // Update Transferred Amount
+                    var netAmtVal = row.find('.text-amount').text();
+                    row.find('.text-transferred-amount').text(netAmtVal);
+                    
+                    // Update Date cell (today)
+                    var todayStr = new Date().toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                    }).replace(/ /g, '-');
+                    row.find('.date-cell').text(todayStr);
+
+                    // Update Status Badge
+                    row.find('.status-cell').html('<span class="status-badge success">Completed</span>');
+
+                    // Replace inline form with Locked label
+                    row.find('.action-cell').html('<span class="text-muted small"><i class="fa-solid fa-lock me-1"></i> Locked</span>');
+
+                    // Highlight row with beautiful transition pulse
+                    row.addClass('reconcile-success-pulse');
+                    setTimeout(function() {
+                        row.removeClass('reconcile-success-pulse');
+                    }, 2000);
+
+                    // Apply filters to dynamically update KPI metrics and badges in real-time
+                    applyFilters();
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: r.message,
+                        confirmButtonColor: '#2563eb'
+                    });
+                }
+            },
+            error: function(xhr) {
+                Swal.close();
+                var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error reconciling transfer.";
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed',
+                    text: msg,
+                    confirmButtonColor: '#2563eb'
+                });
+            }
+        });
+    });
+
+    // =========================================================
+    // REAL-TIME IN-PLACE BULK AJAX MANUAL RECONCILIATION
+    // =========================================================
+    $('#bulk-reconcile-action-form').on('submit', function(e) {
+        e.preventDefault();
+
+        if (selectedIds.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'No transfers selected',
+                text: 'Please select one or more pending transfers to reconcile.',
+                confirmButtonColor: '#2563eb'
+            });
+            return;
+        }
+
+        var utr = $('#bulk-utr-input').val().trim();
+        var token = $('input[name="__RequestVerificationToken"]', this).val();
+
+        Swal.fire({
+            title: 'Bulk Reconciling...',
+            text: 'Reconciling ' + selectedIds.length + ' transfers with common UTR: ' + utr + '...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: $(this).attr('action'),
+            type: 'POST',
+            data: {
+                ids: selectedIds,
+                utr: utr,
+                __RequestVerificationToken: token
+            },
+            success: function(r) {
+                Swal.close();
+                if (r.ok) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Bulk Reconciliation Completed',
+                        text: r.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+
+                    // Perform in-place DOM updates for all selected rows (No Page Reload!)
+                    var todayStr = new Date().toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                    }).replace(/ /g, '-');
+
+                    selectedIds.forEach(function(id) {
+                        var row = $('.transfer-row[data-id="' + id + '"]');
+                        if (row.length > 0) {
+                            row.attr('data-status', 'Completed');
+                            row.attr('data-utr', utr);
+                            
+                            // Replace checkbox with disabled one
+                            row.find('td').first().html('<input type="checkbox" class="form-check-input transfer-select-item" disabled style="opacity: 0.25; cursor: not-allowed;" />');
+                            
+                            // Update UTR & Date
+                            row.find('.utr-cell').html('<code>' + utr + '</code>');
+                            row.find('.date-cell').text(todayStr);
+
+                            // Update Transferred Amount
+                            var netAmtVal = row.find('.text-amount').text();
+                            row.find('.text-transferred-amount').text(netAmtVal);
+
+                            // Update Status badge
+                            row.find('.status-cell').html('<span class="status-badge success">Completed</span>');
+
+                            // Replace inline form with Locked label
+                            row.find('.action-cell').html('<span class="text-muted small"><i class="fa-solid fa-lock me-1"></i> Locked</span>');
+
+                            // Highlight row
+                            row.addClass('reconcile-success-pulse');
+                            setTimeout(function() {
+                                row.removeClass('reconcile-success-pulse');
+                            }, 2000);
+                        }
+                    });
+
+                    // Reset and slide up bulk reconciliation panel
+                    selectedIds = [];
+                    $('#bulk-utr-input').val('');
+                    $('#bulk-reconcile-panel').slideUp(200);
+                    $('#selectAllTransfers').prop('checked', false);
+
+                    // Apply filters to dynamically update KPI metrics and badges in real-time
+                    applyFilters();
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Bulk Reconcile Failed',
+                        text: r.message,
+                        confirmButtonColor: '#2563eb'
+                    });
+                }
+            },
+            error: function(xhr) {
+                Swal.close();
+                var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error reconciling transfers.";
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Execution Failed',
+                    text: msg,
+                    confirmButtonColor: '#2563eb'
+                });
+            }
+        });
+    });
+
+    // =========================================================
+    // UNRECONCILED BANK STATEMENT REGISTRY CRUD & MANUAL MAPPING
+    // =========================================================
+    function loadUnmatchedRecords() {
+        var month = $('#reconcile-month').val();
+        var year = $('#reconcile-year').val();
+        
+        $.ajax({
+            url: '/Transfers/GetUnmatchedRecords',
+            type: 'GET',
+            data: { month: month, year: year },
+            success: function (records) {
+                window.unmatchedRecords = records;
+                var tbody = $('#unmatched-statement-table tbody');
+                tbody.empty();
+                
+                $('#unmatched-count-badge').text(records.length + ' Unreconciled Rows');
+                
+                if (!records || records.length === 0) {
+                    $('#unmatched-table-container').hide();
+                    $('#unmatched-empty-state').show();
+                } else {
+                    $('#unmatched-empty-state').hide();
+                    $('#unmatched-table-container').show();
+                    
+                    records.forEach(function (r) {
+                        var dateStr = '-';
+                        if (r.paymentDate) {
+                            var date = new Date(r.paymentDate);
+                            dateStr = date.toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                            }).replace(/ /g, '-');
+                        }
+
+                        // Parse raw Excel row JSON to extract details
+                        var rawData = {};
+                        try {
+                            rawData = JSON.parse(r.rawRowJson || "{}");
+                        } catch (e) {
+                            rawData = {};
+                        }
+
+                        var excelPartyCode = rawData["Debit narration"] || rawData["Debit Narration"] || rawData["Party Code"] || rawData["Dealer Code"] || "";
+                        var rejectionReason = rawData["Rejection Reason"] || rawData["Rejection_Reason"] || rawData["Remark"] || rawData["Remarks"] || "";
+                        
+                        var nameHtml = '<strong>' + (r.beneficiaryName || '-') + '</strong>';
+                        if (excelPartyCode) {
+                            nameHtml += '<div class="text-muted mt-1" style="font-size: 0.76rem;"><span class="badge bg-light text-dark border">Excel Code: <strong>' + excelPartyCode + '</strong></span></div>';
+                        }
+                        if (rejectionReason) {
+                            nameHtml += '<div class="text-danger mt-1" style="font-size: 0.74rem; max-width: 250px; white-space: normal; word-break: break-all; line-height: 1.25;"><i class="fa-solid fa-circle-exclamation text-warning me-1"></i>' + rejectionReason + '</div>';
+                        }
+                        
+                        var dealerText = r.partyCode ? '<strong>' + r.partyCode + '</strong>' : 
+                                         (excelPartyCode ? '<span class="text-warning small fw-semibold"><i class="fa-solid fa-circle-question me-1"></i> Unassigned<br/><span class="text-muted" style="font-size: 0.72rem;">(Excel: ' + excelPartyCode + ')</span></span>' : '<span class="text-danger small fw-semibold"><i class="fa-solid fa-circle-question me-1"></i> Unassigned</span>');
+                        
+                        var trHtml = '<tr data-record-id="' + r.id + '">' +
+                            '<td style="text-align: center;"><code>' + r.rowNumber + '</code></td>' +
+                            '<td>' + nameHtml + '</td>' +
+                            '<td><code>' + (r.accountNumber || '-') + '</code></td>' +
+                            '<td><code>' + (r.ifsc || '-') + '</code></td>' +
+                            '<td class="text-end fw-bold text-danger">₹' + (r.amount || 0).toLocaleString('en-IN') + '</td>' +
+                            '<td><span class="status-badge danger">' + (r.status || 'Failed') + '</span></td>' +
+                            '<td><code>' + (r.utr || '-') + '</code></td>' +
+                            '<td>' + dateStr + '</td>' +
+                            '<td class="dealer-cell">' + dealerText + '</td>' +
+                            '<td style="text-align: center;">' +
+                                '<div class="btn-group">' +
+                                    '<button class="btn btn-sm btn-outline-info btn-view-excel-details" title="View Full Excel Row Details" data-id="' + r.id + '" style="border-radius: 4px 0 0 4px;"><i class="fa-solid fa-circle-info"></i></button>' +
+                                    '<button class="btn btn-sm btn-outline-secondary btn-edit-unmatched" title="Edit row details" data-id="' + r.id + '"><i class="fa-solid fa-pen-to-square"></i></button>' +
+                                    '<button class="btn btn-sm btn-outline-primary btn-reconcile-unmatched" title="Manually reconcile to dealer" data-id="' + r.id + '"><i class="fa-solid fa-link"></i></button>' +
+                                    '<button class="btn btn-sm btn-outline-danger btn-delete-unmatched" title="Delete record" data-id="' + r.id + '" style="border-radius: 0 4px 4px 0;"><i class="fa-solid fa-trash"></i></button>' +
+                                '</div>' +
+                            '</td>' +
+                            '</tr>';
+                        tbody.append(trHtml);
+                    });
+                }
+            },
+            error: function () {
+                console.error("Error loading unmatched records.");
+            }
+        });
+    }
+
+    // Full Excel statement details popup modal
+    $(document).on('click', '.btn-view-excel-details', function () {
+        var id = $(this).data('id');
+        var record = (window.unmatchedRecords || []).find(r => r.id === id);
+        if (!record) return;
+
+        var rawData = {};
+        try {
+            rawData = JSON.parse(record.rawRowJson || "{}");
+        } catch (e) {
+            rawData = {};
+        }
+
+        var tableHtml = '<div style="max-height: 400px; overflow-y: auto; text-align: left; font-size: 0.82rem;">';
+        tableHtml += '<table class="table table-sm table-striped table-bordered align-middle">';
+        tableHtml += '<thead class="table-dark"><tr><th>Excel Header / Column Key</th><th>Value</th></tr></thead>';
+        tableHtml += '<tbody>';
+
+        var keys = Object.keys(rawData);
+        if (keys.length === 0) {
+            tableHtml += '<tr><td colspan="2" class="text-center text-muted">No raw Excel data stored for this row.</td></tr>';
+        } else {
+            keys.forEach(function (key) {
+                var val = rawData[key];
+                tableHtml += '<tr>' +
+                    '<td class="fw-bold" style="width: 40%; word-break: break-all;">' + key + '</td>' +
+                    '<td style="word-break: break-all;">' + (val || '-') + '</td>' +
+                    '</tr>';
+            });
+        }
+        tableHtml += '</tbody></table></div>';
+
+        Swal.fire({
+            title: 'Full Excel Statement Row Details',
+            html: tableHtml,
+            icon: 'info',
+            confirmButtonText: 'Close',
+            confirmButtonColor: '#2563eb',
+            width: '650px'
+        });
+    });
+
+    $('#btnAddUnmatchedRecord').on('click', function () {
+        var m = parseInt($('#reconcile-month').val());
+        var y = parseInt($('#reconcile-year').val());
+
+        Swal.fire({
+            title: 'Add Statement Record',
+            html:
+                '<div class="text-start" style="font-size: 0.9rem;">' +
+                    '<div class="mb-3">' +
+                        '<label class="form-label fw-semibold">Beneficiary Name</label>' +
+                        '<input id="swal-add-name" class="form-control" placeholder="Enter name">' +
+                    '</div>' +
+                    '<div class="row g-2 mb-3">' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Account Number</label>' +
+                            '<input id="swal-add-account" class="form-control font-monospace" placeholder="Enter account">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">IFSC Code</label>' +
+                            '<input id="swal-add-ifsc" class="form-control font-monospace" placeholder="Enter IFSC">' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="row g-2 mb-3">' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Amount (₹)</label>' +
+                            '<input id="swal-add-amount" type="number" step="0.01" class="form-control" placeholder="0.00">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Status</label>' +
+                            '<select id="swal-add-status" class="form-select">' +
+                                '<option value="Success">Success</option>' +
+                                '<option value="Failed" selected>Failed</option>' +
+                            '</select>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="row g-2">' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">UTR Reference</label>' +
+                            '<input id="swal-add-utr" class="form-control font-monospace" placeholder="UTR (Optional)">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Payment Date</label>' +
+                            '<input id="swal-add-date" type="date" class="form-control">' +
+                        '</div>' +
+                    '</div>' +
+                '</div>',
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-solid fa-plus me-1"></i> Add Record',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#64748b',
+            preConfirm: () => {
+                var addName = $('#swal-add-name').val().trim();
+                var addAccount = $('#swal-add-account').val().trim();
+                var addIfsc = $('#swal-add-ifsc').val().trim();
+                var addAmount = parseFloat($('#swal-add-amount').val()) || 0;
+                var addStatus = $('#swal-add-status').val();
+                var addUtr = $('#swal-add-utr').val().trim();
+                var addDate = $('#swal-add-date').val();
+
+                if (!addName) {
+                    Swal.showValidationMessage('Beneficiary Name is required.');
+                    return false;
+                }
+                if (!addAccount) {
+                    Swal.showValidationMessage('Account Number is required.');
+                    return false;
+                }
+                if (!addIfsc) {
+                    Swal.showValidationMessage('IFSC Code is required.');
+                    return false;
+                }
+                if (addAmount <= 0) {
+                    Swal.showValidationMessage('Amount must be greater than zero.');
+                    return false;
+                }
+
+                return {
+                    Month: m,
+                    Year: y,
+                    BeneficiaryName: addName,
+                    AccountNumber: addAccount,
+                    IFSC: addIfsc,
+                    Amount: addAmount,
+                    Status: addStatus,
+                    UTR: addUtr,
+                    PaymentDate: addDate ? new Date(addDate).toISOString() : null
+                };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var token = $('input[name="__RequestVerificationToken"]').val();
+                
+                Swal.fire({
+                    title: 'Saving...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '/Transfers/CreateUnmatchedRecord',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: {
+                        "RequestVerificationToken": token
+                    },
+                    data: JSON.stringify(result.value),
+                    success: function (r) {
+                        Swal.close();
+                        if (r.ok) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Created',
+                                text: r.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            });
+                            loadUnmatchedRecords();
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Failed',
+                                text: r.message,
+                                confirmButtonColor: '#2563eb'
+                            });
+                        }
+                    },
+                    error: function (xhr) {
+                        Swal.close();
+                        var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error creating record.";
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Failed',
+                            text: msg,
+                            confirmButtonColor: '#2563eb'
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    $(document).on('click', '.btn-edit-unmatched', function () {
+        var id = $(this).data('id');
+        var tr = $(this).closest('tr');
+        var name = tr.find('td:nth-child(2) strong').text();
+        var account = tr.find('td:nth-child(3) code').text();
+        var ifsc = tr.find('td:nth-child(4) code').text();
+        
+        var amtText = tr.find('td:nth-child(5)').text().replace(/[₹,]/g, '').trim();
+        var amount = parseFloat(amtText) || 0;
+        
+        var status = tr.find('td:nth-child(6) span').text();
+        var utr = tr.find('td:nth-child(7) code').text();
+        if (utr === '-') utr = '';
+        
+        var dateText = tr.find('td:nth-child(8)').text();
+        var dateVal = '';
+        if (dateText && dateText !== '-') {
+            var parts = dateText.split('-');
+            if (parts.length === 3) {
+                var day = parts[0];
+                var monthLabel = parts[1];
+                var year = parts[2];
+                var months = {
+                    'Jan':'01', 'Feb':'02', 'Mar':'03', 'Apr':'04', 'May':'05', 'Jun':'06',
+                    'Jul':'07', 'Aug':'08', 'Sep':'09', 'Oct':'10', 'Nov':'11', 'Dec':'12'
+                };
+                var month = months[monthLabel] || '01';
+                dateVal = year + '-' + month + '-' + day;
+            }
+        }
+
+        Swal.fire({
+            title: 'Edit Statement Record',
+            html:
+                '<div class="text-start" style="font-size: 0.9rem;">' +
+                    '<div class="mb-3">' +
+                        '<label class="form-label fw-semibold">Beneficiary Name</label>' +
+                        '<input id="swal-edit-name" class="form-control" value="' + name + '">' +
+                    '</div>' +
+                    '<div class="row g-2 mb-3">' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Account Number</label>' +
+                            '<input id="swal-edit-account" class="form-control font-monospace" value="' + account + '">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">IFSC Code</label>' +
+                            '<input id="swal-edit-ifsc" class="form-control font-monospace" value="' + ifsc + '">' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="row g-2 mb-3">' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Amount (₹)</label>' +
+                            '<input id="swal-edit-amount" type="number" step="0.01" class="form-control" value="' + amount + '">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Status</label>' +
+                            '<select id="swal-edit-status" class="form-select">' +
+                                '<option value="Success"' + (status === 'Success' || status === 'Paid' ? ' selected' : '') + '>Success</option>' +
+                                '<option value="Failed"' + (status === 'Failed' ? ' selected' : '') + '>Failed</option>' +
+                            '</select>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="row g-2">' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">UTR Reference</label>' +
+                            '<input id="swal-edit-utr" class="form-control font-monospace" value="' + utr + '">' +
+                        '</div>' +
+                        '<div class="col-6">' +
+                            '<label class="form-label fw-semibold">Payment Date</label>' +
+                            '<input id="swal-edit-date" type="date" class="form-control" value="' + dateVal + '">' +
+                        '</div>' +
+                    '</div>' +
+                '</div>',
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-solid fa-save me-1"></i> Save Changes',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#64748b',
+            preConfirm: () => {
+                var editName = $('#swal-edit-name').val().trim();
+                var editAccount = $('#swal-edit-account').val().trim();
+                var editIfsc = $('#swal-edit-ifsc').val().trim();
+                var editAmount = parseFloat($('#swal-edit-amount').val()) || 0;
+                var editStatus = $('#swal-edit-status').val();
+                var editUtr = $('#swal-edit-utr').val().trim();
+                var editDate = $('#swal-edit-date').val();
+
+                if (!editName) {
+                    Swal.showValidationMessage('Beneficiary Name is required.');
+                    return false;
+                }
+                if (!editAccount) {
+                    Swal.showValidationMessage('Account Number is required.');
+                    return false;
+                }
+                if (!editIfsc) {
+                    Swal.showValidationMessage('IFSC Code is required.');
+                    return false;
+                }
+                if (editAmount <= 0) {
+                    Swal.showValidationMessage('Amount must be greater than zero.');
+                    return false;
+                }
+
+                return {
+                    Id: id,
+                    BeneficiaryName: editName,
+                    AccountNumber: editAccount,
+                    IFSC: editIfsc,
+                    Amount: editAmount,
+                    Status: editStatus,
+                    UTR: editUtr,
+                    PaymentDate: editDate ? new Date(editDate).toISOString() : null
+                };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var token = $('input[name="__RequestVerificationToken"]').val();
+                
+                Swal.fire({
+                    title: 'Saving...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '/Transfers/SaveUnmatchedRecord',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: {
+                        "RequestVerificationToken": token
+                    },
+                    data: JSON.stringify(result.value),
+                    success: function (r) {
+                        Swal.close();
+                        if (r.ok) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Updated',
+                                text: r.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            });
+                            loadUnmatchedRecords();
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Failed',
+                                text: r.message,
+                                confirmButtonColor: '#2563eb'
+                            });
+                        }
+                    },
+                    error: function (xhr) {
+                        Swal.close();
+                        var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error saving record.";
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Failed',
+                            text: msg,
+                            confirmButtonColor: '#2563eb'
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    $(document).on('click', '.btn-delete-unmatched', function () {
+        var id = $(this).data('id');
+        
+        Swal.fire({
+            title: 'Delete Record?',
+            text: "Are you sure you want to remove this bank statement record from reconciliation?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var token = $('input[name="__RequestVerificationToken"]').val();
+                
+                Swal.fire({
+                    title: 'Deleting...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '/Transfers/DeleteUnmatchedRecord',
+                    type: 'POST',
+                    headers: {
+                        "RequestVerificationToken": token
+                    },
+                    data: { id: id },
+                    success: function (r) {
+                        Swal.close();
+                        if (r.ok) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Deleted',
+                                text: r.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            });
+                            loadUnmatchedRecords();
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Failed',
+                                text: r.message,
+                                confirmButtonColor: '#2563eb'
+                            });
+                        }
+                    },
+                    error: function (xhr) {
+                        Swal.close();
+                        var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error deleting record.";
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Failed',
+                            text: msg,
+                            confirmButtonColor: '#2563eb'
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    var activeDealers = null;
+
+    function getDealers(callback) {
+        if (activeDealers !== null) {
+            callback(activeDealers);
+            return;
+        }
+
+        $.ajax({
+            url: '/Transfers/GetPartiesList',
+            type: 'GET',
+            success: function (list) {
+                activeDealers = list;
+                callback(activeDealers);
+            },
+            error: function () {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed',
+                    text: 'Could not fetch dealers list.',
+                    confirmButtonColor: '#2563eb'
+                });
+            }
+        });
+    }
+
+    $(document).on('click', '.btn-reconcile-unmatched', function () {
+        var id = $(this).data('id');
+        var tr = $(this).closest('tr');
+        var amtText = tr.find('td:nth-child(5)').text().trim();
+        var name = tr.find('td:nth-child(2) strong').text();
+
+        getDealers(function (dealers) {
+            var listHtml = '<div class="text-start" style="font-size: 0.9rem;">' +
+                '<p class="mb-3 text-muted">Select the dealer to reconcile with this statement row (Amount: <strong>' + amtText + '</strong>, Name: <strong>' + name + '</strong>).</p>' +
+                '<div class="mb-3 position-relative">' +
+                    '<i class="fa-solid fa-magnifying-glass position-absolute text-muted" style="left: 12px; top: 12px; font-size: 0.9rem;"></i>' +
+                    '<input type="text" id="dealer-search-input" class="form-control ps-5" placeholder="Search Dealer Code or Name..." style="height: 40px; border-radius: 8px;">' +
+                '</div>' +
+                '<div id="dealer-list-container" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 5px;">' +
+                    '<div class="list-group list-group-flush" id="dealer-list">';
+            
+            dealers.forEach(function (d) {
+                listHtml += '<button type="button" class="list-group-item list-group-item-action dealer-select-btn d-flex justify-content-between align-items-center py-2 px-3 border-0" data-code="' + d.code + '" style="border-radius: 6px; margin-bottom: 2px;">' +
+                    '<span><strong>' + d.code + '</strong> - ' + d.name + '</span>' +
+                    '<i class="fa-solid fa-chevron-right text-muted" style="font-size: 0.8rem;"></i>' +
+                '</button>';
+            });
+
+            listHtml += '</div></div></div>';
+
+            Swal.fire({
+                title: 'Select Dealer for Reconciliation',
+                html: listHtml,
+                showConfirmButton: false,
+                showCancelButton: true,
+                cancelButtonText: 'Cancel',
+                cancelButtonColor: '#64748b',
+                width: '600px',
+                didOpen: () => {
+                    $('#dealer-search-input').on('keyup', function () {
+                        var val = $(this).val().toLowerCase().trim();
+                        $('#dealer-list .dealer-select-btn').each(function () {
+                            var text = $(this).text().toLowerCase();
+                            if (text.indexOf(val) > -1) {
+                                $(this).show();
+                            } else {
+                                $(this).hide();
+                            }
+                        });
+                    });
+
+                    $('#dealer-list').on('click', '.dealer-select-btn', function () {
+                        var code = $(this).data('code');
+                        var dealerName = $(this).find('span').text();
+                        
+                        Swal.fire({
+                            title: 'Confirm Assignment',
+                            html: 'Are you sure you want to reconcile this statement record to:<br/><strong>' + dealerName + '</strong>?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, reconcile',
+                            cancelButtonText: 'Back to List',
+                            confirmButtonColor: '#2563eb',
+                            cancelButtonColor: '#64748b'
+                        }).then((confirmRes) => {
+                            if (confirmRes.isConfirmed) {
+                                var token = $('input[name="__RequestVerificationToken"]').val();
+                                
+                                Swal.fire({
+                                    title: 'Reconciling...',
+                                    allowOutsideClick: false,
+                                    didOpen: () => {
+                                        Swal.showLoading();
+                                    }
+                                });
+
+                                $.ajax({
+                                    url: '/Transfers/ReconcileUnmatchedRecord',
+                                    type: 'POST',
+                                    headers: {
+                                        "RequestVerificationToken": token
+                                    },
+                                    data: { id: id, partyCode: code },
+                                    success: function (r) {
+                                        Swal.close();
+                                        if (r.ok) {
+                                            Swal.fire({
+                                                icon: 'success',
+                                                title: 'Reconciled Successfully',
+                                                text: r.message,
+                                                confirmButtonColor: '#2563eb'
+                                            }).then(() => {
+                                                window.location.reload();
+                                            });
+                                        } else {
+                                            Swal.fire({
+                                                icon: 'error',
+                                                title: 'Failed',
+                                                text: r.message,
+                                                confirmButtonColor: '#2563eb'
+                                            });
+                                        }
+                                    },
+                                    error: function (xhr) {
+                                        Swal.close();
+                                        var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error reconciling record.";
+                                        Swal.fire({
+                                            icon: 'error',
+                                            title: 'Failed',
+                                            text: msg,
+                                            confirmButtonColor: '#2563eb'
+                                        });
+                                    }
+                                });
+                            } else {
+                                $('.btn-reconcile-unmatched[data-id="' + id + '"]').click();
+                            }
+                        });
+                    });
+                }
+            });
+        });
+    });
+            // Drag and Drop for Reconcile Modal Dropzone
+            var reconDropZone = document.getElementById('reconcileDropZone');
+            var reconFileInput = document.getElementById('reconcile-file-input');
+
+            if (reconDropZone && reconFileInput) {
+                reconDropZone.addEventListener('dragover', function (e) {
+                    e.preventDefault();
+                    reconDropZone.style.background = '#f0fdf4';
+                    reconDropZone.style.borderColor = '#22c55e';
+                });
+
+                reconDropZone.addEventListener('dragleave', function () {
+                    reconDropZone.style.background = '#f8fafc';
+                    reconDropZone.style.borderColor = '#cbd5e1';
+                });
+
+                reconDropZone.addEventListener('drop', function (e) {
+                    e.preventDefault();
+                    reconDropZone.style.background = '#f8fafc';
+                    reconDropZone.style.borderColor = '#cbd5e1';
+                    
+                    if (e.dataTransfer.files.length > 0) {
+                        reconFileInput.files = e.dataTransfer.files;
+                        $(reconFileInput).trigger('change');
+                    }
+                });
+            }
+
+            // File input selection tracking
+            $('#reconcile-file-input').on('change', function () {
+                var file = this.files[0];
+                if (file) {
+                    $('#selectedReconFileName').text(file.name).removeClass('d-none');
+                    $('#btnReconcileSubmit').prop('disabled', false);
+                } else {
+                    $('#selectedReconFileName').addClass('d-none');
+                    $('#btnReconcileSubmit').prop('disabled', true);
+                }
+            });
+        });
+</script>
+}
+
+

@@ -1,0 +1,191 @@
+﻿@{
+    ViewData["Title"] = "Upload External Incentive";
+}
+
+<style>
+    .upload-card { background:#fff; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 2px 16px rgba(0,0,0,.06); max-width:700px; margin:0 auto; padding:36px 40px; }
+    .upload-icon { width:70px; height:70px; background:linear-gradient(135deg,var(--primary),var(--secondary)); border-radius:16px; display:flex; align-items:center; justify-content:center; margin:0 auto 20px; box-shadow:0 4px 16px rgba(30, 64, 175,.3); }
+    .drop-zone   { border:2px dashed #cbd5e1; border-radius:12px; padding:40px 20px; text-align:center; cursor:pointer; transition:all .2s; background:#f8fafc; }
+    .drop-zone:hover, .drop-zone.dragover { border-color:var(--primary); background:var(--primary-light); }
+    .drop-zone input[type=file] { display:none; }
+    .fmt-table   { border-radius:10px; overflow:hidden; border:1px solid #e2e8f0; font-size:.82rem; }
+    .fmt-table th { background:#1e293b; color:#fff; font-size:.74rem; text-transform:uppercase; padding:9px 12px; }
+    .fmt-table td { padding:8px 12px; }
+    .fmt-table tr:nth-child(even) td { background:#f8fafc; }
+    .note-box  { background:#eff6ff; border-left:4px solid #3b82f6; border-radius:8px; padding:12px 16px; font-size:.82rem; color:#1e3a5f; }
+</style>
+
+<div class="upload-card mt-2">
+    <div class="text-center mb-4">
+        <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up fa-xl text-white"></i></div>
+        <h2 class="fw-800 mb-1" style="font-size:1.4rem;font-weight:800;">
+            External Incentive Upload
+        </h2>
+        <p class="text-muted" style="font-size:.86rem;">
+            Upload an Excel file — data will appear directly in the Incentive Register
+        </p>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show border-0 rounded-3 mb-3">
+            <i class="fa-solid fa-circle-xmark me-2"></i>@TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <form asp-action="Upload" method="post" enctype="multipart/form-data" id="uploadForm">
+        @Html.AntiForgeryToken()
+
+        <!-- Month / Year -->
+        <div class="row g-3 mb-3">
+            <div class="col-6">
+                <label class="form-label fw-semibold" style="font-size:.83rem;">Month <span class="text-danger">*</span></label>
+                <select name="month" class="form-select" style="border-radius:9px;" required>
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <option value="@m" selected="@(m == DateTime.Now.Month)">
+                            @(new DateTime(2000, m, 1).ToString("MMMM"))
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold" style="font-size:.83rem;">Year <span class="text-danger">*</span></label>
+                <select name="year" class="form-select" style="border-radius:9px;" required>
+                    @for (int y = DateTime.Now.Year - 2; y <= DateTime.Now.Year + 1; y++)
+                    {
+                        <option value="@y" selected="@(y == DateTime.Now.Year)">@y</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <!-- File Drop Zone -->
+        <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:.83rem;">
+                Excel File <span class="text-danger">*</span>
+            </label>
+            <div id="dropZone" class="mb-3 text-center p-4" style="border: 2px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.25s ease;" onclick="document.getElementById('fileInput').click();">
+                <i class="fa-regular fa-file-excel fa-3x text-success mb-3"></i>
+                <h6 class="fw-bold text-dark mb-1">Drag & Drop Excel File Here</h6>
+                <p class="text-muted small mb-3">or click to browse local folders</p>
+                <input type="file" name="file" id="fileInput" style="display: none;" accept=".xlsx,.xls" required onclick="event.stopPropagation();" />
+                <span id="selectedFileName" class="badge bg-secondary px-3 py-2 fw-semibold d-none" style="font-size: 0.78rem; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></span>
+            </div>
+        </div>
+
+        <!-- Remarks -->
+        <div class="mb-3">
+            <label class="form-label fw-semibold" style="font-size:.83rem;">Remarks (optional)</label>
+            <input type="text" name="remarks" class="form-control" style="border-radius:9px;"
+                   placeholder="e.g. May 2026 final data" maxlength="500">
+        </div>
+
+        <!-- Replace existing -->
+        <div class="form-check mb-4">
+            <input class="form-check-input" type="checkbox" name="replaceExisting" id="replaceExisting" value="true">
+            <label class="form-check-label fw-semibold" for="replaceExisting" style="font-size:.84rem;">
+                Replace existing records for this month
+                <span class="text-muted fw-normal">(deletes previous uploads if any)</span>
+            </label>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn w-100 fw-700 py-2"
+                style="background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;border-radius:10px;font-size:.95rem;font-weight:700;" disabled>
+            <i class="fa-solid fa-cloud-arrow-up me-2"></i> Upload &amp; Save
+        </button>
+    </form>
+
+    <hr class="my-4" style="opacity:.1;">
+
+    <!-- Format Guide -->
+    <div class="mb-3">
+        <div class="fw-bold mb-2" style="font-size:.83rem; color:#475569;">
+            <i class="fa-solid fa-circle-info me-1 text-primary"></i> Expected Excel Column Format
+        </div>
+        <div class="table-responsive fmt-table mb-2">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Month</th><th>Cons Party Code</th><th>Cons Party Name</th>
+                        <th>Location</th><th>Net Retail Selling</th><th>Discount Amount</th>
+                        <th>Slab</th><th>Incentive</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>May-26</td><td>WRJ010120962</td><td>GIYA MOTORS</td>
+                        <td>ALW</td><td>17498</td><td>0</td><td>0%</td><td>0</td>
+                    </tr>
+                    <tr>
+                        <td>May-26</td><td>WRJ0106112</td><td>MEHANDIRATTA SRV CENTER</td>
+                        <td>ALW</td><td>123093</td><td>9620</td><td>6%</td><td>0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="note-box">
+            <strong>Note:</strong> Column names are case-insensitive. The "Month" column is optional —
+            if absent, the selected month/year will be used. "Cons Party Code" and "Net Retail Selling" are required.
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const submitBtn = document.getElementById('submitBtn');
+const fileBadge = document.getElementById('selectedFileName');
+
+if (dropZone && fileInput) {
+    dropZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropZone.style.background = '#f0fdf4';
+        dropZone.style.borderColor = '#22c55e';
+    });
+
+    dropZone.addEventListener('dragleave', function () {
+        dropZone.style.background = '#f8fafc';
+        dropZone.style.borderColor = '#cbd5e1';
+    });
+
+    dropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropZone.style.background = '#f8fafc';
+        dropZone.style.borderColor = '#cbd5e1';
+        
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            // Trigger change event manually so file input listeners run
+            var event = new Event('change');
+            fileInput.dispatchEvent(event);
+        }
+    });
+}
+
+if (fileInput) {
+    fileInput.addEventListener('change', function () {
+        var file = this.files[0];
+        if (file) {
+            fileBadge.textContent = file.name;
+            fileBadge.classList.remove('d-none');
+            submitBtn.disabled = false;
+        } else {
+            fileBadge.textContent = '';
+            fileBadge.classList.add('d-none');
+            submitBtn.disabled = true;
+        }
+    });
+}
+
+document.getElementById('uploadForm').addEventListener('submit', function () {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i> Uploading...';
+});
+</script>
+}
+
+
+

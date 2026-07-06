@@ -1,0 +1,972 @@
+@model IReadOnlyList<IncentivePortal.Models.BankDetail>
+@{
+    ViewData["Title"] = "Party Bank Master";
+    var parties = (IReadOnlyList<IncentivePortal.Models.Party>)ViewBag.Parties;
+    var isAdmin = User.IsInRole("Super Admin");
+    var isAllowedToRequest = User.IsInRole("HO Finance") || User.IsInRole("Branch Manager") || User.IsInRole("Associate");
+}
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    /* Premium SaaS Bank Master Styles */
+    .bank-header {
+        background: linear-gradient(135deg, #0b1c30 0%, #1e3c72 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 10px 30px rgba(11, 28, 48, 0.15);
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .bank-header::after {
+        content: '';
+        position: absolute;
+        top: 0; right: 0; bottom: 0; left: 0;
+        background: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><path d="M0 100 C 20 0 50 0 100 100 Z" fill="rgba(255,255,255,0.05)"/></svg>') right/cover no-repeat;
+        pointer-events: none;
+    }
+    .bank-header-icon {
+        width: 48px;
+        height: 48px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    .panel {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        padding: 1.5rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .panel:hover {
+        box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+    }
+    
+    .corp-input {
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        padding: 0.65rem 1rem;
+        transition: all 0.2s ease;
+        background: #f8fafc;
+    }
+    .corp-input:focus {
+        border-color: #3b82f6;
+        background: #ffffff;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    }
+    .corp-select {
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        padding: 0.65rem 1rem;
+        background-color: #f8fafc;
+        cursor: pointer;
+    }
+
+    .portal-tabs {
+        border-bottom: 2px solid #f1f5f9;
+        gap: 1rem;
+    }
+    .portal-tabs .nav-link {
+        color: #64748b;
+        border: none;
+        border-bottom: 2px solid transparent;
+        font-weight: 600;
+        padding: 0.8rem 1rem;
+        transition: all 0.2s ease;
+        background: transparent;
+    }
+    .portal-tabs .nav-link:hover:not(.active) {
+        color: #0f172a;
+        border-bottom-color: #cbd5e1;
+    }
+    .portal-tabs .nav-link.active {
+        color: #2563eb;
+        border-bottom-color: #2563eb;
+        background: transparent;
+    }
+
+    .badge-code {
+        background: #eef2ff;
+        color: #4338ca;
+        font-weight: 700;
+        padding: 0.35rem 0.6rem;
+        border-radius: 6px;
+        font-family: 'Inter', monospace;
+        font-size: 0.8rem;
+        border: 1px solid #e0e7ff;
+    }
+    .badge-acc {
+        background: #f0fdf4;
+        color: #166534;
+        font-weight: 700;
+        padding: 0.35rem 0.6rem;
+        border-radius: 6px;
+        font-family: 'Inter', monospace;
+        font-size: 0.8rem;
+        border: 1px solid #dcfce7;
+    }
+    
+    .corp-table th {
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        padding: 1rem;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    .corp-table td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .corp-table tbody tr {
+        transition: background-color 0.2s;
+    }
+    .corp-table tbody tr:hover {
+        background-color: #f8fafc;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        border: none;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        font-weight: 500;
+        border-radius: 8px;
+        padding: 0.6rem 1.2rem;
+    }
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+        transform: translateY(-1px);
+    }
+    
+    /* Select2 customizations to match corp-input */
+    .select2-container .select2-selection--single {
+        height: calc(1.5em + 1.3rem + 2px);
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background-color: #f8fafc;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #495057;
+        line-height: calc(1.5em + 1.3rem);
+        padding-left: 1rem;
+        padding-right: 2.5rem;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: calc(1.5em + 1.3rem + 2px);
+        right: 0.5rem;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__clear {
+        height: calc(1.5em + 1.3rem + 2px);
+        line-height: calc(1.5em + 1.3rem);
+        margin-right: 1rem;
+    }
+    .select2-container--open .select2-selection--single {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        background: #ffffff;
+    }
+</style>
+
+<div class="bank-header">
+    <div class="bank-header-icon">
+        <i class="fa-solid fa-building-columns text-white"></i>
+    </div>
+    <div>
+        <h2 class="h4 mb-1 fw-bold text-white">Party Bank Master</h2>
+        <p class="mb-0 text-white-50 small">Manage and configure bank credentials and compliance profiles for direct party disbursements.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    @if (isAdmin)
+    {
+    <!-- Left Form Panel (Manual Creation/Edit) -->
+    <div class="col-lg-4">
+        <div class="panel sticky-lg-top" style="top: 20px; z-index: 10;">
+            <div class="d-flex align-items-center gap-2 mb-4 pb-3 border-bottom">
+                <div class="bg-primary bg-opacity-10 text-primary rounded p-2 d-inline-flex">
+                    <i class="fa-solid fa-id-card"></i>
+                </div>
+                <h3 class="h6 mb-0 fw-bold" id="formTitle">Bank Account Setup</h3>
+            </div>
+            
+            <form id="bankForm" asp-action="SaveBankDetail" method="post" class="needs-validation">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="bankDetailId" value="0" />
+                
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold text-uppercase">Select Active Party <span class="text-danger">*</span></label>
+                    <select name="PartyId" id="partyId" class="form-select corp-select" required>
+                        <option value="">-- Choose Party --</option>
+                        @foreach (var p in parties)
+                        {
+                            var codeToDisplay = string.IsNullOrEmpty(p.OriginalPartyCode) ? p.PartyCode : p.OriginalPartyCode;
+                            <option value="@p.Id" data-code="@codeToDisplay">@p.PartyName (@codeToDisplay)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold text-uppercase">Account Holder Name <span class="text-danger">*</span></label>
+                    <input name="AccountHolder" id="accountHolder" class="form-control corp-input" placeholder="Name as per Passbook/Cheque" required />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold text-uppercase">Account Number <span class="text-danger">*</span></label>
+                    <input name="AccountNumber" id="accountNumber" class="form-control corp-input" placeholder="Enter bank account number" required />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold text-uppercase">IFSC Code <span class="text-danger">*</span></label>
+                    <input name="IFSC" id="ifscCode" class="form-control corp-input text-uppercase" placeholder="e.g., SBIN0001234" maxlength="11" required />
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-bold text-uppercase">Bank Name</label>
+                        <input name="BankName" id="bankName" class="form-control corp-input" placeholder="e.g., State Bank of India" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-bold text-uppercase">Branch Name</label>
+                        <input name="BranchName" id="branchName" class="form-control corp-input" placeholder="e.g., Jaipur Central" />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-bold text-uppercase">PAN Number</label>
+                        <input name="PAN" id="pan" class="form-control corp-input text-uppercase" placeholder="e.g., ABCDE1234F" maxlength="10" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-muted small fw-bold text-uppercase">Mobile Registered</label>
+                        <input name="Mobile" id="mobile" class="form-control corp-input" placeholder="e.g., 9876543210" maxlength="15" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 justify-content-end mt-4 pt-3 border-top">
+                    <button type="button" id="btnReset" class="btn btn-light text-secondary fw-semibold border" style="display: none;">Cancel</button>
+                    <button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-check-circle me-1"></i> Save Profile</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    }
+
+    <!-- Right Content Tabs -->
+    <div class="@(isAdmin ? "col-lg-8" : "col-12")">
+        <div class="panel">
+            <ul class="nav nav-tabs portal-tabs border-bottom mb-3" id="bankTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="registry-tab" data-bs-toggle="tab" data-bs-target="#registry" type="button" role="tab">Active Registry</button>
+                </li>
+                @if (isAdmin)
+                {
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="paste-tab" data-bs-toggle="tab" data-bs-target="#paste" type="button" role="tab">Copy & Paste Excel</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab">Upload Excel File</button>
+                    </li>
+                }
+            </ul>
+
+            <div class="tab-content" id="bankTabsContent">
+                <!-- Active Registry Tab -->
+                <div class="tab-pane fade show active" id="registry" role="tabpanel">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                        <div>
+                            <h3 class="h5 mb-1 fw-bold text-dark">Bank Master Database</h3>
+                            <p class="text-muted small mb-0">List of primary and active bank credentials associated with parties</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" onclick="exportTableToCSV('#bankDetailsTable', 'Bank_Master.csv')" class="btn btn-sm btn-outline-success border" style="height: 40px; font-weight: 600;"><i class="fa-solid fa-file-excel me-1"></i> Export Excel</button>
+                            <div class="position-relative" style="width: 250px;">
+                                <input type="text" id="registrySearch" class="form-control corp-input" style="padding-left: 2.5rem !important;" placeholder="Search account or code..." />
+                                <i class="fa-solid fa-magnifying-glass position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive rounded border mb-2" style="max-height: 550px; overflow-y: auto;">
+                        <table class="table table-hover corp-table align-middle mb-0" id="bankDetailsTable">
+                            <thead class="sticky-top bg-white shadow-sm" style="z-index: 1;">
+                                <tr>
+                                    <th>Party Code</th>
+                                    <th>Account Holder</th>
+                                    <th>Account / IFSC</th>
+                                    <th>Bank Details</th>
+                                    <th>PAN / Mobile</th>
+                                    <th class="text-center" style="width: @(isAdmin ? "100px" : "160px");">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-5">
+                                            <div class="mb-2"><i class="fa-solid fa-folder-open fa-2x text-light"></i></div>
+                                            No bank records configured. Use the form to setup accounts.
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in Model)
+                                    {
+                                        <tr class="bank-row" data-id="@item.Id" data-party-id="@item.PartyId" data-holder="@item.AccountHolder" data-num="@item.AccountNumber" data-ifsc="@item.IFSC" data-bank="@item.BankName" data-branch="@item.BranchName" data-pan="@item.PAN" data-mobile="@item.Mobile" data-party-code="@item.Party?.PartyCode">
+                                            <td>
+                                                @{ var tableCode = string.IsNullOrEmpty(item.Party?.OriginalPartyCode) ? item.Party?.PartyCode : item.Party?.OriginalPartyCode; }
+                                                <span class="badge-code shadow-sm">@tableCode</span>
+                                                <br/><small class="text-muted text-truncate d-inline-block fw-medium mt-1" style="max-width: 140px;">@item.Party?.PartyName</small>
+                                            </td>
+                                            <td><strong class="text-dark">@item.AccountHolder</strong></td>
+                                            <td>
+                                                <span class="badge-acc shadow-sm mb-1 d-inline-block">@item.AccountNumber</span>
+                                                <br/><code class="text-secondary bg-light px-1 rounded">@item.IFSC</code>
+                                            </td>
+                                            <td>
+                                                <span class="small fw-bold text-dark">@(string.IsNullOrEmpty(item.BankName) ? "-" : item.BankName)</span>
+                                                <br/><small class="text-muted">@(string.IsNullOrEmpty(item.BranchName) ? "-" : item.BranchName)</small>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.PAN))
+                                                {
+                                                    <span class="badge bg-light text-dark border font-monospace shadow-sm">@item.PAN</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted small">-</span>
+                                                }
+                                                <br/><small class="text-muted mt-1 d-inline-block"><i class="fa-solid fa-phone ms-1 me-1 text-light"></i> @(string.IsNullOrEmpty(item.Mobile) ? "-" : item.Mobile)</small>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center gap-2">
+                                                    @if (isAdmin)
+                                                    {
+                                                        <button class="btn btn-sm btn-light border text-primary btn-edit shadow-sm" title="Edit row"><i class="fa-solid fa-pen"></i></button>
+                                                        <button class="btn btn-sm btn-light border text-danger btn-delete shadow-sm" data-id="@item.Id" title="Delete bank detail"><i class="fa-solid fa-trash"></i></button>
+                                                    }
+                                                    else if (isAllowedToRequest)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-warning btn-request-update rounded-pill shadow-sm" 
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#bankModal" 
+                                                                data-party-id="@item.PartyId" 
+                                                                data-party-code="@item.Party?.PartyCode" 
+                                                                data-party-name="@item.Party?.PartyName" 
+                                                                data-holder="@item.AccountHolder" 
+                                                                data-num="@item.AccountNumber" 
+                                                                data-ifsc="@item.IFSC" 
+                                                                data-bank="@item.BankName" 
+                                                                data-branch="@item.BranchName" 
+                                                                data-pan="@item.PAN" 
+                                                                data-mobile="@item.Mobile" 
+                                                                title="Request update for bank details"><i class="fa-solid fa-pen-to-square me-1"></i> Update</button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Copy & Paste Tab -->
+                @if (isAdmin)
+                {
+                <div class="tab-pane fade" id="paste" role="tabpanel">
+                    <div class="mb-3">
+                        <h3 class="h5 mb-1">Batch Copy & Paste</h3>
+                        <p class="text-muted small">Copy bank details columns from Excel and paste them directly in the text area below.</p>
+                    </div>
+
+                    <div class="alert alert-info py-2 small mb-3">
+                        <strong>Expected Columns:</strong> Party Code (Col 1), Account Number (Col 2), IFSC (Col 3), Account Holder (Col 4, Optional), Bank Name (Col 5, Optional), Branch Name (Col 6, Optional), PAN (Col 7, Optional), Mobile (Col 8, Optional). Header rows are automatically matched.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Paste Tabular Excel Data Here:</label>
+                        <textarea id="pasteArea" class="form-control corp-input" rows="6" placeholder="Party Code&#9;Account Number&#9;IFSC&#9;Account Holder&#9;Bank Name&#9;Branch Name&#9;PAN&#9;Mobile&#10;WRJ0101&#9;123456789&#9;SBIN0001234&#9;Dealer Holder&#9;SBI&#9;Jaipur&#9;ABCDE1234F&#9;9876543210" style="font-family: monospace; font-size: 0.85rem;"></textarea>
+                    </div>
+
+                    <!-- Interactive Parser Preview -->
+                    <div id="pastePreviewSection" style="display: none;" class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h4 class="h6 mb-0 text-success">📋 Parsed Data Preview (<span id="previewCount">0</span> rows found)</h4>
+                            <button id="btnClearPaste" class="btn btn-sm btn-outline-secondary">Clear</button>
+                        </div>
+                        <div class="table-responsive corp-table-wrapper mb-3" style="max-height: 300px; border: 1px solid var(--border-color);">
+                            <table class="table table-sm corp-table align-middle import-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>Row</th>
+                                        <th>Party Code</th>
+                                        <th>Account Holder</th>
+                                        <th>Account details</th>
+                                        <th>Bank / Branch</th>
+                                        <th>PAN / Mobile</th>
+                                        <th class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pastePreviewBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button id="btnSubmitPaste" class="btn btn-success" style="min-width: 180px;">Import Verified Records</button>
+                        </div>
+                    </div>
+                </div>
+                }
+
+                <!-- Upload Excel Tab -->
+                @if (isAdmin)
+                {
+                <div class="tab-pane fade" id="upload" role="tabpanel">
+                    <div class="mb-4">
+                        <h3 class="h5 mb-1">Upload Bank Excel</h3>
+                        <p class="text-muted small">Select or drag in an Excel sheet (`.xlsx`) containing bank details mapping.</p>
+                    </div>
+
+                    <form id="excelUploadForm" asp-action="UploadBankDetailsExcel" method="post" enctype="multipart/form-data" class="p-3 text-center">
+                        @Html.AntiForgeryToken()
+                        
+                        <div id="bankDropZone" class="mb-4 text-center p-4" style="border: 2px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.25s ease;" onclick="$('#excelFile').click();">
+                            <i class="fa-regular fa-file-excel fa-3x text-success mb-3"></i>
+                            <h6 class="fw-bold text-dark mb-1">Drag & Drop Excel File Here</h6>
+                            <p class="text-muted small mb-3">or click to browse local folders</p>
+                            <input type="file" name="file" id="excelFile" accept=".xlsx" style="display: none;" required onclick="event.stopPropagation();" />
+                            <span id="selectedBankFileName" class="badge bg-secondary px-3 py-2 fw-semibold d-none" style="font-size: 0.78rem; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></span>
+                        </div>
+
+                        <div class="alert alert-info py-2 small mb-4 text-start" style="border-radius: 8px;">
+                            <i class="fa-solid fa-circle-info text-info me-1"></i>
+                            <strong>Spreadsheet Requirements:</strong> Workbook must contain columns named <strong>Party Code</strong>, <strong>Account Number</strong>, and <strong>IFSC</strong>.
+                        </div>
+
+                        <div class="border-top pt-3 d-flex justify-content-end gap-2">
+                            <button type="submit" id="btnUploadSubmit" class="btn btn-primary" style="min-width: 150px;" disabled>Upload Excel</button>
+                        </div>
+                    </form>
+                </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isAllowedToRequest)
+{
+    <!-- Bank details Request Change Modal for Non-Admins -->
+    <div class="modal fade" id="bankModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form asp-controller="BankDetails" asp-action="RequestChange" method="post" id="requestChangeForm">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-header" style="border-bottom: 1px solid var(--line); background: #f8fbff;">
+                        <h5 class="modal-title">🏦 Request Bank Details Update</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body" style="padding: 24px;">
+                          <div class="row g-3">
+                              <div class="col-12">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Party</label>
+                                  <input type="text" id="modalPartyDisplay" class="form-control corp-input" readonly style="background-color: #e9ecef;" />
+                                  <input type="hidden" name="PartyId" id="modalPartyId" />
+                              </div>
+                              <div class="col-12">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Account Holder Name</label>
+                                  <input name="AccountHolder" id="modalAccountHolder" class="form-control corp-input" placeholder="Enter account holder name" required />
+                              </div>
+                              <div class="col-12">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Account Number</label>
+                                  <input name="AccountNumber" id="modalAccountNumber" class="form-control corp-input" placeholder="Enter account number" required />
+                              </div>
+                              <div class="col-md-6">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">IFSC Code</label>
+                                  <input name="IFSC" id="modalIFSC" class="form-control corp-input text-uppercase" placeholder="e.g., HDFC0000001" required />
+                              </div>
+                              <div class="col-md-6">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Bank Name</label>
+                                  <input name="BankName" id="modalBankName" class="form-control corp-input" placeholder="e.g., HDFC Bank" required />
+                              </div>
+                              <div class="col-12">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Branch Name</label>
+                                  <input name="BranchName" id="modalBranchName" class="form-control corp-input" placeholder="Enter branch name" required />
+                              </div>
+                              <div class="col-md-6">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">PAN Card</label>
+                                  <input name="PAN" id="modalPAN" class="form-control corp-input text-uppercase" placeholder="Enter PAN number" required />
+                              </div>
+                              <div class="col-md-6">
+                                  <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Mobile Number</label>
+                                  <input name="Mobile" id="modalMobile" class="form-control corp-input" placeholder="Enter mobile number" required />
+                              </div>
+                          </div>
+                      </div>
+                      <div class="modal-footer" style="border-top: 1px solid var(--line); background: #f8fbff; padding: 16px;">
+                          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button type="submit" class="btn btn-sm btn-success">✓ Submit Update Request</button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      </div>
+  }
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize Select2 for Party Dropdown
+    $('#partyId').select2({
+        placeholder: "-- Choose Party --",
+        width: '100%',
+        allowClear: true
+    });
+
+    // -------------------------------------------------------------
+    // REAL-TIME REGISTRY SEARCH
+    // -------------------------------------------------------------
+    $('#registrySearch').on('input', function() {
+        const query = $(this).val().trim().toLowerCase();
+        $('#bankDetailsTable tbody tr').each(function() {
+            const code = ($(this).data('party-code') || '').toString().toLowerCase();
+            const holder = ($(this).data('holder') || '').toString().toLowerCase();
+            const num = ($(this).data('num') || '').toString().toLowerCase();
+            const ifsc = ($(this).data('ifsc') || '').toString().toLowerCase();
+            const bank = ($(this).data('bank') || '').toString().toLowerCase();
+            if (code.includes(query) || holder.includes(query) || num.includes(query) || ifsc.includes(query) || bank.includes(query)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+
+    // -------------------------------------------------------------
+    // MANUAL FORM CRUD LOGIC
+    // -------------------------------------------------------------
+    // Edit action trigger
+    $('#bankDetailsTable').on('click', '.btn-edit', function(e) {
+        e.stopPropagation();
+        const row = $(this).closest('.bank-row');
+        const id = row.data('id');
+        const partyId = row.data('party-id');
+        const holder = row.data('holder');
+        const num = row.data('num');
+        const ifsc = row.data('ifsc');
+        const bank = row.data('bank');
+        const branch = row.data('branch');
+        const pan = row.data('pan');
+        const mobile = row.data('mobile');
+
+        $('#bankDetailId').val(id);
+        $('#partyId').val(partyId).attr('style', 'pointer-events: none; background-color: #e9ecef;'); // disable party change during edit
+        $('#accountHolder').val(holder);
+        $('#accountNumber').val(num);
+        $('#ifscCode').val(ifsc);
+        $('#bankName').val(bank);
+        $('#branchName').val(branch);
+        $('#pan').val(pan);
+        $('#mobile').val(mobile);
+
+        $('#formTitle').html('Edit Bank Profile: <span class="text-primary">' + row.data('party-code') + '</span>');
+        $('#btnReset').show();
+        
+        $('html, body').animate({
+            scrollTop: $("#bankForm").offset().top - 100
+        }, 200);
+    });
+
+    // Delete bank detail trigger
+    $('#bankDetailsTable').on('click', '.btn-delete', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        const row = $(this).closest('.bank-row');
+        const code = row.data('party-code');
+
+        if (confirm('Are you sure you want to delete bank details for ' + code + '?')) {
+            const btn = this;
+            portalSetBusy(btn, '...');
+
+            $.ajax({
+                url: '@Url.Action("DeleteBankDetail", "Parties")',
+                method: 'POST',
+                data: {
+                    id: id,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                }
+            })
+            .done(r => {
+                portalToast(r.message || 'Bank profile deleted.');
+                row.fadeOut(300, function() {
+                    $(this).remove();
+                    if ($('#bankDetailsTable tbody tr').length === 0) {
+                        $('#bankDetailsTable tbody').append('<tr><td colspan="6" class="text-center text-muted py-4">No bank records configured.</td></tr>');
+                    }
+                });
+            })
+            .fail(xhr => {
+                portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to remove bank profile.');
+            })
+            .always(() => portalClearBusy(btn));
+        }
+    });
+
+    // Cancel edit
+    $('#btnReset').on('click', function() {
+        $('#bankDetailId').val('0');
+        $('#partyId').val('').removeAttr('style');
+        $('#accountHolder').val('');
+        $('#accountNumber').val('');
+        $('#ifscCode').val('');
+        $('#bankName').val('');
+        $('#branchName').val('');
+        $('#pan').val('');
+        $('#mobile').val('');
+        $('#formTitle').text('Bank Account Setup');
+        $(this).hide();
+    });
+
+    // Save submit intercept
+    $('#bankForm').on('submit', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const btn = form.find('button[type="submit"]')[0];
+        portalSetBusy(btn, 'Saving...');
+
+        // Enable partyId temporarily so it submits
+        $('#partyId').removeAttr('style');
+
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize()
+        })
+        .done(r => {
+            portalToast(r.message || 'Bank details saved successfully.');
+            setTimeout(() => location.reload(), 600);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to save bank details.');
+            // Restore styling if we were editing
+            if ($('#bankDetailId').val() !== '0') {
+                $('#partyId').attr('style', 'pointer-events: none; background-color: #e9ecef;');
+            }
+        })
+        .always(() => portalClearBusy(btn));
+    });
+
+    // Form population on row click
+    $('#bankDetailsTable').on('click', '.bank-row', function() {
+        $(this).find('.btn-edit').click();
+    });
+
+    // -------------------------------------------------------------
+    // EXCEL COPY & PASTE PARSER LOGIC
+    // -------------------------------------------------------------
+    let parsedPasteItems = [];
+
+    $('#pasteArea').on('input', function() {
+        const text = $(this).val();
+        if (!text.trim()) {
+            $('#pastePreviewSection').hide();
+            parsedPasteItems = [];
+            return;
+        }
+
+        const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+        if (lines.length === 0) {
+            $('#pastePreviewSection').hide();
+            parsedPasteItems = [];
+            return;
+        }
+
+        // Parse header alignment
+        const firstLineCells = lines[0].split('\t').map(c => c.trim().toLowerCase());
+        
+        let hasHeader = false;
+        let partyIndex = -1;
+        let numIndex = -1;
+        let ifscIndex = -1;
+        let holderIndex = -1;
+        let bankIndex = -1;
+        let branchIndex = -1;
+        let panIndex = -1;
+        let mobIndex = -1;
+
+        const knownParty = ["party code", "cons party code", "partycode", "code", "dealer code", "party"];
+        const knownNum = ["account number", "accountnumber", "account", "acc no", "acc", "accnum"];
+        const knownIfsc = ["ifsc", "ifsc code", "ifsccode", "ifsc_code"];
+        const knownHolder = ["account holder", "accountholder", "holder", "holder name", "name", "account holder name"];
+        const knownBank = ["bank name", "bankname", "bank"];
+        const knownBranch = ["branch name", "branchname", "branch"];
+        const knownPan = ["pan", "pan number", "pan no"];
+        const knownMob = ["mobile", "mobile number", "phone", "mobile no"];
+
+        for (let i = 0; i < firstLineCells.length; i++) {
+            const hVal = firstLineCells[i];
+            if (knownParty.includes(hVal)) { partyIndex = i; hasHeader = true; }
+            else if (knownNum.includes(hVal)) { numIndex = i; hasHeader = true; }
+            else if (knownIfsc.includes(hVal)) { ifscIndex = i; hasHeader = true; }
+            else if (knownHolder.includes(hVal)) { holderIndex = i; hasHeader = true; }
+            else if (knownBank.includes(hVal)) { bankIndex = i; hasHeader = true; }
+            else if (knownBranch.includes(hVal)) { branchIndex = i; hasHeader = true; }
+            else if (knownPan.includes(hVal)) { panIndex = i; hasHeader = true; }
+            else if (knownMob.includes(hVal)) { mobIndex = i; hasHeader = true; }
+        }
+
+        // If no explicit matching header, map sequentially by default positions
+        if (!hasHeader) {
+            partyIndex = 0;
+            numIndex = 1;
+            ifscIndex = 2;
+            holderIndex = firstLineCells.length > 3 ? 3 : -1;
+            bankIndex = firstLineCells.length > 4 ? 4 : -1;
+            branchIndex = firstLineCells.length > 5 ? 5 : -1;
+            panIndex = firstLineCells.length > 6 ? 6 : -1;
+            mobIndex = firstLineCells.length > 7 ? 7 : -1;
+        }
+
+        const startIndex = hasHeader ? 1 : 0;
+        parsedPasteItems = [];
+        const tbody = $('#pastePreviewBody');
+        tbody.empty();
+
+        let rowCounter = 1;
+        for (let i = startIndex; i < lines.length; i++) {
+            const cells = lines[i].split('\t');
+            if (cells.length < 3) continue;
+
+            const partyCode = (cells[partyIndex] || '').trim();
+            const num = (cells[numIndex] || '').trim();
+            const ifsc = (cells[ifscIndex] || '').trim();
+            const holder = holderIndex !== -1 ? (cells[holderIndex] || '').trim() : '';
+            const bank = bankIndex !== -1 ? (cells[bankIndex] || '').trim() : '';
+            const branch = branchIndex !== -1 ? (cells[branchIndex] || '').trim() : '';
+            const pan = panIndex !== -1 ? (cells[panIndex] || '').trim() : '';
+            const mob = mobIndex !== -1 ? (cells[mobIndex] || '').trim() : '';
+
+            if (!partyCode && !num && !ifsc) continue;
+
+            let rowStatus = '<span class="badge bg-success">Valid</span>';
+            if (!partyCode || !num || !ifsc) {
+                rowStatus = '<span class="badge bg-danger">Invalid (Missing fields)</span>';
+            }
+
+            parsedPasteItems.push({
+                PartyCode: partyCode,
+                AccountNumber: num,
+                IFSC: ifsc,
+                AccountHolder: holder || null,
+                BankName: bank || null,
+                BranchName: branch || null,
+                PAN: pan || null,
+                Mobile: mob || null
+            });
+
+            tbody.append(`
+                <tr>
+                    <td class="text-muted small">${rowCounter++}</td>
+                    <td><span class="badge-code">${partyCode || '-'}</span></td>
+                    <td><strong>${holder || '<span class="text-muted small">-</span>'}</strong></td>
+                    <td>
+                        <span class="badge-acc">${num || '-'}</span>
+                        <br/><code>${ifsc || '-'}</code>
+                    </td>
+                    <td>
+                        <span class="small fw-semibold text-dark">${bank || '-'}</span>
+                        <br/><small class="text-muted">${branch || '-'}</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-light border text-dark font-monospace">${pan || '-'}</span>
+                        <br/><small class="text-muted">${mob || '-'}</small>
+                    </td>
+                    <td class="text-center">${rowStatus}</td>
+                </tr>
+            `);
+        }
+
+        $('#previewCount').text(parsedPasteItems.length);
+        if (parsedPasteItems.length > 0) {
+            $('#pastePreviewSection').show();
+        } else {
+            $('#pastePreviewSection').hide();
+        }
+    });
+
+    $('#btnClearPaste').on('click', function() {
+        $('#pasteArea').val('');
+        $('#pastePreviewSection').hide();
+        parsedPasteItems = [];
+    });
+
+    $('#btnSubmitPaste').on('click', function() {
+        if (parsedPasteItems.length === 0) return;
+        
+        const btn = this;
+        portalSetBusy(btn, 'Importing ' + parsedPasteItems.length + ' rows...');
+
+        $.ajax({
+            url: '@Url.Action("ImportBankDetailsBatch", "Parties")',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(parsedPasteItems),
+            headers: {
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+            }
+        })
+        .done(r => {
+            portalToast(r.message || 'Batch bank records imported successfully.');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Batch import failed.');
+        })
+        .always(() => portalClearBusy(btn));
+    });
+
+    // -------------------------------------------------------------
+    // EXCEL FILE UPLOAD LOGIC
+    // -------------------------------------------------------------
+    $('#excelUploadForm').on('submit', function(e) {
+        e.preventDefault();
+        const fileInput = $('#excelFile')[0];
+        if (!fileInput.files.length) {
+            portalToast('Please select an Excel file first.');
+            return;
+        }
+
+        const formData = new FormData(this);
+        const btn = $('#btnUploadSubmit')[0];
+        portalSetBusy(btn, 'Uploading...');
+
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false
+        })
+        .done(r => {
+            portalToast(r.message || 'Excel file uploaded and bank records imported successfully.');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Excel upload failed.');
+        })
+        .always(() => portalClearBusy(btn));
+    });
+
+    @if (isAllowedToRequest)
+    {
+        <text>
+        // Request update modal population
+        $('#bankDetailsTable').on('click', '.btn-request-update', function(e) {
+            e.stopPropagation();
+            const partyId = $(this).data('party-id');
+            const partyCode = $(this).data('party-code');
+            const partyName = $(this).data('party-name');
+            const holder = $(this).data('holder');
+            const num = $(this).data('num');
+            const ifsc = $(this).data('ifsc');
+            const bank = $(this).data('bank');
+            const branch = $(this).data('branch');
+            const pan = $(this).data('pan');
+            const mobile = $(this).data('mobile');
+
+            $('#modalPartyId').val(partyId);
+            $('#modalPartyDisplay').val(partyName + ' (' + partyCode + ')');
+            $('#modalAccountHolder').val(holder);
+            $('#modalAccountNumber').val(num);
+            $('#modalIFSC').val(ifsc);
+            $('#modalBankName').val(bank);
+            $('#modalBranchName').val(branch);
+            $('#modalPAN').val(pan);
+            $('#modalMobile').val(mobile);
+        });
+
+        $('#requestChangeForm').on('submit', function(e) {
+            e.preventDefault();
+            const form = $(this);
+            const btn = form.find('button[type="submit"]')[0];
+            portalSetBusy(btn, 'Submitting...');
+
+            $.ajax({
+                url: form.attr('action'),
+                method: 'POST',
+                data: form.serialize()
+            })
+            .done(r => {
+                portalToast(r.message || 'Bank update request submitted successfully.');
+                $('#bankModal').modal('hide');
+                setTimeout(() => location.reload(), 800);
+            })
+            .fail(xhr => {
+                portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to submit request.');
+            })
+            .always(() => portalClearBusy(btn));
+        });
+        </text>
+    }
+
+    // Drag and Drop for Bank Details Dropzone
+    var bankDropZone = document.getElementById('bankDropZone');
+    var bankFileInput = document.getElementById('excelFile');
+
+    if (bankDropZone && bankFileInput) {
+        bankDropZone.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            bankDropZone.style.background = '#f0fdf4';
+            bankDropZone.style.borderColor = '#22c55e';
+        });
+
+        bankDropZone.addEventListener('dragleave', function () {
+            bankDropZone.style.background = '#f8fafc';
+            bankDropZone.style.borderColor = '#cbd5e1';
+        });
+
+        bankDropZone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            bankDropZone.style.background = '#f8fafc';
+            bankDropZone.style.borderColor = '#cbd5e1';
+            
+            if (e.dataTransfer.files.length > 0) {
+                bankFileInput.files = e.dataTransfer.files;
+                $(bankFileInput).trigger('change');
+            }
+        });
+    }
+
+    // File input selection tracking
+    $('#excelFile').on('change', function () {
+        var file = this.files[0];
+        if (file) {
+            $('#selectedBankFileName').text(file.name).removeClass('d-none');
+            $('#btnUploadSubmit').prop('disabled', false);
+        } else {
+            $('#selectedBankFileName').addClass('d-none');
+            $('#btnUploadSubmit').prop('disabled', true);
+        }
+    });
+});
+</script>
+}

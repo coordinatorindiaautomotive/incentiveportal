@@ -1,0 +1,2261 @@
+<style>
+    /* ============================================================
+       UPLOAD CENTER — FULLY RESPONSIVE DESIGN SYSTEM
+       Breakpoints: xs<576 | sm>=576 | md>=768 | lg>=992 | xl>=1200
+       ============================================================ */
+
+    /* -- Base shell ------------------------------------------- */
+    .w-100 {
+        width: 100% !important;
+        min-width: 0;
+    }
+
+    /* â”€â”€ Navigation Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .portal-pills {
+        background: rgba(241, 245, 249, 0.8);
+        padding: 6px;
+        border-radius: 12px;
+        border: 1px solid var(--line, #e2e8f0);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .portal-pills .nav-link {
+        color: var(--muted, #64748b);
+        border: none;
+        padding: 10px 22px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.92rem;
+        transition: all 0.22s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+    }
+    .portal-pills .nav-link:hover {
+        color: var(--brand, #2563eb);
+        background: rgba(37, 99, 235, 0.05);
+    }
+    .portal-pills .nav-link.active {
+        background: linear-gradient(135deg, var(--brand, #2563eb) 0%, var(--brand-2, #06b6d4) 100%) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+    }
+
+    /* â”€â”€ Panel header responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .panel-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding-bottom: 16px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--line, #e2e8f0);
+    }
+    .panel-header > div:last-child {
+        flex-shrink: 0;
+    }
+    .panel-header .d-flex {
+        flex-wrap: wrap;
+    }
+
+    /* â”€â”€ Upload Mode Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .mode-card {
+        border: 1px solid var(--line, #e2e8f0);
+        background: var(--panel, #ffffff);
+        padding: 16px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
+        height: 100%;
+        min-height: 72px;
+    }
+    .mode-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        border-color: rgba(37, 99, 235, 0.4);
+    }
+    .mode-card.active {
+        border: 2px solid var(--brand, #2563eb);
+        background: rgba(37, 99, 235, 0.02) !important;
+        box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08);
+    }
+    .mode-card-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: rgba(37, 99, 235, 0.08);
+        color: var(--brand, #2563eb);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+    }
+    .mode-card.active .mode-card-icon {
+        background: var(--brand, #2563eb);
+        color: #ffffff;
+    }
+    .mode-card-content {
+        flex-grow: 1;
+        text-align: left;
+        min-width: 0;
+    }
+    .mode-card-title {
+        
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: var(--ink, #1e293b);
+        margin-bottom: 3px;
+        line-height: 1.3;
+    }
+    .mode-card-description {
+        font-size: 0.73rem;
+        color: var(--muted, #64748b);
+        line-height: 1.35;
+    }
+    .mode-card-check {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        color: var(--brand, #2563eb);
+        font-size: 1rem;
+        opacity: 0;
+        transform: scale(0.8);
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .mode-card.active .mode-card-check {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    /* â”€â”€ Dropzone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .dropzone-container {
+        border: 2px dashed rgba(37, 99, 235, 0.25);
+        border-radius: 12px;
+        background: rgba(248, 250, 252, 0.6);
+        transition: all 0.22s ease;
+        position: relative;
+    }
+    .dropzone-container:hover {
+        border-color: var(--brand, #2563eb);
+        background: rgba(37, 99, 235, 0.02);
+    }
+    .dropzone-container.dragover {
+        border-color: #22c55e !important;
+        background: #f0fdf4 !important;
+    }
+    .dropzone-container.dragover .dropzone-icon {
+        transform: scale(1.15) translateY(-2px);
+    }
+    .dropzone-file-details {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .dropzone-file-details .file-name {
+        max-width: 100% !important;
+    }
+
+    /* â”€â”€ KPI Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .kpi-card {
+        border-radius: 12px;
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: var(--panel, #ffffff);
+        border: 1px solid var(--line, #e2e8f0);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01);
+        height: 100%;
+    }
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 18px -3px rgba(0, 0, 0, 0.04);
+    }
+    .kpi-card.premium  { border-left: 4.5px solid var(--brand, #2563eb); }
+    .kpi-card.premium .kpi-card-icon { color: var(--brand, #2563eb); background: rgba(37, 99, 235, 0.08); }
+    .kpi-card.success  { border-left: 4.5px solid #10b981; }
+    .kpi-card.success .kpi-card-icon { color: #10b981; background: rgba(16, 185, 129, 0.08); }
+    .kpi-card.danger   { border-left: 4.5px solid #ef4444; }
+    .kpi-card.danger .kpi-card-icon  { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+    .kpi-card.warning  { border-left: 4.5px solid #f59e0b; }
+    .kpi-card.warning .kpi-card-icon { color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+    .kpi-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .kpi-card-label {
+        font-weight: 600;
+        color: var(--muted, #64748b);
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .kpi-card-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .kpi-card-value {
+        
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--ink, #1e293b);
+        line-height: 1.1;
+        word-break: break-word;
+    }
+    .kpi-card-caption {
+        font-size: 0.71rem;
+        color: var(--muted, #64748b);
+        margin-top: 5px;
+    }
+
+    /* â”€â”€ Behavior toggle card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .behavior-card .d-flex {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .behavior-card .small.text-muted {
+        max-width: 100% !important;
+    }
+    .behavior-card:hover {
+        border-color: rgba(139, 92, 246, 0.35) !important;
+    }
+
+    /* â”€â”€ Custom Switch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .premium-switch:checked {
+        background-color: var(--primary) !important;
+        border-color: var(--primary) !important;
+    }
+
+    /* â”€â”€ Import Stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .import-stepper {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: relative;
+        margin: 10px 0 28px;
+        overflow: hidden;
+    }
+    .import-stepper::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 50px;
+        right: 50px;
+        height: 3px;
+        background: var(--line, #e2e8f0);
+        z-index: 1;
+    }
+    .stepper-progress {
+        position: absolute;
+        top: 20px;
+        left: 50px;
+        height: 3px;
+        width: 0%;
+        background: linear-gradient(90deg, var(--brand, #2563eb), var(--brand-2, #06b6d4));
+        z-index: 1;
+        transition: width 0.4s ease;
+    }
+    .step-item {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+        min-width: 0;
+    }
+    .step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--panel, #ffffff);
+        border: 3px solid var(--line, #e2e8f0);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: var(--muted, #64748b);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        flex-shrink: 0;
+    }
+    .step-item.active .step-circle {
+        border-color: var(--brand, #2563eb);
+        color: var(--brand, #2563eb);
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+        background: var(--panel, #ffffff);
+    }
+    .step-item.completed .step-circle {
+        background: var(--brand, #2563eb);
+        border-color: var(--brand, #2563eb);
+        color: #ffffff;
+    }
+    .step-text {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--muted, #64748b);
+        margin-top: 7px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        transition: color 0.3s ease;
+        text-align: center;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 72px;
+    }
+    .step-item.active .step-text,
+    .step-item.completed .step-text {
+        color: var(--ink, #1e293b);
+    }
+
+    /* â”€â”€ Excel bounce animation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    @@keyframes bounceExcel {
+        0%, 100% { transform: translateY(0); }
+        50%       { transform: translateY(-4px); }
+    }
+    .bounce-excel { animation: bounceExcel 2s infinite ease-in-out; }
+
+    /* â”€â”€ Error row highlight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .tr-error { background-color: rgba(239, 68, 68, 0.02) !important; }
+
+    /* â”€â”€ DataTables tweaks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        padding: 4px 8px !important;
+        border-radius: 6px !important;
+        font-size: 0.8rem !important;
+    }
+    .dataTables_wrapper .dataTables_filter input {
+        border-radius: 8px !important;
+        border: 1px solid var(--line) !important;
+        padding: 4px 10px !important;
+        font-size: 0.8rem !important;
+        background: var(--canvas) !important;
+        max-width: 180px;
+    }
+    .dataTables_wrapper .dataTables_length select {
+        border-radius: 6px !important;
+        border: 1px solid var(--line) !important;
+        font-size: 0.8rem !important;
+        padding: 3px 22px 3px 6px !important;
+    }
+    .dataTables_wrapper .row {
+        flex-wrap: wrap;
+        gap: 6px 0;
+    }
+
+    /* â”€â”€ Corp table responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .corp-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 8px;
+    }
+    .corp-table th,
+    .corp-table td {
+        white-space: nowrap;
+        font-size: 0.83rem;
+    }
+
+    /* â”€â”€ Calc Preview Table Denseness â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    #calcPreviewTable th,
+    #calcPreviewTable td {
+        padding: 5px 6px !important;
+        font-size: 0.78rem !important;
+    }
+    #calcPreviewTable td.party-name-col,
+    #calcPreviewTable th.party-name-col {
+        white-space: normal !important;
+        max-width: 140px;
+        min-width: 110px;
+        word-break: break-word;
+        line-height: 1.25;
+    }
+    #calcPreviewTable .btn-xs {
+        padding: 2px 5px !important;
+        font-size: 0.7rem !important;
+    }
+
+    /* â”€â”€ Action button groups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .action-btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+
+    /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+       RESPONSIVE BREAKPOINTS
+       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+    /* â”€â”€ XS: < 576px (phones) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    @@media (max-width: 575.98px) {
+
+        /* Tabs go full-width and stack */
+        .portal-pills {
+            flex-direction: column;
+            padding: 5px;
+        }
+        .portal-pills .nav-item { width: 100%; }
+        .portal-pills .nav-link {
+            width: 100%;
+            padding: 9px 14px;
+            font-size: 0.83rem;
+            justify-content: center;
+        }
+
+        /* Panel header stacks */
+        .panel-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .panel-header > div:last-child {
+            width: 100%;
+        }
+        .panel-header .d-flex {
+            width: 100%;
+        }
+        .panel-header .d-flex .btn {
+            flex: 1;
+            font-size: 0.78rem;
+            padding: 6px 8px;
+        }
+
+        /* Upload mode cards stack */
+        .mode-card {
+            padding: 12px;
+            gap: 10px;
+        }
+        .mode-card-icon { width: 38px; height: 38px; font-size: 1.1rem; }
+        .mode-card-title { font-size: 0.82rem; }
+        .mode-card-description { font-size: 0.70rem; }
+
+        /* Stepper: hide text labels */
+        .step-text { display: none; }
+        .step-circle { width: 34px; height: 34px; font-size: 0.78rem; }
+        .import-stepper { margin-bottom: 16px; }
+        .import-stepper::before { top: 17px; left: 30px; right: 30px; }
+        .stepper-progress { top: 17px; left: 30px; }
+
+        /* Dropzone compact */
+        .dropzone-inner { padding: 16px 12px !important; }
+        .dropzone-icon  { font-size: 1.8rem !important; }
+        .dropzone-inner h5 { font-size: 0.88rem !important; }
+
+        /* KPI cards 2-col grid */
+        .row.g-3 > .col-md-4,
+        .row.g-3 > .col-md-3 {
+            width: 50% !important;
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
+        }
+        @@media (max-width: 480px) {
+            .row.g-3 > .col-6 {
+                width: 100% !important;
+                flex: 0 0 100% !important;
+                max-width: 100% !important;
+            }
+        }
+        .kpi-card { padding: 12px 14px; }
+        .kpi-card-value { font-size: 1.5rem; }
+        .kpi-card-label { font-size: 0.68rem; }
+        .kpi-card-icon  { width: 28px; height: 28px; font-size: 0.85rem; }
+
+        /* Behavior card toggle */
+        .behavior-card .d-flex {
+            align-items: flex-start !important;
+        }
+        .behavior-card .fw-bold { font-size: 0.85rem !important; }
+
+        /* Action buttons stack */
+        #previewBtn, #commitBtn, #downloadPreviewBtn,
+        #runCalcBtn, #commitCalcBtn, #downloadCalcPreviewBtn {
+            width: 100%;
+            text-align: center;
+        }
+        .d-flex.gap-2.flex-wrap { flex-direction: column; }
+
+        /* Calc engine controls stack full width */
+        .row.g-3.align-items-end > [class*="col-sm-"] {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+
+        /* DataTables top controls */
+        .dataTables_wrapper .dataTables_filter input { max-width: 130px; }
+
+        /* Table font size */
+        .corp-table th,
+        .corp-table td { font-size: 0.76rem; padding: 6px 8px !important; }
+
+        /* How-it-works info box */
+        .import-info-box code { word-break: break-all; }
+    }
+
+    /* â”€â”€ SM: 576px – 767px (large phones / small tablets) â”€â”€â”€â”€â”€ */
+    @@media (min-width: 576px) and (max-width: 767.98px) {
+
+        .portal-pills .nav-link { padding: 9px 14px; font-size: 0.86rem; }
+
+        .panel-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .mode-card { padding: 14px; }
+
+        /* Stepper labels very short */
+        .step-text { font-size: 0.60rem; max-width: 60px; }
+
+        /* KPI cards: 2 per row */
+        .row.g-3 > .col-md-4,
+        .row.g-3 > .col-md-3 {
+            width: 50% !important;
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
+        }
+        .kpi-card-value { font-size: 1.75rem; }
+
+        /* Calc controls: 2 per row */
+        .row.g-3.align-items-end > div[class*="col-"] {
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
+        }
+        /* Make runCalcBtn span full width */
+        .row.g-3.align-items-end > div[class*="col-"]:last-child {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* Table */
+        .corp-table th,
+        .corp-table td { font-size: 0.78rem; }
+    }
+
+    /* â”€â”€ MD: 768px – 991px (tablets) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    @@media (min-width: 768px) and (max-width: 991.98px) {
+
+        .portal-pills .nav-link { padding: 10px 18px; }
+
+        .kpi-card-value { font-size: 1.85rem; }
+
+        /* Calc controls: 2 per row, button full width last */
+        .row.g-3.align-items-end > div[class*="col-"] {
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
+        }
+        .row.g-3.align-items-end > div[class*="col-"]:last-child {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* Table */
+        .corp-table th,
+        .corp-table td { font-size: 0.80rem; }
+    }
+
+    /* -- LG+: >= 992px — keep original desktop styles ------- */
+    @@media (min-width: 992px) {
+        .mode-card { padding: 20px; gap: 16px; }
+        .mode-card-icon { width: 48px; height: 48px; font-size: 1.35rem; }
+        .mode-card-title { font-size: 0.92rem; }
+        .mode-card-description { font-size: 0.74rem; }
+        .step-text { font-size: 0.72rem; max-width: unset; white-space: normal; }
+        .step-circle { width: 42px; height: 42px; font-size: 0.95rem; }
+        .kpi-card-value { font-size: 2.15rem; }
+        .kpi-card { padding: 22px; }
+
+        /* Calc controls: original 4-col layout */
+        .row.g-3.align-items-end > div[class*="col-"] {
+            flex: 0 0 25% !important;
+            max-width: 25% !important;
+        }
+    }
+
+    /* -- Custom responsive tweaks for workflow, alert, modals, and tables -- */
+    @@media (max-width: 767.98px) {
+        /* Workflow Selector stacking */
+        .workflow-selector-container {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+        }
+        .workflow-selector-container .form-check-inline {
+            margin-right: 0 !important;
+            width: 100%;
+        }
+
+        /* Alert stacking */
+        #approvalAlertContainer > .alert {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 16px !important;
+        }
+        #approveOverridesBtn {
+            width: 100% !important;
+            text-align: center;
+        }
+
+        /* Convert modal tables to cards */
+        #modalBranchesTable, #modalBranchesTable thead, #modalBranchesTable tbody, #modalBranchesTable tr, #modalBranchesTable td,
+        #modalMappingsTable, #modalMappingsTable thead, #modalMappingsTable tbody, #modalMappingsTable tr, #modalMappingsTable td {
+            display: block !important;
+            width: 100% !important;
+        }
+        #modalBranchesTable thead, #modalMappingsTable thead {
+            display: none !important;
+        }
+        #modalBranchesTable tr, #modalMappingsTable tr {
+            margin-bottom: 16px !important;
+            border: 1px solid var(--line, #e2e8f0) !important;
+            border-radius: 12px !important;
+            background: var(--panel, #ffffff) !important;
+            padding: 12px !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04) !important;
+        }
+        #modalBranchesTable td, #modalMappingsTable td {
+            padding: 6px 0 !important;
+            border: none !important;
+            text-align: left !important;
+        }
+        #modalBranchesTable td::before, #modalMappingsTable td::before {
+            content: attr(data-label);
+            display: block;
+            font-weight: 700;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            color: var(--muted, #64748b);
+            margin-bottom: 6px;
+        }
+        /* Hide the arrow column in mappings on mobile */
+        #modalMappingsTable tr td:nth-child(2) {
+            display: none !important;
+        }
+        /* Separator between fields */
+        #modalBranchesTable td:not(:last-child), #modalMappingsTable td:not(:last-child) {
+            border-bottom: 1px dashed rgba(0, 0, 0, 0.05) !important;
+            padding-bottom: 10px !important;
+            margin-bottom: 10px !important;
+        }
+    }
+
+    @@media (max-width: 575.98px) {
+        /* Modal sizing, margins and footer styling on mobile */
+        .modal-dialog {
+            margin: 12px !important;
+            max-width: calc(100% - 24px) !important;
+        }
+        .modal-content {
+            border-radius: 12px !important;
+        }
+        .modal-header {
+            padding: 16px 20px !important;
+        }
+        .modal-body {
+            padding: 16px 20px !important;
+        }
+        .modal-footer {
+            padding: 16px 20px !important;
+            flex-direction: column-reverse !important;
+            gap: 8px !important;
+        }
+        .modal-footer > button, .modal-footer > a {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+
+        /* Stack calculation preview panel header elements */
+        .panel-header.d-flex.justify-content-between.align-items-center {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+        }
+        .panel-header.d-flex.justify-content-between.align-items-center > div:last-child {
+            width: 100% !important;
+            display: flex;
+            flex-direction: column;
+            gap: 8px !important;
+        }
+        .panel-header.d-flex.justify-content-between.align-items-center > div:last-child button {
+            width: 100% !important;
+            text-align: center;
+        }
+
+        /* DataTables responsive adjustments */
+        .dataTables_wrapper .row > div {
+            text-align: center !important;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .dataTables_wrapper .dataTables_filter input {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        .dataTables_wrapper .dataTables_filter {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="w-100">
+    
+            <div id="engine-panel">
+            <!-- Parameter Selection Console -->
+            <div class="panel mb-4" style="border: 2px solid rgba(30, 64, 175, 0.2); background: linear-gradient(135deg, rgba(30, 64, 175, 0.03) 0%, rgba(255,255,255,1) 100%);">
+                <div class="panel-header" style="border-bottom: 1px solid rgba(30, 64, 175, 0.15);">
+                    <div>
+                        <h2 style="color: var(--primary); display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-calculator"></i> Calculate Monthly Incentives
+                        </h2>
+                        <p class="text-muted small mb-0">Select the period to compute incentives from uploaded sales data. The raw data table is never modified.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="@(Context.Request.Query["embed"].ToString() == "true" ? "/UploadManagement?embed=true" : "/UploadManagement/Index")" onclick="if(window.parent && window.parent.document.getElementById('upload-iframe')){ window.parent.document.getElementById('upload-iframe').src = '/UploadManagement?embed=true'; window.parent.document.getElementById('tab-upload-btn').click(); return false; }" class="btn btn-sm btn-outline-primary fw-bold" style="border-radius: 8px; font-size: 0.75rem; padding: 6px 12px; border-color: rgba(30, 64, 175, 0.4); color: var(--primary); background: #fff;"><i class="fa-solid fa-cloud-arrow-up me-1"></i> Go to Upload Center</a>
+                        <span class="badge" style="background: rgba(30, 64, 175, 0.1); color: var(--primary); font-size: 0.75rem; padding: 6px 12px; border-radius: 20px; font-weight: 600;">🔒 Raw Table Protected</span>
+                    </div>
+                </div>
+                <div class="p-3">
+                    <div class="workflow-selector-container mb-3 d-flex gap-4 align-items-center pb-3" style="border-bottom: 1px dashed rgba(30, 64, 175, 0.15) !important;">
+                        <span class="fw-bold small text-muted text-uppercase" style="letter-spacing: 0.05em; color: var(--primary) !important;">Workflow Mode:</span>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="radio" name="calcWorkflow" id="workflowDynamic" value="Dynamic" checked>
+                            <label class="form-check-label fw-semibold small" for="workflowDynamic" style="cursor: pointer;">
+                                <i class="fa-solid fa-calculator text-primary me-1"></i> Dynamic Engine (Run Calculations)
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="radio" name="calcWorkflow" id="workflowPreCalculated" value="PreCalculated">
+                            <label class="form-check-label fw-semibold small" for="workflowPreCalculated" style="cursor: pointer;">
+                                <i class="fa-solid fa-file-excel text-success me-1"></i> Pre-Calculated Import (Upload Excel)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-semibold small" style="color: var(--primary);">Select Year</label>
+                            <select id="calcYear" class="form-select" style="border-color: rgba(30, 64, 175, 0.3); border-radius: 8px; height: 38px;">
+                                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                                {
+                                    <option value="@y">@y</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <label class="form-label fw-semibold small" style="color: var(--primary);">Select Month</label>
+                            <select id="calcMonth" class="form-select" style="border-color: rgba(30, 64, 175, 0.3); border-radius: 8px; height: 38px;">
+                                @{
+                                    var calcMonths = new[] { "January", "February", "March", "April", "May", "June",
+                                                            "July", "August", "September", "October", "November", "December" };
+                                    for (int m = 1; m <= 12; m++)
+                                    {
+                                        bool isCurr = m == DateTime.Today.Month;
+                                        <option value="@m" selected="@isCurr">@calcMonths[m - 1]</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <!-- Dynamic Mode Content -->
+                            <div class="dynamic-ctrl">
+                                <label class="form-label fw-semibold small" style="color: var(--primary);">Recalculation Mode</label>
+                                <select id="calcForce" class="form-select" style="border-color: rgba(30, 64, 175, 0.3); border-radius: 8px; height: 38px;">
+                                    <option value="true" selected>Force Recalculate (Overwrite)</option>
+                                    <option value="false">Skip Existing Calculations</option>
+                                </select>
+                            </div>
+                            <!-- PreCalculated Mode Content -->
+                            <div class="precalc-ctrl" style="display: none;">
+                                <label class="form-label fw-semibold small w-100" style="color: var(--primary);">
+                                    Upload Excel File
+                                    <a href="/Imports/DownloadPreCalculatedTemplate" class="text-success small fw-semibold float-end"><i class="fa-solid fa-download me-1"></i>Template</a>
+                                </label>
+                                <input type="file" id="precalcFile" class="form-control" accept=".xlsx,.xls" style="border-color: rgba(30, 64, 175, 0.3); border-radius: 8px; height: 38px;" />
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <!-- Dynamic Mode Content -->
+                            <button type="button" id="runCalcBtn" class="btn w-100 fw-bold dynamic-ctrl" style="background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: white; border: none; border-radius: 8px; height: 38px; box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3); transition: all 0.2s;">
+                                <i class="fa-solid fa-sliders me-1"></i> Configure &amp; Calculate
+                            </button>
+                            <!-- PreCalculated Mode Content -->
+                            <button type="button" id="uploadPrecalcBtn" onclick="handlePrecalcUpload(this)" class="btn w-100 fw-bold precalc-ctrl" style="display: none; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; height: 38px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); transition: all 0.2s;">
+                                <i class="fa-solid fa-cloud-arrow-up me-1"></i> Upload &amp; Preview
+                            </button>
+                        </div>
+                    </div>
+                    <div id="calcStatusRow" class="mt-3" style="display:none;">
+                        <div class="alert mb-0 py-2 px-3 small" id="calcStatusAlert" style="border-radius: 8px;"></div>
+                    </div>
+                    <div class="mt-3 p-3 rounded" style="background: rgba(30, 64, 175, 0.04); border: 1px dashed rgba(30, 64, 175, 0.2);">
+                        <!-- Dynamic Mode Instruction -->
+                        <div class="d-flex align-items-start gap-2 dynamic-ctrl">
+                            <i class="fa-solid fa-circle-info" style="color: var(--primary); margin-top: 2px;"></i>
+                            <small class="text-muted">
+                                <strong style="color: var(--primary);">How it works:</strong>
+                                Calculation groups and processes sales transactions directly from the <code>Raw</code> table.
+                                Calculated gross incentives, TDS, outstanding adjustments, and net payout amounts are written directly to the <code>ssincentives</code> table.
+                                The transaction <code>Raw</code> table remains read-only.
+                            </small>
+                        </div>
+                        <!-- PreCalculated Mode Instruction -->
+                        <div class="d-flex align-items-start gap-2 precalc-ctrl" style="display: none;">
+                            <i class="fa-solid fa-circle-info" style="color: #059669; margin-top: 2px;"></i>
+                            <small class="text-muted">
+                                <strong style="color: #059669;">How it works:</strong>
+                                Uploading a pre-calculated file imports your calculated payouts directly into the <code>ssincentives</code> table, bypassing the portal's dynamic calculation engine.
+                                The Excel file must contain <code>Slab</code> and <code>Incentive</code> columns.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+            (function() {
+                function toggleWorkflow(mode) {
+                    var dynamicCtrls = document.querySelectorAll('.dynamic-ctrl');
+                    var precalcCtrls = document.querySelectorAll('.precalc-ctrl');
+                    if (mode === 'Dynamic') {
+                        for (var i = 0; i < dynamicCtrls.length; i++) {
+                            dynamicCtrls[i].style.setProperty('display', '', 'important');
+                        }
+                        for (var i = 0; i < precalcCtrls.length; i++) {
+                            precalcCtrls[i].style.setProperty('display', 'none', 'important');
+                        }
+                    } else {
+                        for (var i = 0; i < dynamicCtrls.length; i++) {
+                            dynamicCtrls[i].style.setProperty('display', 'none', 'important');
+                        }
+                        for (var i = 0; i < precalcCtrls.length; i++) {
+                            precalcCtrls[i].style.setProperty('display', '', 'important');
+                        }
+                    }
+                }
+
+                // Attach native listener immediately to ensure it catches all user clicks
+                document.addEventListener('change', function(e) {
+                    if (e.target && e.target.name === 'calcWorkflow') {
+                        toggleWorkflow(e.target.value);
+                    }
+                });
+
+                // Attach to DOMContentLoaded to handle initial state of the selected radio button
+                document.addEventListener('DOMContentLoaded', function() {
+                    var checkedRadio = document.querySelector('input[name="calcWorkflow"]:checked');
+                    if (checkedRadio) {
+                        toggleWorkflow(checkedRadio.value);
+                    }
+                });
+                
+                // Also poll/fallback check to handle cases where script runs after DOM is ready
+                setTimeout(function() {
+                    var checkedRadio = document.querySelector('input[name="calcWorkflow"]:checked');
+                    if (checkedRadio) {
+                        toggleWorkflow(checkedRadio.value);
+                    }
+                }, 100);
+            })();
+            </script>
+
+            <!-- Financial Calculation KPI Summary Cards -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-6 col-md-3">
+                    <div class="kpi-card premium">
+                        <div class="kpi-card-header">
+                            <span class="kpi-card-label">Parties Processed</span>
+                            <span class="kpi-card-icon"><i class="fa-solid fa-users"></i></span>
+                        </div>
+                        <strong class="kpi-card-value" id="calcTotalParties">0</strong>
+                        <small class="kpi-card-caption">Unique dealers/workshops</small>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="kpi-card success">
+                        <div class="kpi-card-header">
+                            <span class="kpi-card-label">Consolidated Sales</span>
+                            <span class="kpi-card-icon"><i class="fa-solid fa-indian-rupee-sign"></i></span>
+                        </div>
+                        <strong class="kpi-card-value" id="calcTotalSales">₹0</strong>
+                        <small class="kpi-card-caption">Net retail selling value</small>
+                    </div>
+                </div>
+                        <div class="col-6 col-md-3">
+                    <div class="kpi-card warning">
+                        <div class="kpi-card-header">
+                            <span class="kpi-card-label">Gross Incentives</span>
+                            <span class="kpi-card-icon"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+                        </div>
+                        <strong class="kpi-card-value" id="calcGrossIncentive">₹0</strong>
+                        <small class="kpi-card-caption">Total slab-based payout</small>
+                    </div>
+                </div>
+                        <div class="col-6 col-md-3">
+                    <div class="kpi-card purple" style="border-left: 4.5px solid var(--primary);">
+                        <div class="kpi-card-header">
+                            <span class="kpi-card-label">Eligible for Incentive</span>
+                            <span class="kpi-card-icon" style="color: var(--primary); background: rgba(30, 64, 175, 0.08);"><i class="fa-solid fa-money-bill-transfer"></i></span>
+                        </div>
+                        <strong class="kpi-card-value" id="calcNetTransfer" style="color: var(--primary);">₹0</strong>
+                        <small class="kpi-card-caption">Post-TDS &amp; adjustments</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calculation Preview Grid -->
+            <section class="panel">
+                <div class="panel-header d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h2>Engine Calculation Preview</h2>
+                        <p>Detailed breakdown of calculations per dealer party before committing.</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" id="downloadCalcPreviewBtn" class="btn btn-sm btn-outline-success" style="display:none;">📥 Download Preview Excel</button>
+                        <button type="button" id="commitCalcBtn" onclick="handlePrecalcCommit(this)" class="btn btn-sm px-3 fw-bold shadow-sm" style="display:none; background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: white; border: none; border-radius: 6px;">&#x26A1; Push Calculations to Ledgers</button>
+                    </div>
+                <div id="approvalAlertContainer" style="display:none;" class="mb-3">
+                    <div class="alert alert-warning d-flex align-items-center justify-content-between p-3 border-0 shadow-sm" style="border-radius: 10px; background: rgba(245, 158, 11, 0.1); color: #92400e;">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation fa-lg text-warning" style="color: #d97706 !important;"></i>
+                            <div>
+                                <strong style="font-size: 0.95rem;">Pending Manual Overrides Detected</strong>
+                                <span class="d-block small text-muted mt-1" style="color: #a16207 !important;">Some records have been manually edited/overridden and require admin approval before they can be finalized.</span>
+                            </div>
+                        </div>
+                        @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                        {
+                            <button type="button" id="approveOverridesBtn" class="btn btn-sm btn-warning fw-bold px-3 py-2 shadow-sm" style="color: #fff; background: #eab308; border: none; border-radius: 6px;">
+                                <i class="fa-solid fa-circle-check me-1"></i> Approve &amp; Post Overrides
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="table-responsive corp-table-wrapper">
+                    <table class="table table-sm corp-table align-middle" id="calcPreviewTable">
+                        <thead>
+                            <tr>
+                                <th>Party Code</th>
+                                <th class="party-name-col">Party Name</th>
+                                <th>Branch</th>
+                                <th class="text-end">Sales</th>
+                                <th class="text-end">Discount</th>
+                                <th>Slab</th>
+                                <th class="text-end">Gross Inc.</th>
+                                <th class="text-end">TDS %</th>
+                                <th class="text-end">TDS Amt</th>
+                                <th class="text-end">Ledger Adj. (₹)</th>
+                                <th class="text-end">Eligible for Incentive</th>
+                                <th>Status</th>
+                                <th class="text-center" style="min-width:75px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="13" class="text-center text-muted py-4">No calculations generated. Click "Configure &amp; Calculate" above to run the preview engine.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+</div>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     EDIT SALE ROW MODAL
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<div class="modal fade" id="editSaleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+    <div class="modal-content border-0 shadow-lg" style="border-radius:14px;overflow:hidden;">
+      <div class="modal-header border-0 p-4" style="background:linear-gradient(135deg,var(--primary),var(--primary-hover));color:white;">
+        <div>
+          <h5 class="modal-title fw-bold mb-0" style="font-size:1.1rem;"><i class="fa-solid fa-pen-to-square me-2"></i>Edit Sale Record</h5>
+          <p class="mb-0 mt-1" style="font-size:0.8rem;opacity:.85;" id="editSaleModalSubtitle">Party · Month/Year</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        @Html.AntiForgeryToken()
+        <input type="hidden" id="editSaleId" />
+        <input type="hidden" id="editSaleMonth" />
+        <input type="hidden" id="editSaleYear" />
+        <input type="hidden" id="editSalePartyCode" />
+        <div class="mb-3">
+          <label class="form-label fw-semibold small" style="color:var(--primary);">Net Retail Sale Value (₹)</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-indian-rupee-sign"></i></span>
+            <input type="number" step="0.01" id="editSaleValue" class="form-control" placeholder="e.g. 1250000.00" style="border-radius:0 8px 8px 0;" />
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small" style="color:var(--primary);">On-Bill Discount (₹)</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-tag"></i></span>
+            <input type="number" step="0.01" id="editSaleDiscount" class="form-control" placeholder="e.g. 50000.00" style="border-radius:0 8px 8px 0;" />
+          </div>
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-semibold small" style="color:var(--primary);">Change Remarks <span class="text-muted fw-normal">(optional)</span></label>
+          <textarea id="editSaleRemarks" class="form-control" rows="2" placeholder="Reason for edit (e.g. data correction)" style="border-radius:8px;font-size:.88rem;"></textarea>
+        </div>
+        <div class="alert alert-warning py-2 px-3 mt-3 mb-0" style="border-radius:8px;font-size:.8rem;border:none;background:rgba(245,158,11,.1);color:#92400e;">
+          <i class="fa-solid fa-triangle-exclamation me-1"></i> 
+          Saving will clear the existing calculation. Re-run the preview to see new incentive values.
+        </div>
+      </div>
+      <div class="modal-footer border-0 px-4 pb-4">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="saveEditSaleBtn" class="btn fw-bold px-4" style="background:linear-gradient(135deg,var(--primary),var(--primary-hover));color:white;border:none;border-radius:8px;">
+          <i class="fa-solid fa-floppy-disk me-1"></i> Save &amp; Re-Preview
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="rulesModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;overflow:hidden;background:#fdfdfd;">
+            <div class="modal-header border-0 p-4" style="background:linear-gradient(135deg,#093375 0%,#051b3f 100%);color:white;">
+                <div>
+                    <h4 class="modal-title fw-bold" style="font-size:1.35rem;margin:0;">Calculation Governance Console</h4>
+                    <p id="rulesModalSubtitle" style="margin:4px 0 0 0;font-size:0.85rem;opacity:0.9;">Configure branch/category scope and alternate code merges before previewing</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <ul class="nav nav-tabs portal-pills mb-4" id="modalTab" role="tablist" style="border-bottom:2px solid var(--line);">
+                    <li class="nav-item" role="presentation" style="margin-right:8px;">
+                        <button class="nav-link active fw-bold" id="branch-rules-tab" data-bs-toggle="tab" data-bs-target="#branch-rules" type="button" role="tab" aria-selected="true" style="border-radius:6px;padding:8px 16px;">
+                            💼 Branch Inclusion Scope
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="code-mappings-tab" data-bs-toggle="tab" data-bs-target="#code-mappings" type="button" role="tab" aria-selected="false" style="border-radius:6px;padding:8px 16px;">
+                            🔗 Alternate Code Merges
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3" id="modalTabContent">
+                    <!-- Branch Rules Tab -->
+                    <div class="tab-pane fade show active" id="branch-rules" role="tabpanel">
+                        <div class="alert alert-info py-2 px-3 small border-0 mb-3" style="background:rgba(13,202,240,0.08);color:#087990;border-radius:6px;">
+                            💡 Configure the allowed categories and party types for each branch. Uncheck any options to exclude them from the incentive calculation.
+                        </div>
+
+                        <!-- Real-time search and select-all actions -->
+                        <div class="d-flex justify-content-between align-items-center mb-3 gap-3">
+                            <div class="input-group input-group-sm" style="max-width: 320px;">
+                                <span class="input-group-text bg-light text-muted border-end-0"><i class="fa-solid fa-magnifying-glass"></i></span>
+                                <input type="text" id="branchSearchInput" class="form-control border-start-0 ps-0" placeholder="Search branches by code..." style="font-size:0.85rem;" />
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllCatsBtn" style="font-size: 0.78rem;">Select All Categories</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllCatsBtn" style="font-size: 0.78rem;">Deselect All</button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height:400px;border-radius:8px;border:1px solid var(--line);">
+                            <table class="table table-hover align-middle mb-0" style="font-size:0.9rem;" id="modalBranchesTable">
+                                <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                                    <tr>
+                                        <th style="width:15%;padding:12px 16px;">Location</th>
+                                        <th style="width:42%;padding:12px 16px;">Allowed Categories</th>
+                                        <th style="width:43%;padding:12px 16px;">Allowed Party Types</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @{
+                                    var allCats = new[] { "AA", "M", "AG" };
+                                    var allTypes = new[] { "INDEPENDENT WORKSHOP", "MASS" };
+                                    var branches = ViewBag.Branches as IEnumerable<IncentivePortal.Models.Branch> ?? Enumerable.Empty<IncentivePortal.Models.Branch>();
+                                    int rowIdx = 0;
+                                    foreach (var branch in branches)
+                                    {
+                                        var defCats = (branch.AllowedCategories ?? "AA,M")
+                                            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                        var defTypes = (branch.AllowedPartyTypes ?? "INDEPENDENT WORKSHOP")
+                                            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                        <tr data-loc="@branch.Code">
+                                            <td data-label="Location" style="padding:12px 16px;"><strong style="color:var(--brand);">@branch.Code</strong></td>
+                                            <td data-label="Allowed Categories" style="padding:12px 16px;">
+                                                @foreach (var cat in allCats)
+                                                {
+                                                    var cbId = $"cat_{rowIdx}_{cat}";
+                                                    var isChk = defCats.Contains(cat);
+                                                    <div class="form-check form-check-inline me-3 mb-1">
+                                                        <input class="form-check-input branch-cat-check" type="checkbox" data-loc="@branch.Code" value="@cat" id="@cbId" @(isChk ? "checked" : "") />
+                                                        <label class="form-check-label small fw-bold" for="@cbId" style="cursor:pointer;">@cat</label>
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td data-label="Allowed Party Types" style="padding:12px 16px;">
+                                                @foreach (var pt in allTypes)
+                                                {
+                                                    var cbId2 = $"type_{rowIdx}_{pt.Replace(" ", "_")}";
+                                                    var isChk2 = defTypes.Contains(pt);
+                                                    <div class="form-check form-check-inline me-3 mb-1">
+                                                        <input class="form-check-input branch-type-check" type="checkbox" data-loc="@branch.Code" value="@pt" id="@cbId2" @(isChk2 ? "checked" : "") />
+                                                        <label class="form-check-label small fw-bold" for="@cbId2" style="cursor:pointer;">@pt</label>
+                                                    </div>
+                                                }
+                                            </td>
+                                        </tr>
+                                        rowIdx++;
+                                    }
+                                    if (!branches.Any())
+                                    {
+                                        <tr><td colspan="3" class="text-center text-muted py-3">No branches configured. Please add branches in Master Data.</td></tr>
+                                    }
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Code Mappings Tab -->
+                    <div class="tab-pane fade" id="code-mappings" role="tabpanel">
+                        <div class="alert alert-info py-2 px-3 small border-0 mb-3" style="background:rgba(13,202,240,0.08);color:#087990;border-radius:6px;">
+                            💡 Alternate codes are merged into their Original Code before calculation. Add or remove mappings as needed.
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold mb-0 text-secondary" style="font-size:1rem;">Code Redirection Register</h5>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="addMappingRowBtn">+ Add Custom Merge</button>
+                        </div>
+                        <div class="table-responsive" style="max-height:350px;border-radius:8px;border:1px solid var(--line);">
+                            <table class="table table-hover align-middle mb-0" id="modalMappingsTable">
+                                <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                                    <tr>
+                                        <th style="padding:12px 16px; width: 42%;">Alternate Party Code</th>
+                                        <th style="padding:12px 16px; width: 10%; text-align: center;"></th>
+                                        <th style="padding:12px 16px; width: 38%;">Original Party Code (Merge Target)</th>
+                                        <th style="width:10%;padding:12px 16px;" class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @{
+                                    var mappings = ViewBag.AlternateMappings as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+                                    var mappingList = mappings.ToList();
+                                    if (mappingList.Count == 0)
+                                    {
+                                        <tr class="mapping-row">
+                                            <td data-label="Alternate Party Code" style="padding:8px 16px; width: 42%;">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text bg-light text-muted"><i class="fa-solid fa-link-slash"></i></span>
+                                                    <input class="form-control mapping-alt-input" placeholder="Alternate Code (e.g. 1944A)" value="" style="height:34px;" />
+                                                </div>
+                                            </td>
+                                            <td style="padding:8px 16px; width: 10%; text-align: center; vertical-align: middle;">
+                                                <span style="font-size: 1.25rem; color: var(--brand, #2563eb); font-weight: bold;"><i class="fa-solid fa-circle-arrow-right"></i></span>
+                                            </td>
+                                            <td data-label="Merge Target" style="padding:8px 16px; width: 38%;">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text bg-light text-muted"><i class="fa-solid fa-link"></i></span>
+                                                    <input class="form-control mapping-orig-input" placeholder="Merge Target (e.g. 1944)" value="" style="height:34px;" />
+                                                </div>
+                                            </td>
+                                            <td data-label="Action" style="padding:8px 16px; width: 10%;" class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger remove-mapping-row-btn" style="padding:4px 12px; font-size:0.8rem; border-radius: 6px;"><i class="fa-solid fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var m in mappingList)
+                                        {
+                                            <tr class="mapping-row">
+                                                <td data-label="Alternate Party Code" style="padding:8px 16px; width: 42%;">
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text bg-light text-muted"><i class="fa-solid fa-link-slash"></i></span>
+                                                        <input class="form-control mapping-alt-input" placeholder="Alternate Code (e.g. 1944A)" value="@m.alternateCode" style="height:34px;" />
+                                                    </div>
+                                                </td>
+                                                <td style="padding:8px 16px; width: 10%; text-align: center; vertical-align: middle;">
+                                                    <span style="font-size: 1.25rem; color: var(--brand, #2563eb); font-weight: bold;"><i class="fa-solid fa-circle-arrow-right"></i></span>
+                                                </td>
+                                                <td data-label="Merge Target" style="padding:8px 16px; width: 38%;">
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text bg-light text-muted"><i class="fa-solid fa-link"></i></span>
+                                                        <input class="form-control mapping-orig-input" placeholder="Merge Target (e.g. 1944)" value="@m.originalCode" style="height:34px;" />
+                                                    </div>
+                                                </td>
+                                                <td data-label="Action" style="padding:8px 16px; width: 10%;" class="text-center">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger remove-mapping-row-btn" style="padding:4px 12px; font-size:0.8rem; border-radius: 6px;"><i class="fa-solid fa-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4 bg-light" style="gap: 10px;">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                <!-- Preview button (shown only in preview mode) -->
+                <button type="button" class="btn btn-primary px-4 shadow" id="applyRulesAndPreviewBtn" style="background:var(--brand);border-color:var(--brand);">Apply Rules &amp; Run Preview</button>
+                <!-- Calculate button (shown only in calc mode) -->
+                <button type="button" class="btn px-4 shadow fw-bold d-none" id="applyRulesAndCalcBtn" style="background:linear-gradient(135deg,var(--primary),var(--primary-hover));color:white;border:none;">
+                    <i class="fa-solid fa-bolt me-1"></i> Apply Rules &amp; Calculate
+                </button>
+                <!-- Calculate Preview button (shown in calc mode instead of direct calculate) -->
+                <button type="button" class="btn px-4 shadow fw-bold d-none" id="applyRulesAndCalcPreviewBtn" style="background:linear-gradient(135deg,var(--primary),var(--primary-hover));color:white;border:none;">
+                    <i class="fa-solid fa-eye me-1"></i> Apply Rules &amp; Run Preview
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Download Raw Stored Sales Modal -->
+<div class="modal fade" id="downloadRawModal" tabindex="-1" aria-labelledby="downloadRawModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--line);">
+                <h5 class="modal-title fw-bold" id="downloadRawModalLabel" style="color: var(--brand);">📥 Download Stored Raw Sales Data</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: var(--close-filter);"></button>
+            </div>
+            <form asp-controller="Reports" asp-action="DownloadRawSales" method="get" target="_blank">
+                <div class="modal-body">
+                    <p class="text-muted small">Select the month and year to download the complete raw unconsolidated transaction-level rows stored in the database.</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Select Year</label>
+                        <select name="year" class="form-select" required>
+                            @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                            {
+                                <option value="@y">@y</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Select Month</label>
+                        <select name="month" class="form-select" required>
+                            @{
+                                var months = new[] { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+                                for (int m = 1; m <= 12; m++)
+                                {
+                                    bool isCurrent = m == DateTime.Today.Month;
+                                    <option value="@m" selected="@isCurrent">@months[m - 1]</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid var(--line);">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success btn-sm">Download Raw Excel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+<script>
+let currentBranchRules = [];
+let currentMappings = [];
+let isCalcMode = false;
+let pendingCalcBranchRules = [];
+
+function forceDismissModal(modalId) {
+    const modalEl = document.getElementById(modalId);
+    if (modalEl) {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        if (modal) {
+            modal.hide();
+        }
+    }
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css({ overflow: '', 'padding-right': '' });
+}
+
+function updateImportStats(rows) {
+    const total = (rows.length > 0 && rows[0].totalRawRows) ? rows[0].totalRawRows : rows.length;
+    const errors = rows.some(r => r.error) ? rows.filter(r => r.error).length : 0;
+    $('#totalRows').text(total.toLocaleString());
+    $('#validRows').text((total - errors).toLocaleString());
+    $('#errorRows').text(errors.toLocaleString());
+}
+
+// Interactive Stepper progression helper
+function setStepper(stepNum) {
+    const percent = ((stepNum - 1) / 3) * 100;
+    $('#stepperProgress').css('width', percent + '%');
+    
+    for (let i = 1; i <= 4; i++) {
+        const item = $('#step' + i);
+        if (i < stepNum) {
+            item.removeClass('active').addClass('completed');
+        } else if (i === stepNum) {
+            item.removeClass('completed').addClass('active');
+        } else {
+            item.removeClass('active completed');
+        }
+    }
+}
+
+// High-performance value counting animation
+function animateValue(id, start, end, duration, prefix = "") {
+    if (isNaN(end)) end = 0;
+    const obj = document.getElementById(id);
+    if (!obj) return;
+    let startTimestamp = null;
+    const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        const currentVal = Math.floor(progress * (end - start) + start);
+        if (prefix === "₹") {
+            obj.innerHTML = prefix + currentVal.toLocaleString('en-IN');
+        } else {
+            obj.innerHTML = currentVal.toLocaleString();
+        }
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            if (prefix === "₹") {
+                obj.innerHTML = prefix + end.toLocaleString('en-IN');
+            } else {
+                obj.innerHTML = end.toLocaleString();
+            }
+        }
+    };
+    window.requestAnimationFrame(step);
+}
+
+$(document).ready(function() {
+    // Elements are loaded, but we still use delegated handlers for maximum safety.
+});
+
+// Modal branch searching logic
+$(document).on('keyup', '#branchSearchInput', function() {
+    const val = $(this).val().trim().toUpperCase();
+    $('#modalBranchesTable tbody tr').each(function() {
+        const loc = $(this).data('loc') ? $(this).data('loc').toString().toUpperCase() : '';
+        if (loc.indexOf(val) > -1) {
+            $(this).show();
+        } else {
+            $(this).hide();
+        }
+    });
+});
+
+// Modal select all/deselect all categories
+$(document).on('click', '#selectAllCatsBtn', function() {
+    $('#modalBranchesTable tbody tr:visible .branch-cat-check').prop('checked', true);
+});
+$(document).on('click', '#deselectAllCatsBtn', function() {
+    $('#modalBranchesTable tbody tr:visible .branch-cat-check').prop('checked', false);
+});
+
+function addMappingRow(alt, orig) {
+    const tbody = $('#modalMappingsTable tbody');
+    tbody.append(`
+        <tr class="mapping-row">
+            <td data-label="Alternate Party Code" style="padding: 8px 16px; width: 42%;">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light text-muted"><i class="fa-solid fa-link-slash"></i></span>
+                    <input class="form-control mapping-alt-input" placeholder="Alternate Code (e.g. 1944A)" value="${alt || ''}" style="height: 34px;" />
+                </div>
+            </td>
+            <td style="padding: 8px 16px; width: 10%; text-align: center; vertical-align: middle;">
+                <span style="font-size: 1.25rem; color: var(--brand, #2563eb); font-weight: bold;"><i class="fa-solid fa-circle-arrow-right"></i></span>
+            </td>
+            <td data-label="Merge Target" style="padding: 8px 16px; width: 38%;">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light text-muted"><i class="fa-solid fa-link"></i></span>
+                    <input class="form-control mapping-orig-input" placeholder="Merge Target (e.g. 1944)" value="${orig || ''}" style="height: 34px;" />
+                </div>
+            </td>
+            <td data-label="Action" style="padding: 8px 16px; width: 10%;" class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-mapping-row-btn" style="padding: 4px 12px; font-size: 0.8rem; border-radius: 6px;"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>
+    `);
+}
+
+$(document).on('click', '.remove-mapping-row-btn', function() {
+    $(this).closest('tr').remove();
+    if ($('#modalMappingsTable tbody tr').length === 0) {
+        addMappingRow('', '');
+    }
+});
+
+$(document).on('click', '#addMappingRowBtn', function() {
+    addMappingRow('', '');
+});
+
+// ================================================================
+// CALCULATE MONTHLY INCENTIVES — Opens Governance Modal from DB
+// ================================================================
+$(document).on('click', '#runCalcBtn', function () {
+    const month = parseInt($('#calcMonth').val());
+    const year = parseInt($('#calcYear').val());
+
+    if (!month || !year) {
+        portalToast('Please select a valid month and year.', 'warning');
+        return;
+    }
+
+    const btn = this;
+    portalSetBusy(btn, 'Loading...');
+    isCalcMode = true;
+
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December"];
+    const monthName = (month >= 1 && month <= 12) ? monthNames[month - 1] : month;
+    $('#rulesModalSubtitle').text(`Configure Scope — ${monthName} ${year}`);
+
+    // Show correct footer buttons: hide both old preview and calculate buttons, show calculation preview button
+    $('#applyRulesAndPreviewBtn').addClass('d-none');
+    $('#applyRulesAndCalcBtn').addClass('d-none');
+    $('#applyRulesAndCalcPreviewBtn').removeClass('d-none');
+
+    // Fetch metadata from DB for this period
+    $.ajax({
+        url: '@Url.Action("GetCalcMetadata", "Imports")',
+        method: 'GET',
+        data: { month: month, year: year }
+    })
+    .done(function(meta) {
+        portalClearBusy(btn);
+
+        var categories = (meta.categories && meta.categories.length > 0) ? meta.categories : ['AA', 'M', 'AG'];
+        var partyTypes = (meta.partyTypes && meta.partyTypes.length > 0) ? meta.partyTypes : ['INDEPENDENT WORKSHOP', 'MASS'];
+
+        // Populate Branch Inclusion Scope table
+        var tbody = $('#modalBranchesTable tbody').empty();
+        if (meta.locations && meta.locations.length > 0) {
+            $.each(meta.locations, function(i, loc) {
+                var locUpper = loc.toUpperCase();
+                var seededBranch = null;
+                if (meta.seededBranches) {
+                    var locKey = Object.keys(meta.seededBranches).find(function(k) { return k.toUpperCase() === locUpper; });
+                    if (locKey) seededBranch = meta.seededBranches[locKey];
+                }
+
+                var allowedCats = (seededBranch && seededBranch.allowedCategories) ? seededBranch.allowedCategories : 'AA,M';
+                var allowedTypes = (seededBranch && seededBranch.allowedPartyTypes) ? seededBranch.allowedPartyTypes : 'INDEPENDENT WORKSHOP';
+
+                if (!allowedCats) allowedCats = 'AA,M';
+                if (!allowedTypes) allowedTypes = 'INDEPENDENT WORKSHOP';
+
+                var catArray = $.map(allowedCats.split(','), function(c) { return $.trim(c).toUpperCase(); });
+                var typeArray = $.map(allowedTypes.split(','), function(t) { return $.trim(t).toUpperCase(); });
+
+                var catTd = $('<td>').attr('data-label', 'Allowed Categories').css('padding', '12px 16px');
+                $.each(categories, function(j, cat) {
+                    var isChecked = $.inArray($.trim(cat).toUpperCase(), catArray) >= 0;
+                    var id = 'chk_calc_cat_' + i + '_' + cat;
+                    var wrapper = $('<div>').addClass('form-check form-check-inline me-3 mb-1');
+                    var cb = $('<input>').addClass('form-check-input branch-cat-check')
+                         .attr({ type: 'checkbox', 'data-loc': loc, value: cat, id: id })
+                         .prop('checked', isChecked);
+                    var lbl = $('<label>').addClass('form-check-label small fw-bold').attr('for', id)
+                        .css('cursor', 'pointer').text(cat);
+                    wrapper.append(cb).append(lbl);
+                    catTd.append(wrapper);
+                });
+
+                var typeTd = $('<td>').attr('data-label', 'Allowed Party Types').css('padding', '12px 16px');
+                $.each(partyTypes, function(j, pt) {
+                    var isChecked = $.inArray($.trim(pt).toUpperCase(), typeArray) >= 0;
+                    var id = 'chk_calc_type_' + i + '_' + pt.replace(/ /g, '_');
+                    var wrapper = $('<div>').addClass('form-check form-check-inline me-3 mb-1');
+                    var cb = $('<input>').addClass('form-check-input branch-type-check')
+                         .attr({ type: 'checkbox', 'data-loc': loc, value: pt, id: id })
+                         .prop('checked', isChecked);
+                    var lbl = $('<label>').addClass('form-check-label small fw-bold').attr('for', id)
+                        .css('cursor', 'pointer').text(pt);
+                    wrapper.append(cb).append(lbl);
+                    typeTd.append(wrapper);
+                });
+
+                var locTd = $('<td>').attr('data-label', 'Location').css('padding', '12px 16px')
+                    .append($('<strong>').css('color', 'var(--primary)').text(loc));
+                var tr = $('<tr>').attr('data-loc', loc).append(locTd).append(catTd).append(typeTd);
+                tbody.append(tr);
+            });
+        } else {
+            tbody.append('<tr><td colspan="3" class="text-center text-muted py-3">No sales data found for this period. Please import data first.</td></tr>');
+        }
+
+        // Populate alternate code mappings
+        var mappingsBody = $('#modalMappingsTable tbody').empty();
+        if (meta.seededPartyMappings && meta.seededPartyMappings.length > 0) {
+            $.each(meta.seededPartyMappings, function(i, m) { addMappingRow(m.alternateCode, m.originalCode); });
+        } else {
+            addMappingRow('', '');
+        }
+
+        // Show modal
+        var modalEl = document.getElementById('rulesModal');
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        bsModal.show();
+    })
+    .fail(function(xhr) {
+        portalClearBusy(btn);
+        isCalcMode = false;
+        $('#applyRulesAndPreviewBtn').removeClass('d-none');
+        $('#applyRulesAndCalcPreviewBtn').addClass('d-none');
+        var msg = xhr.responseJSON?.message || xhr.responseText || 'Failed to load calculation metadata.';
+        portalToast(msg, 'error');
+    });
+});
+
+// Apply Rules & Run Preview (for calculation mode) button handler
+$(document).on('click', '#applyRulesAndCalcPreviewBtn', function () {
+    const month = parseInt($('#calcMonth').val());
+    const year = parseInt($('#calcYear').val());
+    const force = $('#calcForce').val();
+
+    // Collect branch rules from modal
+    const branchRules = [];
+    $('#modalBranchesTable tbody tr').each(function() {
+        const loc = $(this).data('loc');
+        const checkedCats = [];
+        $(this).find('.branch-cat-check:checked').each(function() { checkedCats.push($(this).val()); });
+        const checkedTypes = [];
+        $(this).find('.branch-type-check:checked').each(function() { checkedTypes.push($(this).val()); });
+        branchRules.push({
+            location: loc,
+            allowedCategories: checkedCats.join(','),
+            allowedPartyTypes: checkedTypes.join(',')
+        });
+    });
+
+    // Collect custom mappings from modal
+    const codeMappings = [];
+    $('#modalMappingsTable tbody tr.mapping-row').each(function() {
+        const alt = $(this).find('.mapping-alt-input').val().trim();
+        const orig = $(this).find('.mapping-orig-input').val().trim();
+        if (alt && orig) {
+            codeMappings.push({ AlternateCode: alt, OriginalCode: orig });
+        }
+    });
+
+    pendingCalcBranchRules = branchRules;
+    pendingCalcPartyMappings = codeMappings;
+    forceDismissModal('rulesModal');
+
+    // Reset footer state for next open
+    $('#applyRulesAndPreviewBtn').removeClass('d-none');
+    $('#applyRulesAndCalcPreviewBtn').addClass('d-none');
+    isCalcMode = false;
+
+    // Execute preview instead of direct calculation
+    runCalculationPreview(month, year, force, branchRules, codeMappings);
+});
+
+// Module-level state for the currently previewed period
+var currentCalcMonth = null;
+var currentCalcYear  = null;
+var currentCalcForce = true;
+var pendingCalcBranchRulesSnapshot = [];
+var pendingCalcPartyMappingsSnapshot = [];
+
+function runCalculationPreview(month, year, force, branchRules, partyMappings) {
+    currentCalcMonth = month;
+    currentCalcYear  = year;
+    currentCalcForce = force;
+    pendingCalcBranchRulesSnapshot = branchRules || [];
+    pendingCalcPartyMappingsSnapshot = partyMappings || [];
+
+    $('#commitCalcBtn').hide();
+    $('#downloadCalcPreviewBtn').hide();
+
+    // Destroy DataTable if it exists
+    if ($.fn.DataTable.isDataTable('#calcPreviewTable')) {
+        $('#calcPreviewTable').DataTable().destroy();
+    }
+
+    const btn = document.getElementById('runCalcBtn');
+    portalSetBusy(btn, 'Running Calculation Preview...');
+    $('#calcStatusRow').hide();
+
+    $.ajax({
+        url: '@Url.Action("PreviewCalculation", "Imports")',
+        method: 'POST',
+        data: {
+            month: month,
+            year: year,
+            forceRecalculate: force,
+            branchRulesJson: branchRules && branchRules.length > 0 ? JSON.stringify(branchRules) : '',
+            partyMappingsJson: partyMappings && partyMappings.length > 0 ? JSON.stringify(partyMappings) : '',
+            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+        }
+    })
+    .done(rows => {
+        portalClearBusy(btn);
+        
+        const body = $('#calcPreviewTable tbody').empty();
+        
+        // Sum high-level financial stats for animation
+        let totalSales = 0;
+        let grossIncentives = 0;
+        let netTransfer = 0;
+        let hasPendingApprovals = false;
+        
+        $.each(rows, (i, r) => {
+            totalSales += Number(r.saleValue || 0);
+            grossIncentives += Number(r.grossIncentive || 0);
+            netTransfer += Number(r.netTransfer || 0);
+
+            if (r.status === "Pending Approval") {
+                hasPendingApprovals = true;
+            }
+
+            const badge = r.status === "Pending Approval"
+                ? `<span class="status-badge warning text-warning bg-warning-subtle border border-warning-subtle px-2 py-1" style="border-radius: 6px; font-weight: 600; font-size: 0.72rem;"><i class="fa-solid fa-clock me-1"></i>Pending Approval</span>`
+                : (r.isEdited 
+                    ? `<span class="status-badge success text-success bg-success-subtle border border-success-subtle px-2 py-1" style="border-radius: 6px; font-weight: 600; font-size: 0.72rem;"><i class="fa-solid fa-circle-check me-1"></i>Posted (Edited)</span>`
+                    : `<span class="status-badge success text-success bg-success-subtle border border-success-subtle px-2 py-1" style="border-radius: 6px; font-weight: 600; font-size: 0.72rem;"><i class="fa-solid fa-circle-check me-1"></i>Posted</span>`);
+
+            const rowStyle = r.isEdited
+                ? `style="background-color: rgba(245, 158, 11, 0.04);"`
+                : ``;
+
+            const actions = `
+                <div class="d-flex gap-1 justify-content-center">
+                    <button class="btn btn-xs calc-edit-btn" title="Edit Sale Values"
+                        data-party="${r.partyCode}" data-month="${currentCalcMonth}" data-year="${currentCalcYear}"
+                        style="padding:2px 5px;font-size:.7rem;border-radius:5px;background:rgba(30, 64, 175,.1);color:var(--primary);border:1px solid rgba(30, 64, 175,.25);">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="btn btn-xs calc-delete-btn" title="Delete Sale Record"
+                        data-party="${r.partyCode}" data-month="${currentCalcMonth}" data-year="${currentCalcYear}"
+                        style="padding:2px 5px;font-size:.7rem;border-radius:5px;background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.2);">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>`;
+            body.append(`
+                <tr ${rowStyle}>
+                    <td><strong>${r.partyCode}</strong></td>
+                    <td class="party-name-col">${r.partyName}</td>
+                    <td><span class="badge bg-secondary-subtle text-secondary">${r.location}</span></td>
+                    <td class="text-end">${Number(r.saleValue).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                    <td class="text-end">${Number(r.discount).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                    <td><span class="text-primary small fw-bold">${r.slabApplied}</span></td>
+                    <td class="text-end fw-bold">${Number(r.grossIncentive).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                    <td class="text-end">${Number(r.tdsPercent)}%</td>
+                    <td class="text-end text-danger fw-semibold">${Number(r.tdsAmount).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                    <td class="text-end text-warning">${r.adjustedAmount > 0 ? 'âˆ’' + Number(r.adjustedAmount).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—'}</td>
+                    <td class="text-end text-success fw-bold">${Number(r.netTransfer).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                    <td>${badge}</td>
+                    <td class="text-center">${actions}</td>
+                </tr>
+            `);
+        });
+
+        if (hasPendingApprovals) {
+            $('#approvalAlertContainer').show();
+        } else {
+            $('#approvalAlertContainer').hide();
+        }
+
+        if (rows.length === 0) {
+            body.append('<tr><td colspan="13" class="text-center text-muted py-4">No calculations generated. Click "Configure &amp; Calculate" above to run the preview engine.</td></tr>');
+        } else {
+            // Initialize DataTable for calculation preview
+            $('#calcPreviewTable').DataTable({
+                pageLength: 25,
+                lengthMenu: [10, 25, 50, 100],
+                language: {
+                    search: "",
+                    searchPlaceholder: "Search calculation previews..."
+                },
+                dom: "<'row mb-2 align-items-center'<'col-sm-6'l><'col-sm-6 text-end'f>>t<'row mt-2'<'col-sm-6'i><'col-sm-6 text-end'p>>"
+            });
+        }
+
+        // Run live counting animations on Payout KPI Tiles
+        animateValue("calcTotalParties", 0, rows.length, 800);
+        animateValue("calcTotalSales", 0, Math.round(totalSales), 800, "₹");
+        animateValue("calcGrossIncentive", 0, Math.round(grossIncentives), 800, "₹");
+        animateValue("calcNetTransfer", 0, Math.round(netTransfer), 800, "₹");
+
+        // Show monthly calculation preview download & commit buttons
+        $('#downloadCalcPreviewBtn').show();
+        $('#commitCalcBtn').show();
+
+        portalToast('Calculation preview generated successfully.');
+        
+        // Scroll down to preview panel
+        $('html, body').animate({
+            scrollTop: $("#calcPreviewTable").offset().top - 100
+        }, 500);
+    })
+    .fail(xhr => {
+        portalClearBusy(btn);
+        const errMsg = xhr.responseJSON?.message || xhr.responseText || 'Calculation preview failed.';
+        portalToast(errMsg, 'error');
+    });
+}
+
+// â”€â”€ PAYOUT ENGINE: EDIT SALE ROW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Open edit modal — delegated handler (table rows are re-created on each preview)
+$(document).on('click', '.calc-edit-btn', function () {
+    const partyCode = $(this).data('party');
+    const month     = $(this).data('month');
+    const year      = $(this).data('year');
+
+    // Fetch current sale values
+    $.ajax({
+        url: '@Url.Action("GetSaleRow", "Imports")',
+        method: 'GET',
+        data: { partyCode, month, year }
+    })
+    .done(function (s) {
+        if (s.isLocked) {
+            portalToast('This period is locked. Unlock it first from Control Tower.', 'error');
+            return;
+        }
+        $('#editSaleId').val(s.id);
+        $('#editSaleMonth').val(s.month);
+        $('#editSaleYear').val(s.year);
+        $('#editSalePartyCode').val(s.partyCode);
+        $('#editSaleValue').val(s.saleValue);
+        $('#editSaleDiscount').val(s.discount);
+        $('#editSaleRemarks').val('');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        $('#editSaleModalSubtitle').text(`${s.partyCode} · ${s.partyName} · ${months[s.month-1]}-${s.year}`);
+        const modal = new bootstrap.Modal(document.getElementById('editSaleModal'));
+        modal.show();
+    })
+    .fail(function (xhr) {
+        portalToast(xhr.responseJSON?.message || 'Could not load sale record.', 'error');
+    });
+});
+
+// Save edit modal
+$(document).on('click', '#saveEditSaleBtn', function () {
+    const id        = $('#editSaleId').val();
+    const saleValue = $('#editSaleValue').val();
+    const discount  = $('#editSaleDiscount').val();
+    const remarks   = $('#editSaleRemarks').val();
+
+    if (!id || saleValue === '') {
+        portalToast('Please enter a sale value.', 'error');
+        return;
+    }
+
+    const btn = this;
+    portalSetBusy(btn, 'Saving...');
+
+    $.ajax({
+        url: '@Url.Action("EditSaleRow", "Imports")',
+        method: 'POST',
+        data: {
+            id, saleValue, discount, remarks,
+            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').first().val()
+        }
+    })
+    .done(function (res) {
+        portalClearBusy(btn);
+        bootstrap.Modal.getInstance(document.getElementById('editSaleModal')).hide();
+        portalToast(res.message || 'Saved! Re-running preview...');
+        // Auto re-run the preview to show updated incentive
+        runCalculationPreview(currentCalcMonth, currentCalcYear, currentCalcForce, pendingCalcBranchRulesSnapshot, pendingCalcPartyMappingsSnapshot);
+    })
+    .fail(function (xhr) {
+        portalClearBusy(btn);
+        portalToast(xhr.responseJSON?.message || 'Save failed.', 'error');
+    });
+});
+
+// â”€â”€ PAYOUT ENGINE: DELETE SALE ROW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+$(document).on('click', '.calc-delete-btn', function () {
+    const partyCode = $(this).data('party');
+    const month     = $(this).data('month');
+    const year      = $(this).data('year');
+
+    // First fetch the sale ID
+    $.ajax({
+        url: '@Url.Action("GetSaleRow", "Imports")',
+        method: 'GET',
+        data: { partyCode, month, year }
+    })
+    .done(function (s) {
+        if (s.isLocked) {
+            portalToast('This period is locked. Unlock it first from Control Tower.', 'error');
+            return;
+        }
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        Swal.fire({
+            title: 'Delete Sale Record?',
+            html: `<div style='font-size:.9rem;'>
+                    <b>${s.partyCode}</b> — ${s.partyName}<br/>
+                    <span class='text-muted'>${months[s.month-1]}-${s.year}</span><br/><br/>
+                    Sale Value: <b>\u20b9${Number(s.saleValue).toLocaleString('en-IN')}</b>
+                   </div>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: '<i class="fa-solid fa-trash-can me-1"></i> Delete',
+            cancelButtonText: 'Cancel'
+        }).then(result => {
+            if (!result.isConfirmed) return;
+
+            $.ajax({
+                url: '@Url.Action("DeleteSaleRow", "Imports")',
+                method: 'POST',
+                data: {
+                    id: s.id,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').first().val()
+                }
+            })
+            .done(function (res) {
+                portalToast(res.message || 'Deleted! Re-running preview...');
+                runCalculationPreview(currentCalcMonth, currentCalcYear, currentCalcForce, pendingCalcBranchRulesSnapshot, pendingCalcPartyMappingsSnapshot);
+            })
+            .fail(function (xhr) {
+                portalToast(xhr.responseJSON?.message || 'Delete failed.', 'error');
+            });
+        });
+    })
+    .fail(function (xhr) {
+        portalToast(xhr.responseJSON?.message || 'Could not load sale record.', 'error');
+    });
+});
+
+// Download calculation preview Excel click handler
+$(document).on('click', '#downloadCalcPreviewBtn', function() {
+    const month = parseInt($('#calcMonth').val());
+    const year = parseInt($('#calcYear').val());
+    const force = $('#calcForce').val();
+    const rulesJson = pendingCalcBranchRules.length > 0 ? JSON.stringify(pendingCalcBranchRules) : '';
+    const mappingsJson = pendingCalcPartyMappings.length > 0 ? JSON.stringify(pendingCalcPartyMappings) : '';
+
+    // Create a dynamic form to submit as a GET request so that it triggers a file download
+    const form = $('<form>', {
+        action: '@Url.Action("ExportCalculationPreview", "Imports")',
+        method: 'GET',
+        target: '_blank'
+    });
+
+    form.append($('<input>', { type: 'hidden', name: 'month', value: month }));
+    form.append($('<input>', { type: 'hidden', name: 'year', value: year }));
+    form.append($('<input>', { type: 'hidden', name: 'forceRecalculate', value: force }));
+    form.append($('<input>', { type: 'hidden', name: 'branchRulesJson', value: rulesJson }));
+    form.append($('<input>', { type: 'hidden', name: 'partyMappingsJson', value: mappingsJson }));
+
+    $('body').append(form);
+    form.submit();
+    form.remove();
+});
+
+// Pre-Calculated Excel Import memory stores
+let precalcFileRows = null;
+let uploadedPrecalcFile = null;
+let precalcPreviewToken = null;
+
+// Toggle workflow mode between dynamic engine and pre-calculated file upload
+$(document).on('change', 'input[name="calcWorkflow"]', function() {
+    const mode = $(this).val();
+    if (mode === 'Dynamic') {
+        $('.dynamic-ctrl').show();
+        $('.precalc-ctrl').hide();
+    } else {
+        $('.dynamic-ctrl').hide();
+        $('.precalc-ctrl').show();
+    }
+    
+    // Clear the calculations preview grid and KPI summary cards
+    if ($.fn.DataTable.isDataTable('#calcPreviewTable')) {
+        $('#calcPreviewTable').DataTable().destroy();
+    }
+    $('#calcPreviewTable tbody').empty().append('<tr><td colspan="13" class="text-center text-muted py-4">No calculations generated. Click "Configure &amp; Calculate" or "Upload &amp; Preview" above.</td></tr>');
+    $('#commitCalcBtn').hide();
+    $('#downloadCalcPreviewBtn').hide();
+    $('#approvalAlertContainer').hide();
+    
+    animateValue("calcTotalParties", 0, 0, 200);
+    animateValue("calcTotalSales", 0, 0, 200, "₹");
+    animateValue("calcGrossIncentive", 0, 0, 200, "₹");
+    animateValue("calcNetTransfer", 0, 0, 200, "₹");
+});
+
+// Pre-Calculated Excel Upload Preview Handler
+window.handlePrecalcUpload = function(btn) {
+    try {
+        const fileInput = document.getElementById('precalcFile');
+        if (!fileInput) {
+            Swal.fire('Error', 'File input element #precalcFile not found.', 'error');
+            return;
+        }
+        const file = fileInput.files[0];
+        if (!file) {
+            Swal.fire('Warning', 'Please select a valid Excel file to upload.', 'warning');
+            return;
+        }
+        uploadedPrecalcFile = file;
+
+        portalSetBusy(btn, 'Uploading & Previewing...');
+        $('#calcStatusRow').hide();
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("uploadMode", "PreCalculated");
+        
+        const token = $('input[name="__RequestVerificationToken"]').val();
+        if (token) {
+            formData.append("__RequestVerificationToken", token);
+        }
+
+        $.ajax({
+            url: '@Url.Action("Preview", "Imports")',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false
+        })
+        .done(res => {
+            portalClearBusy(btn);
+            // Server now returns { previewToken, rows } — store the token for fast commit
+            const rows = res.rows || res;
+            precalcPreviewToken = res.previewToken || null;
+            precalcFileRows = rows;
+
+            // Destroy DataTable if it exists
+            if ($.fn.DataTable.isDataTable('#calcPreviewTable')) {
+                $('#calcPreviewTable').DataTable().destroy();
+            }
+
+            const body = $('#calcPreviewTable tbody').empty();
+            
+            let totalSales = 0;
+            let grossIncentives = 0;
+            let netTransfer = 0;
+            let hasErrors = false;
+            
+            $.each(rows, (i, r) => {
+                totalSales += Number(r.saleValue || 0);
+                grossIncentives += Number(r.fileIncentive || 0);
+                netTransfer += Number((r.transferAmount !== null && r.transferAmount !== undefined) ? r.transferAmount : (r.fileIncentive || 0));
+
+                let badge = '';
+                if (r.error) {
+                    hasErrors = true;
+                    badge = `<span class="status-badge danger text-danger bg-danger-subtle border border-danger-subtle px-2 py-1" style="border-radius: 6px; font-weight: 600; font-size: 0.72rem;" title="${r.error}"><i class="fa-solid fa-triangle-exclamation me-1"></i>Error</span>`;
+                } else {
+                    badge = `<span class="status-badge success text-success bg-success-subtle border border-success-subtle px-2 py-1" style="border-radius: 6px; font-weight: 600; font-size: 0.72rem;"><i class="fa-solid fa-circle-check me-1"></i>Pre-Calculated</span>`;
+                }
+
+                body.append(`
+                    <tr>
+                        <td><strong>${r.partyCode || r.resolvedPartyCode}</strong></td>
+                        <td class="party-name-col">${r.partyName || '-'}</td>
+                        <td><span class="badge bg-secondary-subtle text-secondary">${r.location || '-'}</span></td>
+                        <td class="text-end">${Number(r.saleValue).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                        <td class="text-end">${Number(r.discount).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                        <td><span class="text-primary small fw-bold">${(r.slabPercent * 100).toFixed(2)}%</span></td>
+                        <td class="text-end fw-bold">${Number(r.fileIncentive).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                        <td class="text-end">0%</td>
+                        <td class="text-end text-danger fw-semibold">0</td>
+                        <td class="text-end text-warning">—</td>
+                        <td class="text-end text-success fw-bold">${Number((r.transferAmount !== null && r.transferAmount !== undefined) ? r.transferAmount : r.fileIncentive).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
+                        <td>${badge}</td>
+                        <td class="text-center">
+                            <span class="text-muted small">—</span>
+                        </td>
+                    </tr>
+                `);
+            });
+
+            if (rows.length === 0) {
+                body.append('<tr><td colspan="13" class="text-center text-muted py-4">No records found in Excel sheet.</td></tr>');
+            } else {
+                $('#calcPreviewTable').DataTable({
+                    pageLength: 25,
+                    lengthMenu: [10, 25, 50, 100],
+                    language: {
+                        search: "",
+                        searchPlaceholder: "Search calculation previews..."
+                    },
+                    dom: "<'row mb-2 align-items-center'<'col-sm-6'l><'col-sm-6 text-end'f>>t<'row mt-2'<'col-sm-6'i><'col-sm-6 text-end'p>>"
+                });
+            }
+
+            // Run live counting animations
+            animateValue("calcTotalParties", 0, rows.length, 800);
+            animateValue("calcTotalSales", 0, Math.round(totalSales), 800, "₹");
+            animateValue("calcGrossIncentive", 0, Math.round(grossIncentives), 800, "₹");
+            animateValue("calcNetTransfer", 0, Math.round(netTransfer), 800, "₹");
+
+            if (hasErrors) {
+                Swal.fire('Warning', 'Some rows in the Excel sheet contain validation errors.', 'warning');
+                $('#commitCalcBtn').hide();
+            } else if (rows.length > 0) {
+                $('#commitCalcBtn').show();
+            }
+            $('#downloadCalcPreviewBtn').hide();
+
+            // Scroll down to preview panel
+            $('html, body').animate({
+                scrollTop: $("#calcPreviewTable").offset().top - 100
+            }, 500);
+        })
+        .fail(xhr => {
+            portalClearBusy(btn);
+            const errMsg = xhr.responseJSON?.message || xhr.responseText || 'Pre-calculated preview failed.';
+            Swal.fire('Error', errMsg, 'error');
+        });
+    } catch (err) {
+        if (btn) portalClearBusy(btn);
+        Swal.fire('Client Error', err.message, 'error');
+    }
+};
+
+// Commit (Push) calculation preview click handler
+window.handlePrecalcCommit = function(btn) {
+    try {
+        const workflowMode = $('input[name="calcWorkflow"]:checked').val();
+        
+        if (workflowMode === 'PreCalculated') {
+            if (!uploadedPrecalcFile) {
+                Swal.fire('Warning', 'Please upload and preview a file first.', 'warning');
+                return;
+            }
+            
+            portalSetBusy(btn, 'Committing Payouts...');
+            $('#calcStatusRow').hide();
+            
+            const formData = new FormData();
+            formData.append("file", uploadedPrecalcFile);
+            formData.append("uploadMode", "PreCalculated");
+            formData.append("rewriteSales", "true");
+            formData.append("changeReason", "Imported pre-calculated monthly incentives");
+            if (precalcPreviewToken) {
+                formData.append("previewToken", precalcPreviewToken);
+            }
+            
+            const token = $('input[name="__RequestVerificationToken"]').val();
+            if (token) {
+                formData.append("__RequestVerificationToken", token);
+            }
+
+            $.ajax({
+                url: '@Url.Action("Commit", "Imports")',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false
+            })
+            .done(res => {
+                if (res.ok && res.jobId) {
+                    portalSetBusy(btn, 'Importing...');
+                    
+                    pollJobStatus(res.jobId,
+                        (progressMsg) => {
+                            portalSetBusy(btn, progressMsg);
+                        },
+                        (statusRes) => {
+                            portalClearBusy(btn);
+                            Swal.fire('Success', statusRes.message || 'Pre-calculated incentives committed successfully!', 'success');
+                            
+                            $('#calcStatusAlert')
+                                .removeClass('alert-danger').addClass('alert-success')
+                                .html(`<i class="fa-solid fa-circle-check text-success me-1"></i> <strong>${statusRes.message || 'Import completed successfully.'}</strong>`);
+                            $('#calcStatusRow').show();
+
+                            $('#commitCalcBtn').hide();
+                        },
+                        (errorMsg) => {
+                            portalClearBusy(btn);
+                            Swal.fire('Error', errorMsg, 'error');
+                            
+                            $('#calcStatusAlert')
+                                .removeClass('alert-success').addClass('alert-danger')
+                                .html(`<i class="fa-solid fa-circle-exclamation text-danger me-1"></i> <strong>Error:</strong> ${errorMsg}`);
+                            $('#calcStatusRow').show();
+                        }
+                    );
+                } else {
+                    portalClearBusy(btn);
+                    Swal.fire('Error', res.message || 'Intake commit failed.', 'error');
+                }
+            })
+            .fail(xhr => {
+                portalClearBusy(btn);
+                const errMsg = xhr.responseJSON?.message || xhr.responseText || 'Failed to commit pre-calculated incentives.';
+                Swal.fire('Error', errMsg, 'error');
+                
+                $('#calcStatusAlert')
+                    .removeClass('alert-success').addClass('alert-danger')
+                    .html(`<i class="fa-solid fa-circle-exclamation text-danger me-1"></i> <strong>Error:</strong> ${errMsg}`);
+                $('#calcStatusRow').show();
+            });
+            return;
+        }
+
+        const month = parseInt($('#calcMonth').val());
+        const year = parseInt($('#calcYear').val());
+        const force = $('#calcForce').val();
+
+        portalSetBusy(btn, 'Queueing Calculations...');
+
+        $.ajax({
+            url: '@Url.Action("Calculate", "Imports")',
+            method: 'POST',
+            data: {
+                month: month,
+                year: year,
+                forceRecalculate: force,
+                branchRulesJson: pendingCalcBranchRules && pendingCalcBranchRules.length > 0 ? JSON.stringify(pendingCalcBranchRules) : '',
+                partyMappingsJson: pendingCalcPartyMappings && pendingCalcPartyMappings.length > 0 ? JSON.stringify(pendingCalcPartyMappings) : '',
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            }
+        })
+        .done(res => {
+            if (res.ok && res.jobId) {
+                portalSetBusy(btn, 'Calculating...');
+                
+                pollJobStatus(res.jobId,
+                    (progressMsg) => {
+                        portalSetBusy(btn, progressMsg);
+                    },
+                    (statusRes) => {
+                        portalClearBusy(btn);
+                        Swal.fire('Success', statusRes.message || 'Calculations committed successfully!', 'success');
+                        
+                        $('#calcStatusAlert')
+                            .removeClass('alert-danger').addClass('alert-success')
+                            .html(`<i class="fa-solid fa-circle-check text-success me-1"></i> <strong>${statusRes.message || 'Calculation completed.'}</strong>`);
+                        $('#calcStatusRow').show();
+
+                        $('#commitCalcBtn').hide();
+                        $('#downloadCalcPreviewBtn').hide();
+                    },
+                    (errorMsg) => {
+                        portalClearBusy(btn);
+                        Swal.fire('Error', errorMsg, 'error');
+                        
+                        $('#calcStatusAlert')
+                            .removeClass('alert-success').addClass('alert-danger')
+                            .html(`<i class="fa-solid fa-circle-exclamation text-danger me-1"></i> <strong>Error:</strong> ${errorMsg}`);
+                        $('#calcStatusRow').show();
+                    }
+                );
+            } else {
+                portalClearBusy(btn);
+                Swal.fire('Error', res.message || 'Calculation failed.', 'error');
+            }
+        })
+        .fail(xhr => {
+            portalClearBusy(btn);
+            const errMsg = xhr.responseJSON?.message || xhr.responseText || 'Failed to commit calculations.';
+            Swal.fire('Error', errMsg, 'error');
+            
+            $('#calcStatusAlert')
+                .removeClass('alert-success').addClass('alert-danger')
+                .html(`<i class="fa-solid fa-circle-exclamation text-danger me-1"></i> <strong>Error:</strong> ${errMsg}`);
+            $('#calcStatusRow').show();
+        });
+    } catch (err) {
+        if (btn) portalClearBusy(btn);
+        Swal.fire('Client Error', err.message, 'error');
+    }
+};
+
+// Hover effect for Calculate button
+$(document).on('mouseenter', '#runCalcBtn', function() {
+    $(this).css('box-shadow', '0 6px 20px rgba(30, 64, 175, 0.45)');
+}).on('mouseleave', '#runCalcBtn', function() {
+    $(this).css('box-shadow', '0 4px 12px rgba(30, 64, 175, 0.3)');
+});
+
+// Helper function to poll background job status
+function pollJobStatus(jobId, onProgress, onSuccess, onFailure) {
+    const interval = setInterval(() => {
+        $.ajax({
+            url: '/Imports/GetJobStatus',
+            method: 'GET',
+            data: { jobId: jobId }
+        })
+        .done(status => {
+            if (status.status === 'Succeeded') {
+                clearInterval(interval);
+                onSuccess(status);
+            } else if (status.status === 'Failed') {
+                clearInterval(interval);
+                onFailure(status.error || status.message || 'Job failed.');
+            } else {
+                if (onProgress) {
+                    onProgress(status.message || 'Processing...');
+                }
+            }
+        })
+        .fail(xhr => {
+            clearInterval(interval);
+            onFailure(xhr.responseJSON?.message || xhr.responseText || 'Error fetching job status.');
+        });
+    }, 1500);
+}
+// Approve overrides button click handler
+$(document).on('click', '#approveOverridesBtn', function() {
+    const month = currentCalcMonth;
+    const year = currentCalcYear;
+    if (!month || !year) {
+        portalToast('No active period identified for approval.', 'error');
+        return;
+    }
+
+    const btn = this;
+    portalSetBusy(btn, 'Posting...');
+
+    $.ajax({
+        url: '@Url.Action("ApproveCalculation", "Imports")',
+        method: 'POST',
+        data: {
+            month: month,
+            year: year,
+            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').first().val()
+        }
+    })
+    .done(res => {
+        portalClearBusy(btn);
+        if (res.ok) {
+            portalToast(res.message || 'Calculations approved and posted successfully!', 'success');
+            // Re-run the preview to update status badges
+            runCalculationPreview(currentCalcMonth, currentCalcYear, currentCalcForce, pendingCalcBranchRulesSnapshot, pendingCalcPartyMappingsSnapshot);
+        } else {
+            portalToast(res.message || 'Approval failed.', 'error');
+        }
+    })
+    .fail(xhr => {
+        portalClearBusy(btn);
+        const errMsg = xhr.responseJSON?.message || xhr.responseText || 'Failed to approve calculations.';
+        portalToast(errMsg, 'error');
+    });
+});
+</script>
+}
+
+@section DataTableScripts {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+}
+
+
+

@@ -1,0 +1,138 @@
+/* ==========================================================================
+   DESIGN TOKENS — Enterprise SaaS Design System
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ---- Colors System ---- */
+  --bg-page: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --border-subtle: #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  /* ---- Brand / Sidebar ---- */
+  --sidebar-bg: #1A1592;
+  --sidebar-hover: #8A2EFF;
+  --sidebar-grad-start: #EC4899;
+  --sidebar-grad-end: #8B2CF5;
+  --sidebar-text: #FFFFFF;
+  --sidebar-text-muted: rgba(255, 255, 255, 0.7);
+
+  /* ---- Brand Accent / Primary Selection ---- */
+  --accent-primary: #6D28FF;
+  --accent-primary-hover: #5B21F6;
+  
+  /* ---- Text System ---- */
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6B7280;
+  --text-inverse: #FFFFFF;
+
+  /* ---- KPI card gradients ---- */
+  --grad-sales-start: #8B2CF5;
+  --grad-sales-end: #5B21F6;
+
+  --grad-incentive-start: #10B981;
+  --grad-incentive-end: #059669;
+
+  --grad-cashin-start: #3B82F6;
+  --grad-cashin-end: #2563EB;
+
+  --grad-cashout-start: #FB923C;
+  --grad-cashout-end: #F97316;
+
+  --grad-netbalance-start: #EC4899;
+  --grad-netbalance-end: #DB2777;
+  
+  --grad-support-start: #6D28FF;
+  --grad-support-end: #9333EA;
+
+  /* ---- Status colors ---- */
+  --status-success-bg: #F0FDF4;
+  --status-success-text: #16A34A;
+  --status-pending-bg: #FFF7ED;
+  --status-pending-text: #F97316;
+  --status-failed-bg: #FEF2F2;
+  --status-failed-text: #DC2626;
+
+  /* ---- Elevation System ---- */
+  --shadow-card: 0 10px 30px rgba(109, 40, 255, 0.10);
+  --shadow-floating: 0 15px 40px rgba(0, 0, 0, 0.08);
+  --shadow-btn: 0 8px 25px rgba(109, 40, 255, 0.25);
+
+  /* ---- Radii ---- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-sidebar: 24px;
+  --radius-full: 9999px;
+
+  /* Core UI System mapping */
+  --primary:             var(--accent-primary);
+  --primary-hover:       var(--accent-primary-hover);
+  --primary-light:       #f5f3ff;
+  --primary-glow:        rgba(109, 40, 255, 0.15);
+
+  --secondary:           var(--accent-primary);
+  
+  --success:             var(--status-success-text);
+  --danger:              var(--status-failed-text);
+
+  --radius:              var(--radius-md);
+  --shadow:              var(--shadow-card);
+
+  --ink:                 var(--text-primary);
+  --ink-2:               #111827;
+  --muted:               var(--text-secondary);
+  --muted-2:             var(--text-muted);
+  --line:                var(--border-subtle);
+  --line-2:              var(--border-strong);
+  
+  --panel:               var(--bg-card);
+  --canvas:              var(--bg-page);
+
+  /* Navigation Sidebar specific overrides */
+  --nav:                 var(--sidebar-bg);
+  --nav-2:               var(--sidebar-bg);
+  --nav-accent:          var(--sidebar-hover);
+  --nav-text:            var(--sidebar-text-muted);
+  --nav-active:          var(--sidebar-text);
+  --nav-border:          rgba(255, 255, 255, 0.1);
+
+  --border-glow:         var(--primary-glow);
+
+  /* Spacing Scale (8px Base Unit) */
+  --space-1:  8px;      /* xs */
+  --space-2:  16px;     /* sm */
+  --space-3:  24px;     /* md */
+  --space-4:  32px;     /* lg */
+  --space-5:  40px;     /* xl */
+  --space-6:  48px;
+  --space-7:  64px;
+
+  /* Typography Scale */
+  --font-xs:   12px;
+  --font-sm:   14px; /* body */
+  --font-md:   15px; /* subheading */
+  --font-lg:   18px;
+  --font-xl:   24px;
+  --font-2xl:  32px; /* heading */
+  --font-3xl:  38px; /* card value */
+
+  /* Layout Dimensions */
+  --sidebar-w:           270px;
+  --sidebar-collapsed-w: 80px;
+  --topbar-h:            80px;
+
+  /* Transitions */
+  --ease-out-quart:   cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:      cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --transition-fast:    0.15s var(--ease-in-out);
+  --transition-normal:  0.25s var(--ease-in-out);
+  --transition-slow:    0.40s var(--ease-out-quart);
+  --transition-spring:  0.35s var(--ease-spring);
+}

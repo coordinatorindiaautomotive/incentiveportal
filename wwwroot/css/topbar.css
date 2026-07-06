@@ -1,0 +1,160 @@
+/* ==========================================================================
+   TOP NAV - Enterprise SaaS
+   ========================================================================== */
+.topbar {
+  height: var(--topbar-h);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.topbar-page-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.page-title-text {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.breadcrumb-lite {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.topbar-search-box {
+  display: flex;
+  align-items: center;
+  background: var(--bg-page);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  width: 320px;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.topbar-search-box:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  background: #fff;
+}
+
+.topbar-search-box input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  outline: none;
+  margin-left: 8px;
+}
+
+.topbar-search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-shortcut-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--border-subtle);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  margin-left: auto;
+}
+
+.topbar-icon-btn, .theme-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.topbar-icon-btn:hover, .theme-toggle-btn:hover {
+  background: var(--bg-page);
+  color: var(--primary);
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--grad-netbalance-start);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+}
+
+.user-profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.user-profile-trigger:hover {
+  background: var(--bg-page);
+}
+
+.avatar-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name-text {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-role-text {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+

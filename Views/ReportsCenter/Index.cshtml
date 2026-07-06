@@ -1,0 +1,156 @@
+@{
+    ViewData["Title"] = "Reports Center Console";
+    var colConfigs = (ViewBag.ColumnConfigs as List<IncentivePortal.Models.ReportColumnConfig>) ?? new List<IncentivePortal.Models.ReportColumnConfig>();
+    var savedFilters = (ViewBag.SavedFilters as Array) ?? Array.Empty<object>();
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Block -->
+    <div class="card p-3 mb-4 border-0 shadow-sm" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 class="mb-1 text-primary fw-bold" style="font-family:'Inter',sans-serif;"><i class="fa-solid fa-chart-column me-2"></i> Reports Center Hub</h4>
+                <p class="text-muted small mb-0">Centralized access to financial registers, payout transfers, audit streams, and custom column exporter filters.</p>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-primary btn-sm bg-primary border-0" data-bs-toggle="modal" data-bs-target="#columnsConfigModal"><i class="fa-solid fa-gears me-1"></i> Configure Report Columns</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Reports Directory Catalog (Left) -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <h5 class="fw-bold text-secondary mb-3">Available Platform Reports</h5>
+                
+                <div class="row g-4">
+                    <!-- Section: Incentives -->
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded h-100" style="background: rgba(248, 249, 255, 0.6); border-color: rgba(196,198,207,0.3) !important;">
+                            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-coins me-1"></i> Payouts & Scheme Registers</h6>
+                            <ul class="list-unstyled mb-0 small">
+                                <li class="mb-2"><a href="/Reports/IncentiveRegister" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-file-invoice-dollar text-primary me-2"></i> Incentive Register Report</a></li>
+                                <li class="mb-2"><a href="/Reports/TargetVsAchievement" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-bullseye text-primary me-2"></i> Target vs Achievement Tracker</a></li>
+                                <li class="mb-2"><a href="/Transfers/Index" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-money-bill-transfer text-primary me-2"></i> Bank Transfers Tracker</a></li>
+                                <li><a href="/Reports/PendingApprovals" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-circle-check text-primary me-2"></i> Pending Approvals Checklist</a></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Section: Outstandings -->
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded h-100" style="background: rgba(248, 249, 255, 0.6); border-color: rgba(196,198,207,0.3) !important;">
+                            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-scale-balanced me-1"></i> Outstandings & Ledgers</h6>
+                            <ul class="list-unstyled mb-0 small">
+                                <li class="mb-2"><a href="/Reports/OutstandingMaster" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-receipt text-primary me-2"></i> Outstanding Master Registry</a></li>
+                                <li class="mb-2"><a href="/Ledger/Index" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-book-bookmark text-primary me-2"></i> Customer Account Ledgers</a></li>
+                                <li><a href="/ControlTower/Index#tab-outstanding" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-sliders text-primary me-2"></i> Outstanding Deduction Rules</a></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Section: Cash Book -->
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded h-100" style="background: rgba(248, 249, 255, 0.6); border-color: rgba(196,198,207,0.3) !important;">
+                            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-wallet me-1"></i> Cash Book & Expenditures</h6>
+                            <ul class="list-unstyled mb-0 small">
+                                <li class="mb-2"><a href="/CashManagement/CashBook" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-book text-primary me-2"></i> Daily Cash Book Ledger</a></li>
+                                <li class="mb-2"><a href="/CashManagement/CostCenterCash" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-file-contract text-primary me-2"></i> Cost Center Dispatches</a></li>
+                                <li><a href="/CashManagement/Reconciliation" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-scale-unbalanced-flip text-primary me-2"></i> Cash Reconciliation Sheet</a></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Section: Assets & Helpdesk -->
+                    <div class="col-md-6">
+                        <div class="p-3 border rounded h-100" style="background: rgba(248, 249, 255, 0.6); border-color: rgba(196,198,207,0.3) !important;">
+                            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-cubes me-1"></i> Infrastructure & Tickets</h6>
+                            <ul class="list-unstyled mb-0 small">
+                                <li class="mb-2"><a href="/AssetRegister/Index" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-laptop-file text-primary me-2"></i> Asset Management Register</a></li>
+                                <li class="mb-2"><a href="/Helpdesk/Index" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-ticket-simple text-primary me-2"></i> Helpdesk Tickets Logs</a></li>
+                                <li><a href="/ControlTower/Index#tab-audit" class="text-decoration-none text-dark fw-bold"><i class="fa-solid fa-history text-primary me-2"></i> Global System Audit Trail</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Saved Custom Query Filters (Right) -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm p-4 h-100" style="background: rgba(255,255,255,0.9);">
+                <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-bookmark me-1"></i> Saved Custom Filters</h6>
+                <p class="text-muted small mb-3">Quickly open report registries with your pre-configured filters and query settings.</p>
+
+                <div class="saved-filters-list">
+                    @foreach (dynamic f in savedFilters)
+                    {
+                        <div class="p-3 mb-2 rounded border bg-light d-flex justify-content-between align-items-center" style="font-size: 0.82rem;">
+                            <div>
+                                <div class="fw-bold text-dark mb-1">@f.Name</div>
+                                <div class="text-muted small">Report: @f.Report</div>
+                            </div>
+                            <a href="@(f.Report == "Incentive Register" ? "/Reports/IncentiveRegister" : f.Report == "Approvals" ? "/Reports/PendingApprovals" : "/CashManagement/CashBook")@(f.QueryString)" class="btn btn-xs btn-primary bg-primary border-0 fs-7" style="font-size:0.75rem;"><i class="fa-solid fa-arrow-right"></i> Open</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Column Visibility Config -->
+<div class="modal fade" id="columnsConfigModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <div class="modal-header border-bottom bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-gears me-1"></i> Configure Payout Columns</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3">Select which financial columns appear in the Incentive Register report tables.</p>
+                <div class="list-group">
+                    @foreach (var col in colConfigs.Where(c => c.ReportName == "IncentiveRegister"))
+                    {
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold text-dark small">@col.DisplayName</div>
+                                <div class="text-muted" style="font-size:0.7rem;">Key: @col.ColumnKey</div>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" checked="@(col.IsVisible ? "checked" : null)" onchange="toggleColumnVisibility('@col.ReportName', '@col.ColumnKey', this.checked, '@col.DisplayName', @col.SortOrder)" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer border-top bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleColumnVisibility(reportName, columnKey, isVisible, displayName, sortOrder) {
+            $.ajax({
+                url: '/ReportsCenter/SaveColumnConfig',
+                method: 'POST',
+                data: {
+                    reportName: reportName,
+                    columnKey: columnKey,
+                    displayName: displayName,
+                    isVisible: isVisible,
+                    sortOrder: sortOrder,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(res) {
+                    portalToast('Column settings updated successfully.', 'success');
+                }
+            });
+        }
+    </script>
+}
+

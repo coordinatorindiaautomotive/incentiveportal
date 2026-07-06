@@ -1,0 +1,327 @@
+﻿@model IEnumerable<IncentivePortal.Models.CostCenterCash>
+@{
+    ViewData["Title"] = "Cost Center Cash Registry";
+    var totalOpening = Model.Sum(x => x.OpeningBalance);
+    var totalDebit = Model.Sum(x => x.Debit);
+    var totalCredit = Model.Sum(x => x.Credit);
+    var totalClosing = Model.Sum(x => x.ClosingBalance);
+    var activeCenters = Model.Count();
+    var rawSync = Model.Any() ? Model.Max(x => x.SyncedAt) : DateTime.UtcNow;
+    var utcSync = rawSync.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(rawSync, DateTimeKind.Utc) : rawSync.ToUniversalTime();
+    var lastSync = TimeZoneInfo.ConvertTimeFromUtc(utcSync, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+}
+
+<style>
+    .metric-card {
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid #f1f5f9;
+        box-shadow: 0 4px 20px rgba(15, 23, 42, 0.02);
+        padding: 24px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+    }
+    .metric-icon-wrap {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+    }
+    .terminal-logs-window {
+        background: #0f172a;
+        color: #38bdf8;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.82rem;
+        padding: 16px;
+        border-radius: 8px;
+        max-height: 350px;
+        overflow-y: auto;
+        border: 1px solid #334155;
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+    }
+    .terminal-logs-window p {
+        margin: 0 0 6px 0;
+        line-height: 1.4;
+    }
+    .terminal-logs-window::-webkit-scrollbar {
+        width: 6px;
+    }
+    .terminal-logs-window::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 3px;
+    }
+    .soft-green-pulse {
+        animation: softGreenPulseAnim 1.5s ease-out;
+    }
+    @@keyframes softGreenPulseAnim {
+        0% { background-color: rgba(34, 197, 94, 0.25); }
+        100% { background-color: transparent; }
+    }
+</style>
+
+<!-- Dashboard Stats Panel -->
+<section class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="metric-card d-flex align-items-center justify-content-between">
+            <div>
+                <span class="text-secondary small fw-bold uppercase tracking-wider d-block mb-1">Total Opening</span>
+                <h3 class="fw-extrabold text-dark mb-0 font-monospace" style="font-size: 1.6rem; letter-spacing: -0.5px;">₹@totalOpening.ToString("N2")</h3>
+            </div>
+            <div class="metric-icon-wrap bg-primary-light text-primary">
+                <i class="fa-solid fa-folder-open"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card d-flex align-items-center justify-content-between">
+            <div>
+                <span class="text-secondary small fw-bold uppercase tracking-wider d-block mb-1">Total Closing Cash</span>
+                <h3 class="fw-extrabold text-dark mb-0 font-monospace" style="font-size: 1.6rem; letter-spacing: -0.5px; color: #15803d !important;">₹@totalClosing.ToString("N2")</h3>
+            </div>
+            <div class="metric-icon-wrap bg-success-light text-success">
+                <i class="fa-solid fa-indian-rupee-sign"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card d-flex align-items-center justify-content-between">
+            <div>
+                <span class="text-secondary small fw-bold uppercase tracking-wider d-block mb-1">Cost Centers</span>
+                <h3 class="fw-extrabold text-dark mb-0 font-monospace" style="font-size: 1.6rem; letter-spacing: -0.5px;">@activeCenters</h3>
+            </div>
+            <div class="metric-icon-wrap bg-info-light text-info">
+                <i class="fa-solid fa-sitemap"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-card d-flex align-items-center justify-content-between">
+            <div>
+                <span class="text-secondary small fw-bold uppercase tracking-wider d-block mb-1">Last Synced (Tally)</span>
+                <h3 class="fw-extrabold text-dark mb-0" style="font-size: 1.05rem; margin-top: 6px; letter-spacing: -0.2px;">@(Model.Any() ? lastSync.ToString("dd-MMM-yyyy hh:mm tt") : "Never")</h3>
+            </div>
+            <div class="metric-icon-wrap bg-warning-light text-warning">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main Controls and Table Panel -->
+<section class="panel" style="background: #ffffff; border-radius: 12px; box-shadow: 0 8px 32px rgba(15, 23, 42, 0.03); padding: 24px; border: 1px solid #f1f5f9;">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom pb-4 mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-1"><i class="fa-solid fa-wallet text-primary me-2"></i>Cost Center Cash Registry</h4>
+            <p class="text-muted small mb-0">Track and reconcile Cash in Hand balances for each Cost Center (Branch) mapped directly from Tally ERP 9.</p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <label for="periodMonthFilter" class="small fw-bold text-secondary mb-0">Month:</label>
+                <select id="periodMonthFilter" class="form-select corp-select py-1" style="width: 140px; height: 38px; font-weight: 600; font-size: 0.85rem;">
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <option value="@m" selected="@(ViewBag.SelectedMonth == m)">@System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(m)</option>
+                    }
+                </select>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label for="periodYearFilter" class="small fw-bold text-secondary mb-0">Year:</label>
+                <select id="periodYearFilter" class="form-select corp-select py-1" style="width: 100px; height: 38px; font-weight: 600; font-size: 0.85rem;">
+                    @for (int y = ViewBag.SelectedYear - 2; y <= ViewBag.SelectedYear + 1; y++)
+                    {
+                        <option value="@y" selected="@(ViewBag.SelectedYear == y)">@y</option>
+                    }
+                </select>
+            </div>
+            @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+            {
+                <button id="syncTallyBtn" type="button" class="btn btn-primary d-flex align-items-center gap-2 px-4" style="background: linear-gradient(135deg, #093375 0%, #0c52d6 100%); border: none; font-weight: 600; height: 38px; border-radius: 8px; box-shadow: 0 4px 12px rgba(9,51,117,0.2);">
+                    <i class="fa-solid fa-arrows-rotate spinner-icon"></i> Dynamic Sync with Tally
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- DataTables Grid -->
+    <div class="table-responsive corp-table-wrapper" style="border: none; border-radius: 8px; overflow: hidden;">
+        <table class="corp-table align-middle w-100" id="costCenterCashGrid" style="font-size: 0.86rem;">
+            <thead>
+                <tr>
+                    <th>Cost Center Name</th>
+                    <th class="text-end">Opening Balance</th>
+                    <th class="text-end">Debit (Cash Inflow)</th>
+                    <th class="text-end">Credit (Cash Outflow)</th>
+                    <th class="text-end" style="font-weight: 700; color: #0f172a;">Closing Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td><span class="fw-bold text-dark" style="font-size: 0.84rem;">@item.CostCenterName</span></td>
+                        <td class="text-end font-monospace text-secondary">₹@item.OpeningBalance.ToString("N2")</td>
+                        <td class="text-end font-monospace text-success">+₹@item.Debit.ToString("N2")</td>
+                        <td class="text-end font-monospace text-danger">-₹@item.Credit.ToString("N2")</td>
+                        <td class="text-end font-monospace fw-bold text-dark outstanding-cell" style="font-size: 0.88rem;">₹@item.ClosingBalance.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Dynamic Tally Logs Terminal Modal -->
+<div class="modal fade" id="tallySyncLogsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
+            <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white;">
+                <div>
+                    <h4 class="modal-title fw-bold" style="font-size: 1.25rem; margin:0;"><i class="fa-solid fa-code text-warning me-2"></i> Tally SOAP XML Gateway Console</h4>
+                    <p style="margin: 4px 0 0 0; font-size: 0.82rem; opacity: 0.85;">Reconciliation logs from Tally ERP 9 Dynamic Cash Sync pipeline</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" style="background: #0f172a;">
+                <div class="terminal-logs-window" id="terminalLogsGrid">
+                    <!-- Logs stream in real-time here -->
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 bg-light d-flex justify-content-between">
+                <span class="small text-muted font-monospace"><i class="fa-solid fa-network-wired"></i> Gateways Active</span>
+                <button type="button" class="btn btn-secondary px-4 fw-bold" data-bs-dismiss="modal" style="border-radius: 6px; font-size: 0.84rem;">Done & Refresh Page</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialise DataTables Grid
+            var table = $('#costCenterCashGrid').DataTable({
+                pageLength: 10,
+                lengthMenu: [10, 25, 50, 100],
+                language: {
+                    search: "🔍 Quick Filter:",
+                    searchPlaceholder: "Search cost center..."
+                },
+                order: [[4, 'desc']], // Closing Balance descending by default
+                dom: '<"d-flex flex-wrap align-items-center justify-content-between p-3 bg-light border-bottom border-light"f<"d-flex gap-2"l>>t<"d-flex flex-wrap align-items-center justify-content-between p-3 bg-light border-top border-light"ip>'
+            });
+
+            // Period filtering
+            $('#periodMonthFilter, #periodYearFilter').on('change', function () {
+                var m = $('#periodMonthFilter').val();
+                var y = $('#periodYearFilter').val();
+                window.location.href = '@Url.Action("CostCenterCash", "CashManagement")?month=' + m + '&year=' + y;
+            });
+
+            // Sync Cost Center Cash from Tally
+            $('#syncTallyBtn').on('click', function () {
+                var btn = $(this);
+                var icon = btn.find('.spinner-icon');
+                var m = $('#periodMonthFilter').val();
+                var y = $('#periodYearFilter').val();
+
+                Swal.fire({
+                    title: 'Sync Cost Center Cash?',
+                    text: 'This will query Tally ERP 9 dynamically for opening balances and transaction breakups for the selected month.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Sync Dynamically',
+                    cancelButtonText: 'Cancel',
+                    confirmButtonColor: '#093375',
+                    cancelButtonColor: '#64748b',
+                    customClass: {
+                        popup: 'border-0 shadow-lg',
+                        confirmButton: 'fw-bold px-4 py-2',
+                        cancelButton: 'fw-bold px-4 py-2'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        btn.prop('disabled', true);
+                        icon.addClass('fa-spin text-warning');
+
+                        Swal.fire({
+                            title: 'Syncing Cost Center Cash...',
+                            html: '<div class="d-flex flex-column align-items-center justify-content-center py-3"><div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div><div class="fw-semibold text-secondary" style="font-size:0.92rem;">Connecting to Tally SOAP XML API on Port 9000...</div></div>',
+                            allowOutsideClick: false,
+                            showConfirmButton: false,
+                            customClass: {
+                                popup: 'border-0 shadow-lg'
+                            }
+                        });
+
+                        $.ajax({
+                            url: '@Url.Action("SyncCostCenterCash", "CashManagement")',
+                            type: 'POST',
+                            data: {
+                                month: m,
+                                year: y
+                            },
+                            success: function (res) {
+                                Swal.close();
+                                btn.prop('disabled', false);
+                                icon.removeClass('fa-spin text-warning');
+
+                                if (res.ok) {
+                                    // Reset Modal Header Style
+                                    $('#tallySyncLogsModal .modal-title').html('<i class="fa-solid fa-code text-warning me-2"></i> Tally SOAP XML Gateway Console');
+                                    $('#tallySyncLogsModal .modal-header').css('background', 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)');
+
+                                    // Pop and Stream logs into terminal modal
+                                    var logsDiv = $('#terminalLogsGrid').empty();
+                                    res.logs.forEach(function (logLine, index) {
+                                        var colorClass = logLine.indexOf('COMPLETE') !== -1 ? 'text-success' : (logLine.indexOf('ERROR') !== -1 ? 'text-danger' : 'text-sky');
+                                        setTimeout(function () {
+                                            logsDiv.append(`<p class="${colorClass} mb-1">> ${logLine}</p>`);
+                                            logsDiv.scrollTop(logsDiv[0].scrollHeight);
+                                        }, index * 80);
+                                    });
+
+                                    var modal = new bootstrap.Modal(document.getElementById('tallySyncLogsModal'));
+                                    modal.show();
+
+                                    // Apply pulse highlights to cells
+                                    $('.outstanding-cell').addClass('soft-green-pulse');
+
+                                    // Refresh Page when logs modal is closed
+                                    $('#tallySyncLogsModal').on('hidden.bs.modal', function () {
+                                        window.location.reload();
+                                    });
+                                }
+                            },
+                            error: function (err) {
+                                Swal.close();
+                                btn.prop('disabled', false);
+                                icon.removeClass('fa-spin text-warning');
+
+                                var msg = err.responseJSON && err.responseJSON.message ? err.responseJSON.message : 'Sync failed. Please verify if Tally Integration service is active and responsive.';
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Sync Failed',
+                                    text: msg,
+                                    confirmButtonColor: '#ef4444'
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+}
+
+@section DataTableScripts {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+}

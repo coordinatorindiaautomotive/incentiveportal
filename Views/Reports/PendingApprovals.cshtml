@@ -1,0 +1,39 @@
+@model IReadOnlyList<IncentivePortal.Models.BankApprovalRequest>
+@{
+    ViewData["Title"] = "Pending Approval Report";
+}
+
+<div class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Pending Approval Report</h2>
+            <p>List of all bank account details verification requests awaiting approval</p>
+        </div>
+    </div>
+
+    <div class="table-responsive corp-table-wrapper" style="border: none; border-radius: 8px; overflow: hidden;">
+        <table class="corp-table align-middle w-100">
+            <thead>
+                <tr>
+                    <th>Party</th>
+                    <th>Type</th>
+                    <th>Requested</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in Model)
+            {
+                <tr>
+                    <td><span class="fw-bold text-dark">@row.Party.PartyName</span> <span class="text-muted">(@row.Party.PartyCode)</span></td>
+                    <td><span class="badge bg-info text-dark">@row.RequestType</span></td>
+                    <td>@row.CreatedAt.ToLocalTime().ToString("dd MMM yyyy hh:mm tt")</td>
+                    <td>
+                        <span class="badge bg-warning text-dark">@row.Status</span>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

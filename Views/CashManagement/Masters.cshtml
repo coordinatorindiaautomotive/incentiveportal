@@ -1,0 +1,225 @@
+﻿@using IncentivePortal.Models
+@{
+    ViewData["Title"] = "Cash Masters";
+    var receiptTypes = ViewBag.ReceiptTypes as List<CashMasterItem> ?? new List<CashMasterItem>();
+    var expenseCategories = ViewBag.ExpenseCategories as List<CashMasterItem> ?? new List<CashMasterItem>();
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" style="border-radius:8px;font-size:.875rem;">
+        <i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3" style="border-radius:8px;font-size:.875rem;">
+        <i class="fa-solid fa-circle-xmark me-2"></i>@TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:.5px;">Cash Management</div>
+        <h2 style="font-size:1.5rem;font-weight:700;color:var(--ink);margin:0;">
+            <i class="fa-solid fa-gears me-2" style="color:#6366f1;"></i>Cash Masters
+        </h2>
+        <p class="text-muted mb-0" style="font-size:.82rem;">Manage dynamic master data for receipt types (Cash In) and expense categories (Cash Out)</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Receipt Types (Cash In) -->
+    <div class="col-lg-6">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.03);height:100%;">
+            <div style="padding:18px 24px;border-bottom:1px solid #e2e8f0;background:rgba(99,102,241,.02);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <i class="fa-solid fa-file-invoice-dollar" style="color:#6366f1;font-size:1.2rem;"></i>
+                    <span style="font-size:1rem;font-weight:700;color:var(--ink);">Receipt Types (Cash In)</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" style="border-radius:8px;font-weight:600;font-size:.78rem;" onclick="openAddModal('ReceiptType')">
+                    <i class="fa-solid fa-plus me-1"></i>Add Type
+                </button>
+            </div>
+            
+            <div style="padding:20px 24px;">
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    @if (!receiptTypes.Any())
+                    {
+                        <div class="text-muted text-center py-4" style="font-size:.82rem;">No receipt types found.</div>
+                    }
+                    else
+                    {
+                        @foreach (var item in receiptTypes)
+                        {
+                            var statusColor = item.IsActive ? "#22c55e" : "#ef4444";
+                            var statusBg = item.IsActive ? "rgba(34,197,94,.1)" : "rgba(239,68,68,.1)";
+                            
+                            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.01);">
+                                <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
+                                    <div style="width:8px;height:8px;border-radius:50%;background:@statusColor;flex-shrink:0;"></div>
+                                    <div style="font-size:.88rem;font-weight:600;color:var(--ink);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
+                                        @item.Name
+                                    </div>
+                                    <span style="background:@statusBg;color:@statusColor;padding:2px 8px;border-radius:12px;font-size:.68rem;font-weight:700;">
+                                        @(item.IsActive ? "ACTIVE" : "INACTIVE")
+                                    </span>
+                                </div>
+                                
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" style="border-radius:6px;padding:4px 8px;font-size:.75rem;" onclick="openEditModal(@item.Id, 'ReceiptType', '@item.Name.Replace("'", "\\'")')">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    
+                                    <form method="post" action="/CashManagement/ToggleMasterItemActive" style="display:inline;">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id">
+                                        <button type="submit" class="btn btn-sm @(item.IsActive ? "btn-outline-warning" : "btn-outline-success")" style="border-radius:6px;padding:4px 8px;font-size:.75rem;" title="@(item.IsActive ? "Deactivate" : "Activate")">
+                                            <i class="fa-solid @(item.IsActive ? "fa-ban" : "fa-check")"></i>
+                                        </button>
+                                    </form>
+                                    
+                                    <form method="post" action="/CashManagement/DeleteMasterItem" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this Receipt Type? This will remove it from future selectors but preserve historical transaction logs.')">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" style="border-radius:6px;padding:4px 8px;font-size:.75rem;" title="Delete">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Expense Categories (Cash Out) -->
+    <div class="col-lg-6">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.03);height:100%;">
+            <div style="padding:18px 24px;border-bottom:1px solid #e2e8f0;background:rgba(99,102,241,.02);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <i class="fa-solid fa-tags" style="color:#6366f1;font-size:1.2rem;"></i>
+                    <span style="font-size:1rem;font-weight:700;color:var(--ink);">Expense Categories (Cash Out)</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" style="border-radius:8px;font-weight:600;font-size:.78rem;" onclick="openAddModal('ExpenseCategory')">
+                    <i class="fa-solid fa-plus me-1"></i>Add Category
+                </button>
+            </div>
+            
+            <div style="padding:20px 24px;">
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    @if (!expenseCategories.Any())
+                    {
+                        <div class="text-muted text-center py-4" style="font-size:.82rem;">No expense categories found.</div>
+                    }
+                    else
+                    {
+                        @foreach (var item in expenseCategories)
+                        {
+                            var statusColor = item.IsActive ? "#22c55e" : "#ef4444";
+                            var statusBg = item.IsActive ? "rgba(34,197,94,.1)" : "rgba(239,68,68,.1)";
+                            
+                            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.01);">
+                                <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
+                                    <div style="width:8px;height:8px;border-radius:50%;background:@statusColor;flex-shrink:0;"></div>
+                                    <div style="font-size:.88rem;font-weight:600;color:var(--ink);text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">
+                                        @item.Name
+                                    </div>
+                                    <span style="background:@statusBg;color:@statusColor;padding:2px 8px;border-radius:12px;font-size:.68rem;font-weight:700;">
+                                        @(item.IsActive ? "ACTIVE" : "INACTIVE")
+                                    </span>
+                                </div>
+                                
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" style="border-radius:6px;padding:4px 8px;font-size:.75rem;" onclick="openEditModal(@item.Id, 'ExpenseCategory', '@item.Name.Replace("'", "\\'")')">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    
+                                    <form method="post" action="/CashManagement/ToggleMasterItemActive" style="display:inline;">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id">
+                                        <button type="submit" class="btn btn-sm @(item.IsActive ? "btn-outline-warning" : "btn-outline-success")" style="border-radius:6px;padding:4px 8px;font-size:.75rem;" title="@(item.IsActive ? "Deactivate" : "Activate")">
+                                            <i class="fa-solid @(item.IsActive ? "fa-ban" : "fa-check")"></i>
+                                        </button>
+                                    </form>
+                                    
+                                    <form method="post" action="/CashManagement/DeleteMasterItem" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this Expense Category? This will remove it from future selectors but preserve historical transaction logs.')">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@item.Id">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" style="border-radius:6px;padding:4px 8px;font-size:.75rem;" title="Delete">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal fade" id="masterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;overflow:hidden;">
+            <div class="modal-header border-0 bg-dark text-white p-3">
+                <h5 class="modal-title" id="modalTitle" style="font-weight:600;font-size:1.05rem;">
+                    Add Cash Master Item
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="/CashManagement/SaveMasterItem">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4 bg-light">
+                    <input type="hidden" id="itemId" name="id" value="0">
+                    <input type="hidden" id="itemType" name="itemType" value="">
+                    
+                    <div class="mb-3">
+                        <label for="itemName" class="form-label" style="font-size:.85rem;font-weight:600;color:var(--ink);">Item Name *</label>
+                        <input type="text" class="form-control" id="itemName" name="name" required style="border-radius:8px;font-size:.875rem;" placeholder="e.g. Subsidy / Licenses">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-3 bg-white d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:8px;font-weight:600;font-size:.85rem;">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="border-radius:8px;font-weight:600;font-size:.85rem;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openAddModal(type) {
+            document.getElementById('itemId').value = "0";
+            document.getElementById('itemType').value = type;
+            document.getElementById('itemName').value = "";
+            
+            var displayType = type === 'ReceiptType' ? 'Receipt Type' : 'Expense Category';
+            document.getElementById('modalTitle').innerText = 'Add ' + displayType;
+            
+            var modal = new bootstrap.Modal(document.getElementById('masterModal'));
+            modal.show();
+        }
+        
+        function openEditModal(id, type, name) {
+            document.getElementById('itemId').value = id;
+            document.getElementById('itemType').value = type;
+            document.getElementById('itemName').value = name;
+            
+            var displayType = type === 'ReceiptType' ? 'Receipt Type' : 'Expense Category';
+            document.getElementById('modalTitle').innerText = 'Edit ' + displayType;
+            
+            var modal = new bootstrap.Modal(document.getElementById('masterModal'));
+            modal.show();
+        }
+    </script>
+}
+

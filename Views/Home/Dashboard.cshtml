@@ -1,0 +1,1489 @@
+﻿@model IncentivePortal.DTOs.DashboardSummary
+@inject IncentivePortal.Data.IncentiveDbContext Db
+@inject IncentivePortal.Helpers.ICurrentUser CurrentUser
+@using Microsoft.EntityFrameworkCore
+@{
+    ViewData["Title"] = "Dashboard";
+
+    // Enforce branch-isolated filters for selectors
+    var branches = Db.Branches.Where(x => !x.IsDeleted).ToList();
+    if (CurrentUser.BranchId.HasValue && !CurrentUser.IsInRole("Super Admin") && !CurrentUser.IsInRole("HO Finance") && !CurrentUser.IsInRole("Auditor"))
+    {
+        branches = branches.Where(x => x.Id == CurrentUser.BranchId.Value).ToList();
+    }
+
+    var parties = Db.Parties.Include(x => x.Branch).Where(x => !x.IsDeleted).ToList();
+    if (CurrentUser.BranchId.HasValue && !CurrentUser.IsInRole("Super Admin") && !CurrentUser.IsInRole("HO Finance") && !CurrentUser.IsInRole("Auditor"))
+    {
+        parties = parties.Where(x => x.BranchId == CurrentUser.BranchId.Value).ToList();
+    }
+
+    // Dynamic greeting calculation
+    var welcomeName = "User";
+    if (User.Identity?.IsAuthenticated == true)
+    {
+        if (User.IsInRole("Super Admin"))
+        {
+            welcomeName = "Admin User";
+        }
+        else if (User.IsInRole("HO Finance"))
+        {
+            welcomeName = "HO Finance User";
+        }
+        else if (User.IsInRole("Branch Manager") && CurrentUser.BranchId.HasValue)
+        {
+            var userBranch = Db.Branches.FirstOrDefault(x => x.Id == CurrentUser.BranchId.Value);
+            welcomeName = userBranch != null ? $"{userBranch.Name} Manager" : "Branch Manager";
+        }
+        else
+        {
+            welcomeName = User.Identity.Name ?? "User";
+        }
+    }
+
+    // Month-End Checklist readiness status queries
+    var notificationSetting = Db.NotificationSettings.FirstOrDefault(n => !n.IsDeleted);
+    bool isSmtpConfigured = notificationSetting != null && notificationSetting.EmailEnabled && !string.IsNullOrEmpty(notificationSetting.SmtpHost) && !string.IsNullOrEmpty(notificationSetting.SmtpUser);
+
+    var todayDate = DateTime.UtcNow.Date;
+    bool isTdsActive = Db.TdsRules.Any(r => !r.IsDeleted && r.EffectiveFrom <= todayDate && r.EffectiveTo >= todayDate);
+
+    var tallySetting = Db.TallyIntegrationSettings.FirstOrDefault(t => !t.IsDeleted);
+    bool isTallyActive = tallySetting != null && tallySetting.IsEnabled && !string.IsNullOrEmpty(tallySetting.BaseUrl);
+}
+
+@functions {
+    public string FormatCr(decimal value) {
+        if (value >= 10000000m) {
+            return "₹ " + (value / 10000000m).ToString("N2") + " Cr";
+        } else if (value >= 100000m) {
+            return "₹ " + (value / 100000m).ToString("N2") + " L";
+        }
+        return "₹ " + value.ToString("N0");
+    }
+}
+
+<!-- Dashboard Global Overrides -->
+<style>
+    .quick-action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .quick-action-btn {
+        transition: all 0.25s ease;
+    }
+    
+    /* Dark Theme Dashboard Styles */
+    .dark-theme .stat-card {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+    }
+    .dark-theme .panel {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+        color: #f8fafc !important;
+    }
+    .dark-theme .form-select, .dark-theme .form-control {
+        background-color: #0f172a !important;
+        color: #f8fafc !important;
+        border-color: #334155 !important;
+    }
+    .dark-theme .table-light {
+        background-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+    .dark-theme .table {
+        color: #f8fafc !important;
+        border-color: #334155 !important;
+    }
+    .dark-theme .table-hover tbody tr:hover {
+        background-color: rgba(255, 255, 255, 0.03) !important;
+    }
+    .dark-theme .metric {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+    .dark-theme .circular-progress-wrap circle.progress-ring__circle-bg {
+        stroke: #334155 !important;
+    }
+    .dark-theme .simulator-display-card {
+        background: rgba(255, 255, 255, 0.02) !important;
+        border-color: #334155 !important;
+    }
+    .dark-theme .text-dark {
+        color: #ffffff !important;
+    }
+    .dark-theme .bg-light {
+        background-color: #0f172a !important;
+    }
+    
+    .bg-success-light { background: rgba(34, 197, 94, 0.12); }
+    .bg-primary-light { background: rgba(37, 99, 235, 0.12); }
+    .bg-teal-light { background: rgba(20, 184, 166, 0.12); }
+    .text-teal { color: #14b8a6; }
+</style>
+
+<div id="dashboardWrapper" class="p-1" style="transition: all 0.3s ease;">
+    
+    <!-- Top Greeting Section with Date Selector and Download Button -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <h2 style=" font-size: 1.6rem; font-weight: 700; color: var(--ink); margin: 0; display: flex; align-items: center; gap: 8px;">
+                Welcome back, @welcomeName! 👋
+            </h2>
+            <p class="text-muted mb-0" style="font-size: 0.88rem; ">Here's what's happening with your incentive program today.</p>
+        </div>
+        
+        <div class="d-flex align-items-center gap-3">
+            <!-- Datepicker Dropdown Trigger -->
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary d-flex align-items-center gap-2 px-3 py-2 bg-white" style="border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.85rem; font-weight: 600; color: var(--ink); height: 40px;" type="button" id="dateRangePicker" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fa-regular fa-calendar-days text-muted"></i> 
+                    <span>01 May 2024 - 31 May 2024</span>
+                    <i class="fa-solid fa-angle-down text-muted" style="font-size: 0.72rem;"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg p-2" aria-labelledby="dateRangePicker" style="border-radius: 12px;  font-size: 0.85rem;">
+                    <li><a class="dropdown-item py-2 active" style="border-radius:6px;" href="#">May 2024</a></li>
+                    <li><a class="dropdown-item py-2" style="border-radius:6px;" href="#">April 2024</a></li>
+                    <li><a class="dropdown-item py-2" style="border-radius:6px;" href="#">Q1 FY 2024-25</a></li>
+                </ul>
+            </div>
+
+            <!-- Download Report Button -->
+            <button class="btn btn-primary d-flex align-items-center gap-2 px-4" style="background: var(--brand); border: none; height: 40px; font-weight: 600; font-size: 0.88rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);">
+                <i class="fa-solid fa-cloud-arrow-down"></i> Download Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Multi-Tab Section Navigation -->
+    <ul class="nav nav-tabs portal-dashboard-tabs mb-4 border-0 p-1 rounded-3 d-inline-flex" role="tablist" style="background: rgba(15, 23, 42, 0.05); padding: 3px !important; border-radius: 8px !important;">
+        @if (CurrentUser.IsInRole("Super Admin") || CurrentUser.IsInRole("HO Finance") || CurrentUser.IsInRole("Auditor"))
+        {
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-bold px-4 py-2 border-0" id="ho-tab" data-bs-toggle="tab" data-bs-target="#ho-pane" type="button" role="tab" style="font-size: 0.88rem; border-radius: 6px;">
+                    <i class="fa-solid fa-chart-line me-1"></i> Dashboard View
+                </button>
+            </li>
+        }
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(!(CurrentUser.IsInRole("Super Admin") || CurrentUser.IsInRole("HO Finance") || CurrentUser.IsInRole("Auditor")) ? "active" : "") fw-bold px-4 py-2 border-0" id="branch-tab" data-bs-toggle="tab" data-bs-target="#branch-pane" type="button" role="tab" style="font-size: 0.88rem; border-radius: 6px;">
+                <i class="fa-solid fa-sitemap me-1"></i> Branch isolation
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold px-4 py-2 border-0" id="dealer-tab" data-bs-toggle="tab" data-bs-target="#dealer-pane" type="button" role="tab" style="font-size: 0.88rem; border-radius: 6px;">
+                <i class="fa-solid fa-magnifying-glass-chart me-1"></i> Dealer Simulator
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tabs Content Container -->
+    <div class="tab-content">
+        <!-- ======================================================== -->
+        <!-- TAB 1: EXECUTIVE MAIN DASHBOARD VIEW                     -->
+        <!-- ======================================================== -->
+        @if (CurrentUser.IsInRole("Super Admin") || CurrentUser.IsInRole("HO Finance") || CurrentUser.IsInRole("Auditor"))
+        {
+            <div class="tab-pane fade show active" id="ho-pane" role="tabpanel">
+                
+                <!-- 5 EXECUTIVE STATS CARDS — gradient (reference mockup colors) -->
+                <div class="row g-3 mb-4">
+                    
+                    <!-- Card 1: Total Distributors -->
+                    <div class="col-6 col-sm-6 col-md-4 col-xl">
+                        <div class="kpi-gradient-card kpi-sales">
+                            <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
+                            <div class="kpi-label">Total Distributors</div>
+                            <div class="kpi-value">@Model.ActiveParties.ToString("N0")</div>
+                            <div class="d-flex justify-content-between align-items-end">
+                                <div class="kpi-delta">
+                                    <i class="fa-solid fa-arrow-up" style="font-size:0.65rem;"></i> @Model.SalesGrowthMonthOnMonth.ToString("F1")% <span style="opacity:0.8;font-weight:500;">MoM</span>
+                                </div>
+                                <div class="kpi-sparkline" style="width: 80px; height: 30px;">
+                                    <svg width="80" height="30" viewBox="0 0 80 30" style="overflow: visible;">
+                                        <path d="M 0 25 Q 15 20, 30 22 T 55 10 T 80 5 L 80 30 L 0 30 Z" fill="rgba(255,255,255,0.15)" />
+                                        <path d="M 0 25 Q 15 20, 30 22 T 55 10 T 80 5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Total Target -->
+                    <div class="col-6 col-sm-6 col-md-4 col-xl">
+                        <div class="kpi-gradient-card kpi-purple">
+                            <div class="kpi-icon"><i class="fa-solid fa-bullseye"></i></div>
+                            <div class="kpi-label">Total Target</div>
+                            <div class="kpi-value">@FormatCr(Model.TotalSales * 1.20m)</div>
+                            <div class="d-flex justify-content-between align-items-end">
+                                <div class="kpi-delta">
+                                    <i class="fa-solid fa-arrow-up" style="font-size:0.65rem;"></i> 8.3% <span style="opacity:0.8;font-weight:500;">MoM</span>
+                                </div>
+                                <div class="kpi-sparkline" style="width: 80px; height: 30px;">
+                                    <svg width="80" height="30" viewBox="0 0 80 30" style="overflow: visible;">
+                                        <path d="M 0 28 Q 20 25, 40 20 T 70 12 T 80 8 L 80 30 L 0 30 Z" fill="rgba(255,255,255,0.15)" />
+                                        <path d="M 0 28 Q 20 25, 40 20 T 70 12 T 80 8" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Achieved Sales -->
+                    <div class="col-6 col-sm-6 col-md-4 col-xl">
+                        <div class="kpi-gradient-card kpi-cashin">
+                            <div class="kpi-icon"><i class="fa-solid fa-chart-line"></i></div>
+                            <div class="kpi-label">Achieved Sales</div>
+                            <div class="kpi-value">@FormatCr(Model.TotalSales)</div>
+                            <div class="d-flex justify-content-between align-items-end">
+                                <div class="kpi-delta">
+                                    <i class="fa-solid fa-arrow-up" style="font-size:0.65rem;"></i> 15.6% <span style="opacity:0.8;font-weight:500;">MoM</span>
+                                </div>
+                                <div class="kpi-sparkline" style="width: 80px; height: 30px;">
+                                    <svg width="80" height="30" viewBox="0 0 80 30" style="overflow: visible;">
+                                        <path d="M 0 28 Q 15 26, 35 15 T 60 18 T 80 2 L 80 30 L 0 30 Z" fill="rgba(255,255,255,0.15)" />
+                                        <path d="M 0 28 Q 15 26, 35 15 T 60 18 T 80 2" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Total Incentive -->
+                    <div class="col-6 col-sm-6 col-md-4 col-xl">
+                        <div class="kpi-gradient-card kpi-incentive">
+                            <div class="kpi-icon"><i class="fa-solid fa-gift"></i></div>
+                            <div class="kpi-label">Total Incentive</div>
+                            <div class="kpi-value">@FormatCr(Model.TotalIncentive)</div>
+                            <div class="d-flex justify-content-between align-items-end">
+                                <div class="kpi-delta">
+                                    <i class="fa-solid fa-arrow-up" style="font-size:0.65rem;"></i> @Model.IncentiveGrowthMonthOnMonth.ToString("F1")% <span style="opacity:0.8;font-weight:500;">MoM</span>
+                                </div>
+                                <div class="kpi-sparkline" style="width: 80px; height: 30px;">
+                                    <svg width="80" height="30" viewBox="0 0 80 30" style="overflow: visible;">
+                                        <path d="M 0 26 Q 20 28, 40 18 T 65 10 T 80 2 L 80 30 L 0 30 Z" fill="rgba(255,255,255,0.15)" />
+                                        <path d="M 0 26 Q 20 28, 40 18 T 65 10 T 80 2" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 5: Paid Incentive -->
+                    <div class="col-12 col-sm-6 col-md-4 col-xl">
+                        <div class="kpi-gradient-card kpi-net">
+                            <div class="kpi-icon"><i class="fa-solid fa-wallet"></i></div>
+                            <div class="kpi-label">Paid Incentive</div>
+                            <div class="kpi-value">@FormatCr(Model.PaidIncentives)</div>
+                            <div class="d-flex justify-content-between align-items-end">
+                                <div class="kpi-delta">
+                                    <i class="fa-solid fa-arrow-up" style="font-size:0.65rem;"></i> 9.4% <span style="opacity:0.8;font-weight:500;">MoM</span>
+                                </div>
+                                <div class="kpi-sparkline" style="width: 80px; height: 30px;">
+                                    <svg width="80" height="30" viewBox="0 0 80 30" style="overflow: visible;">
+                                        <path d="M 0 25 Q 15 28, 35 15 T 60 10 T 80 4 L 80 30 L 0 30 Z" fill="rgba(255,255,255,0.15)" />
+                                        <path d="M 0 25 Q 15 28, 35 15 T 60 10 T 80 4" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- MIDDLE GRID: TWO CHARTS TIMELINE + QUICK ACTIONS -->
+                <div class="row g-4 mb-4">
+                    
+                    <!-- Chart 1: Sales vs Target Overview (Combination Chart) -->
+                    <div class="col-lg-5 col-md-12">
+                        <div class="panel h-100" style="border-radius: 8px; padding: 24px; background: #ffffff; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
+                            <div class="panel-header d-flex justify-content-between align-items-center mb-4">
+                                <div>
+                                    <h4 class="fw-bold mb-1 text-dark" style="font-size: 1.05rem; "><i class="fa-solid fa-chart-simple text-primary me-2"></i> Sales vs Target Overview</h4>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="yearSelectorDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="font-size:0.75rem; border-radius: 6px; font-weight:600;">
+                                        This Year
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="yearSelectorDropdown" style="font-size:0.8rem;">
+                                        <li><a class="dropdown-item py-1 active" href="#">This Year</a></li>
+                                        <li><a class="dropdown-item py-1" href="#">Last Year</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div id="widget-trends-chart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Chart 2: Incentive Summary Donut Chart -->
+                    <div class="col-lg-4 col-md-6">
+                        <div class="panel h-100" style="border-radius: 8px; padding: 24px; background: #ffffff; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
+                            <div class="panel-header mb-4">
+                                <h4 class="fw-bold mb-1 text-dark" style="font-size: 1.05rem; "><i class="fa-solid fa-circle-pie text-success me-2"></i> Incentive Summary</h4>
+                            </div>
+                            <div id="widget-distribution-chart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Quick Actions (Exactly like the Image) -->
+                    <div class="col-lg-3 col-md-6">
+                        <div class="panel h-100" style="border-radius: 8px; padding: 20px; background: #ffffff; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div class="panel-header mb-3 pb-2 border-bottom">
+                                <h4 style=" font-size: 1.05rem; font-weight: 700; color: var(--ink); margin: 0;"><i class="fa-solid fa-bolt text-warning me-2"></i> Quick Actions</h4>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                @if (CurrentUser.IsInRole("Super Admin"))
+                                {
+                                    <!-- Action 1: Upload E-Way Bills -->
+                                    <a asp-controller="UploadManagement" asp-action="Index" class="quick-action-btn d-flex align-items-center justify-content-between p-3" style="background: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.15); border-radius: 8px; color: var(--brand); font-weight: 600; text-decoration: none; font-size: 0.84rem; transition: all 0.2s;">
+                                        <span class="d-flex align-items-center gap-2">
+                                            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 1.05rem;"></i> Upload Console
+                                        </span>
+                                        <i class="fa-solid fa-arrow-right-long" style="opacity: 0.7;"></i>
+                                    </a>
+                                    <!-- Action 2: Workbook Import -->
+                                    <a asp-controller="Imports" asp-action="MonthlySales" class="quick-action-btn d-flex align-items-center justify-content-between p-3" style="background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.15); border-radius: 8px; color: #22C55E; font-weight: 600; text-decoration: none; font-size: 0.84rem; transition: all 0.2s;">
+                                        <span class="d-flex align-items-center gap-2">
+                                            <i class="fa-solid fa-file-excel" style="font-size: 1.05rem;"></i> Workbook Import
+                                        </span>
+                                        <i class="fa-solid fa-arrow-right-long" style="opacity: 0.7;"></i>
+                                    </a>
+                                }
+                                <!-- Action 3: Calculate Incentive -->
+                                <a asp-controller="Imports" asp-action="MonthlySales" class="quick-action-btn d-flex align-items-center justify-content-between p-3" style="background: rgba(30, 64, 175, 0.04); border: 1px solid rgba(30, 64, 175, 0.15); border-radius: 8px; color: var(--primary); font-weight: 600; text-decoration: none; font-size: 0.84rem; transition: all 0.2s;">
+                                    <span class="d-flex align-items-center gap-2">
+                                        <i class="fa-solid fa-calculator" style="font-size: 1.05rem;"></i> Calculate Incentive
+                                    </span>
+                                    <i class="fa-solid fa-arrow-right-long" style="opacity: 0.7;"></i>
+                                </a>
+                                <!-- Action 4: Pending Approvals -->
+                                <a asp-controller="Reports" asp-action="PendingApprovals" class="quick-action-btn d-flex align-items-center justify-content-between p-3" style="background: rgba(239, 68, 68, 0.04); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 8px; color: #EF4444; font-weight: 600; text-decoration: none; font-size: 0.84rem; transition: all 0.2s;">
+                                    <span class="d-flex align-items-center gap-2">
+                                        <i class="fa-solid fa-circle-check" style="font-size: 1.05rem;"></i> Pending Approvals
+                                    </span>
+                                    <i class="fa-solid fa-arrow-right-long" style="opacity: 0.7;"></i>
+                                </a>
+                                <!-- Action 5: View Reports -->
+                                <a asp-controller="Reports" asp-action="IncentiveRegister" class="quick-action-btn d-flex align-items-center justify-content-between p-3" style="background: rgba(14, 165, 233, 0.04); border: 1px solid rgba(14, 165, 233, 0.15); border-radius: 8px; color: #0EA5E9; font-weight: 600; text-decoration: none; font-size: 0.84rem; transition: all 0.2s;">
+                                    <span class="d-flex align-items-center gap-2">
+                                        <i class="fa-solid fa-chart-line" style="font-size: 1.05rem;"></i> View Reports
+                                    </span>
+                                    <i class="fa-solid fa-arrow-right-long" style="opacity: 0.7;"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- MONTH-END CHECKLIST -->
+                <div class="row g-4 mb-4">
+                    <div class="col-12">
+                        <div class="panel" style="border-radius: 8px; padding: 24px; background: #ffffff; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
+                            <div class="panel-header d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                <h4 style=" font-size: 1.05rem; font-weight: 700; color: var(--ink); margin: 0;">
+                                    <i class="fa-solid fa-clipboard-check text-primary me-2"></i> Month-End Configuration Checklist
+                                </h4>
+                                <span class="badge bg-light text-dark border font-monospace" style="font-size: 0.8rem;">Readiness Status</span>
+                            </div>
+                            <div class="row g-3">
+                                <!-- Check 1: SMTP Configured -->
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-center gap-3 p-3 rounded" style="background: @(isSmtpConfigured ? "#f0fdf4" : "#fef2f2"); border: 1px solid @(isSmtpConfigured ? "#bbf7d0" : "#fecaca");">
+                                        <div class="fs-3">
+                                            @if (isSmtpConfigured)
+                                            {
+                                                <span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>
+                                            }
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark" style="font-size: 0.88rem;">SMTP Mail Server</div>
+                                            <div class="text-secondary" style="font-size: 0.78rem;">
+                                                @if (isSmtpConfigured)
+                                                {
+                                                    <text>Configured &amp; Active</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>SMTP Settings Lacking</text>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Check 2: TDS Rules Active -->
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-center gap-3 p-3 rounded" style="background: @(isTdsActive ? "#f0fdf4" : "#fef2f2"); border: 1px solid @(isTdsActive ? "#bbf7d0" : "#fecaca");">
+                                        <div class="fs-3">
+                                            @if (isTdsActive)
+                                            {
+                                                <span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>
+                                            }
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark" style="font-size: 0.88rem;">Active TDS Rules</div>
+                                            <div class="text-secondary" style="font-size: 0.78rem;">
+                                                @if (isTdsActive)
+                                                {
+                                                    <text>Active rules present today</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>No active TDS rules today</text>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Check 3: Tally Sync Active -->
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-center gap-3 p-3 rounded" style="background: @(isTallyActive ? "#f0fdf4" : "#fef2f2"); border: 1px solid @(isTallyActive ? "#bbf7d0" : "#fecaca");">
+                                        <div class="fs-3">
+                                            @if (isTallyActive)
+                                            {
+                                                <span class="text-success"><i class="fa-solid fa-circle-check"></i></span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-danger"><i class="fa-solid fa-circle-xmark"></i></span>
+                                            }
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark" style="font-size: 0.88rem;">Tally Integration</div>
+                                            <div class="text-secondary" style="font-size: 0.78rem;">
+                                                @if (isTallyActive)
+                                                {
+                                                    <text>Enabled &amp; Ready</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>Tally sync disabled/inactive</text>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOWER GRID: RECENT ACTIVITY & TOP DISTRIBUTORS -->
+                <div class="row g-4 mb-4">
+                    
+                    <!-- Recent Activity Styled Table -->
+                    <div class="col-lg-8">
+                        <div class="panel h-100" style="border-radius: 8px; padding: 20px; background: #ffffff; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
+                            <div class="panel-header d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                <h4 style=" font-size: 1.05rem; font-weight: 700; color: var(--ink); margin: 0;"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Recent Activity</h4>
+                                <a asp-controller="Ledger" asp-action="Index" style="font-size: 0.8rem; font-weight: 600; color: var(--brand); text-decoration: none;">View All</a>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table align-middle" id="dashboardActivityTable" style="font-size: 0.82rem;  min-width: 600px;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 50px;">#</th>
+                                            <th>Activity</th>
+                                            <th>User</th>
+                                            <th>Date &amp; Time</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>1</td>
+                                            <td><span class="d-flex align-items-center gap-2 fw-semibold text-dark"><i class="fa-solid fa-cloud-arrow-up text-primary"></i> E-Way Bills Uploaded</span></td>
+                                            <td>John Doe</td>
+                                            <td>31 May 2024, 10:30 AM</td>
+                                            <td><span class="badge bg-success-light text-success fw-bold px-2 py-1" style="font-size: 0.72rem; border-radius: 20px;">Success</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>2</td>
+                                            <td><span class="d-flex align-items-center gap-2 fw-semibold text-dark"><i class="fa-solid fa-calculator text-primary"></i> Incentive Calculated</span></td>
+                                            <td>Jane Smith</td>
+                                            <td>31 May 2024, 09:15 AM</td>
+                                            <td><span class="badge bg-success-light text-success fw-bold px-2 py-1" style="font-size: 0.72rem; border-radius: 20px;">Success</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>3</td>
+                                            <td><span class="d-flex align-items-center gap-2 fw-semibold text-dark"><i class="fa-solid fa-file-excel text-primary"></i> Incentive Data Uploaded</span></td>
+                                            <td>Rahul Verma</td>
+                                            <td>30 May 2024, 06:45 PM</td>
+                                            <td><span class="badge bg-success-light text-success fw-bold px-2 py-1" style="font-size: 0.72rem; border-radius: 20px;">Success</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>4</td>
+                                            <td><span class="d-flex align-items-center gap-2 fw-semibold text-dark"><i class="fa-solid fa-circle-check text-primary"></i> Incentive Approved</span></td>
+                                            <td>Priya Sharma</td>
+                                            <td>30 May 2024, 04:20 PM</td>
+                                            <td><span class="badge bg-primary-light text-primary fw-bold px-2 py-1" style="font-size: 0.72rem; border-radius: 20px;">Approved</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>5</td>
+                                            <td><span class="d-flex align-items-center gap-2 fw-semibold text-dark"><i class="fa-solid fa-credit-card text-primary"></i> Payment Released</span></td>
+                                            <td>Admin User</td>
+                                            <td>30 May 2024, 02:10 PM</td>
+                                            <td><span class="badge bg-teal-light text-teal fw-bold px-2 py-1" style="font-size: 0.72rem; border-radius: 20px;">Paid</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Distributors by Sales (with Progress Bars) -->
+                    <div class="col-lg-4">
+                        <div class="panel h-100" style="border-radius: 8px; padding: 20px; background: #ffffff; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0;">
+                            <div class="panel-header d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                                <h4 style=" font-size: 1.05rem; font-weight: 700; color: var(--ink); margin: 0;"><i class="fa-solid fa-medal text-warning me-2"></i> Top Distributors <span style="font-size: 0.76rem; font-weight: 500; color: var(--muted);">(By Achieved Sales)</span></h4>
+                                <a asp-controller="Parties" asp-action="Index" style="font-size: 0.8rem; font-weight: 600; color: var(--brand); text-decoration: none;">View All</a>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 10px;">
+                                @{
+                                    int rank = 1;
+                                    var topDealers = Model.TopDealers.Take(5).ToList();
+                                    decimal maxSales = topDealers.Count > 0 ? topDealers.Max(x => x.Sales) : 1m;
+                                }
+                                @foreach (var d in topDealers)
+                                {
+                                    var percent = maxSales > 0 ? (d.Sales / maxSales) * 100m : 0m;
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-1" style="font-size: 0.85rem;">
+                                            <span class="fw-semibold text-dark">
+                                                <span style="background: rgba(37, 99, 235, 0.1); color: var(--brand); width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; margin-right: 6px;">@rank</span>
+                                                @d.PartyName
+                                            </span>
+                                            <strong class="font-monospace" style="color: var(--ink);">@FormatCr(d.Sales)</strong>
+                                        </div>
+                                        <div class="progress" style="height: 6px; border-radius: 10px; background: #eef2f6;">
+                                            <div class="progress-bar" role="progressbar" style="width: @percent.ToString("F1")%; background: var(--brand); border-radius: 10px;" aria-valuenow="@percent.ToString("F1")" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    rank++;
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- LOCATION SPLIT + CATEGORY MIX CHARTS -->
+                <div class="row g-4 mb-4">
+                    <!-- Location Split Donut -->
+                    <div class="col-lg-6 col-md-12">
+                        <div class="panel" style="border-radius:8px; padding:24px; background:#ffffff; box-shadow:0 4px 20px rgba(0,0,0,0.03); border:1px solid #e2e8f0;">
+                            <div class="panel-header mb-3">
+                                <h4 class="fw-bold mb-0 text-dark" style="font-size:1.05rem; ">
+                                    <i class="fa-solid fa-map-location-dot text-primary me-2"></i> Location Split
+                                </h4>
+                                <p class="text-muted small mb-0 mt-1">Sales distribution by branch / location</p>
+                            </div>
+                            <div id="location-split-chart" style="min-height:370px;"></div>
+                        </div>
+                    </div>
+                    <!-- Category Mix Donut -->
+                    <div class="col-lg-6 col-md-12">
+                        <div class="panel" style="border-radius:8px; padding:24px; background:#ffffff; box-shadow:0 4px 20px rgba(0,0,0,0.03); border:1px solid #e2e8f0;">
+                            <div class="panel-header mb-3">
+                                <h4 class="fw-bold mb-0 text-dark" style="font-size:1.05rem; ">
+                                    <i class="fa-solid fa-layer-group text-success me-2"></i> Category Mix
+                                </h4>
+                                <p class="text-muted small mb-0 mt-1">Sales breakdown by product / part category</p>
+                            </div>
+                            <div id="category-mix-chart" style="min-height:370px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        }
+
+        <!-- ======================================================== -->
+        <!-- TAB 2: BRANCH PERFORMANCE ISOLATION                      -->
+        <!-- ======================================================== -->
+        <div class="tab-pane fade @(!(CurrentUser.IsInRole("Super Admin") || CurrentUser.IsInRole("HO Finance") || CurrentUser.IsInRole("Auditor")) ? "show active" : "")" id="branch-pane" role="tabpanel">
+            <div class="panel mb-4" style="border-radius: 8px; padding: 20px; border: 1px solid #e2e8f0;">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h4 class="fw-bold mb-1 text-dark" style="font-size:1.05rem; "><i class="fa-solid fa-filter text-primary me-2"></i> Local Branch Analytics Console</h4>
+                        <p class="text-muted small mb-md-0">Enforces role-based isolation of dealer records for your specific jurisdiction</p>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <select class="form-select corp-select d-inline-block w-auto" id="branch-selector" @(CurrentUser.BranchId.HasValue && !CurrentUser.IsInRole("Super Admin") && !CurrentUser.IsInRole("HO Finance") && !CurrentUser.IsInRole("Auditor") ? "disabled" : "") style="height: 38px; font-weight:600; border-radius: 8px;">
+                            @foreach (var br in branches)
+                            {
+                                <option value="@br.Id">@br.Name (@br.Code)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branch summaries metrics -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-3 col-sm-6">
+                    <div class="metric success" style="border-radius: 8px; border-left: 4px solid #22C55E;">
+                        <span style="font-size: 0.74rem;">Branch Sales Accrued</span>
+                        <strong id="br-kpi-sales" class="font-monospace" style="font-size: 1.5rem;">₹0</strong>
+                        <small>Accrued this intake period</small>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-sm-6">
+                    <div class="metric premium" style="border-radius: 8px; border-left: 4px solid var(--brand);">
+                        <span style="font-size: 0.74rem;">Branch Payout Liability</span>
+                        <strong id="br-kpi-payout" class="text-success font-monospace" style="font-size: 1.5rem;">₹0</strong>
+                        <small>Calculated net payout</small>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-sm-6">
+                    <div class="metric warning" style="border-radius: 8px; border-left: 4px solid #f59e0b;">
+                        <span style="font-size: 0.74rem;">Growth Momentum</span>
+                        <strong id="br-kpi-growth" class="font-monospace" style="font-size: 1.5rem;">0%</strong>
+                        <small>Accrued liability progress</small>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-sm-6">
+                    <div class="metric danger" style="border-radius: 8px; border-left: 4px solid #ef4444;">
+                        <span style="font-size: 0.74rem;">Slab Target Progress</span>
+                        <strong id="br-kpi-slab-ach" class="font-monospace" style="font-size: 1.5rem;">0%</strong>
+                        <small>Dealers on target thresholds</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branch top growth dealers & chart -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-7">
+                    <div class="panel h-100" style="border-radius: 8px; padding: 24px; border: 1px solid #e2e8f0;">
+                        <div class="panel-header mb-4">
+                            <div>
+                                <h4 class="fw-bold mb-1 text-dark" style="font-size:1.05rem; "><i class="fa-solid fa-list-ol text-primary me-2"></i> Branch Growth Dealers</h4>
+                                <p class="mb-0 text-muted small">Highest performing dealer accounts associated with this branch</p>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle" id="br-top-dealers-table" style="font-size: 0.85rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Dealer Profile</th>
+                                        <th class="text-end">Sales Value</th>
+                                        <th class="text-end">Gross Payout</th>
+                                        <th class="text-end">Growth MoM</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated via AJAX -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="panel h-100" style="border-radius: 8px; padding: 24px; border: 1px solid #e2e8f0;">
+                        <div class="panel-header mb-4">
+                            <div>
+                                <h4 class="fw-bold mb-1 text-dark" style="font-size:1.05rem; "><i class="fa-solid fa-chart-pie text-secondary me-2"></i> Branch Incentive Slab Spread</h4>
+                                <p class="mb-0 text-muted small">Slab categorization of dealers within this branch</p>
+                            </div>
+                        </div>
+                        <div id="branch-slab-dist-chart" style="height: 320px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- TAB 3: DEALER SIMULATOR INTELLIGENCE                     -->
+        <!-- ======================================================== -->
+        <div class="tab-pane fade" id="dealer-pane" role="tabpanel">
+            <div class="panel mb-4" style="border-radius: 8px; padding: 20px; border: 1px solid #e2e8f0;">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h4 class="fw-bold mb-1 text-dark" style="font-size:1.05rem; "><i class="fa-solid fa-magnifying-glass-chart text-primary me-2"></i> Dealer Performance Intelligence Selector</h4>
+                        <p class="text-muted small mb-md-0">Select an active dealer account to simulate performance projections and view transaction lifecycles</p>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <select class="form-select corp-select d-inline-block w-auto" id="dealer-selector" style="height: 38px; font-weight:600; border-radius: 8px;">
+                            <option value="">-- Choose Dealer --</option>
+                            @foreach (var dl in parties)
+                            {
+                                <option value="@dl.Id">@dl.PartyCode - @dl.PartyName (@dl.Branch.Code)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dealer Shell populated dynamically -->
+            <div id="dealer-insights-shell" style="display: none;">
+                
+                <!-- Dealer Stats Row -->
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3 col-sm-6">
+                        <div class="metric info" style="border-radius:8px;">
+                            <span style="font-size: 0.74rem;">Current Purchase Value</span>
+                            <strong id="dl-kpi-sales" class="font-monospace" style="font-size: 1.5rem;">₹0</strong>
+                            <small>Accrued this period</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="metric premium" style="border-radius:8px;">
+                            <span style="font-size: 0.74rem;">Current Slab Tier</span>
+                            <strong id="dl-kpi-slab" class="font-monospace" style="font-size: 1.5rem;">0%</strong>
+                            <small>Matched calculation rate</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="metric success" style="border-radius:8px;">
+                            <span style="font-size: 0.74rem;">Gross Accrued Payout</span>
+                            <strong id="dl-kpi-incentive" class="text-success font-monospace" style="font-size: 1.5rem;">₹0</strong>
+                            <small>Accrued liability</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="metric warning" style="border-radius:8px;">
+                            <span style="font-size: 0.74rem;">Account Growth Trend</span>
+                            <strong id="dl-kpi-growth" style="font-size: 1.25rem; padding-top: 10px;" class="font-monospace">0% / 0%</strong>
+                            <small>MoM / YoY growth momentum</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation projection & milestones -->
+                <div class="row g-4 mb-4">
+                    
+                    <!-- Circular progress toward next milestone -->
+                    <div class="col-lg-5">
+                        <div class="panel h-100 text-center d-flex flex-column justify-content-between py-4" style="border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div class="panel-header text-start border-0 py-0">
+                                <h4 class="fw-bold mb-0 text-dark" style="font-size: 1.05rem; "><i class="fa-solid fa-bullseye text-primary me-2"></i> Next Slab Milestone Progress</h4>
+                            </div>
+                            <div class="d-flex justify-content-center my-4 position-relative">
+                                <div class="circular-progress-wrap">
+                                    <svg class="progress-ring" width="200" height="200">
+                                        <circle class="progress-ring__circle-bg" stroke="#f1f5f9" stroke-width="12" fill="transparent" r="85" cx="100" cy="100"/>
+                                        <circle class="progress-ring__circle" id="progress-circle" stroke="var(--color-1)" stroke-width="14" fill="transparent" r="85" cx="100" cy="100" stroke-linecap="round"/>
+                                    </svg>
+                                    <div class="progress-circle-text">
+                                        <strong class="fs-1 text-dark" id="prog-circle-pct" style=" font-weight: 700;">0%</strong>
+                                        <span class="text-muted d-block small fw-bold">Completed</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="fw-bold text-dark mb-1" id="next-slab-message" style="font-size: 0.95rem;">Calculating milestone targets...</p>
+                                <small class="text-muted" id="next-slab-detail">Purchase progress toward next tier</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Projection simulator -->
+                    <div class="col-lg-7">
+                        <div class="panel h-100 d-flex flex-column justify-content-between" style="border-radius: 8px; padding: 24px; border: 1px solid #e2e8f0;">
+                            <div>
+                                <div class="panel-header">
+                                    <div>
+                                        <h4 class="fw-bold mb-1 text-dark" style="font-size: 1.05rem; "><i class="fa-solid fa-sliders text-success me-2"></i> Interactive Payout Projection Simulator</h4>
+                                        <p class="mb-0 text-muted small">Drag slider to simulate purchase values and immediately calculate higher slab payouts</p>
+                                    </div>
+                                </div>
+
+                                <div class="bg-light p-3 rounded mb-4" style="border-radius: 8px !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold text-dark small">SIMULATED PURCHASE INCREASE</span>
+                                        <span class="fs-4 fw-extrabold text-success font-monospace" id="simulator-purchase-text">+ ₹0</span>
+                                    </div>
+                                    <input type="range" class="form-range portal-simulator-slider" id="simulator-slider" min="0" max="500000" step="10000" value="0">
+                                    <div class="d-flex justify-content-between text-muted small mt-1 font-monospace" style="font-size: 0.75rem;">
+                                        <span>Current Sale</span>
+                                        <span>+ ₹2,50,000</span>
+                                        <span>+ ₹5,00,000</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Interactive Simulation Output -->
+                            <div class="simulator-display-card p-4 rounded text-center" style="background: rgba(13, 82, 214, 0.03); border: 1px solid rgba(13, 82, 214, 0.1); border-radius: 8px;">
+                                <div class="row">
+                                    <div class="col-6 border-end">
+                                        <span class="text-secondary small d-block mb-1">PROJECTED PURCHASES</span>
+                                        <strong class="fs-4 text-dark font-monospace" id="sim-sale">₹0</strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="text-secondary small d-block mb-1">PROJECTED SLAB RATE</span>
+                                        <strong class="fs-4 text-primary font-monospace" id="sim-slab">0%</strong>
+                                    </div>
+                                </div>
+                                <hr class="my-3">
+                                <span class="text-secondary small d-block mb-1">FORECASTED TOTAL INCENTIVE PAYOUT</span>
+                                <strong class="fs-2 text-success d-block font-monospace fw-extrabold" id="sim-incentive">₹0</strong>
+                                <span class="badge bg-success-light text-success fw-bold mt-2" id="sim-increase-text" style="font-size: 0.8rem;">Additional payout: ₹0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 12-Month Performance timeline chart -->
+                <div class="row g-4 mb-4">
+                    <div class="col-12">
+                        <div class="panel" style="border-radius: 8px; padding: 24px; border: 1px solid #e2e8f0;">
+                            <div class="panel-header mb-4">
+                                <div>
+                                    <h4 class="fw-bold mb-1 text-dark" style="font-size: 1.05rem; "><i class="fa-solid fa-timeline text-primary me-2"></i> 12-Month Purchase &amp; Slab Lifecycle Trend</h4>
+                                    <p class="mb-0 text-muted small">Analyze dealer purchase and slab tier trajectory across a rolling calendar year</p>
+                                </div>
+                            </div>
+                            <div id="dealer-timeline-chart" style="height: 320px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Three-Date Incentive Payment Lifecycle Tracker -->
+                <div class="row g-4 mb-4">
+                    <div class="col-12">
+                        <div class="panel" style="border-radius: 8px; padding: 24px; border: 1px solid #e2e8f0;">
+                            <div class="panel-header mb-4">
+                                <div>
+                                    <h4 class="fw-bold mb-1 text-dark" style="font-size: 1.05rem; "><i class="fa-solid fa-money-check-dollar text-primary me-2"></i> Incentive Payment Lifecycle Tracker</h4>
+                                    <p class="mb-0 text-muted small">Detailed temporal log showing Month Accrued, Processing Date, and Payment Credit Date</p>
+                                </div>
+                            </div>
+
+                            <!-- Mobile Card Layout -->
+                            <div class="row g-3 mb-4" id="dl-history-cards-container">
+                                <!-- Populated dynamically -->
+                            </div>
+
+                            <!-- Large Screens Table View -->
+                            <div class="table-responsive corp-table-wrapper d-none d-md-block">
+                                <table class="table align-middle corp-table table-hover mb-0" id="dl-history-lifecycle-table" style="font-size: 0.85rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Accrued Month</th>
+                                            <th class="text-end">Sales Value</th>
+                                            <th class="text-end">Slab Rate</th>
+                                            <th class="text-end">Gross Incentive</th>
+                                            <th class="text-end">TDS Deducted</th>
+                                            <th class="text-end col-net-transfer" style="font-weight: 700;">Net Credited</th>
+                                            <th>Lifecycle State</th>
+                                            <th>Settled Payment Date</th>
+                                            <th>UTR Reference</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Populated via AJAX -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Empty Selector State -->
+            <div class="panel text-center py-5" id="dealer-empty-state" style="border-radius: 8px; padding: 60px; border: 1px solid #e2e8f0;">
+                <div class="display-1 text-muted mb-3" style="opacity: 0.35;"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+                <h4 class="fw-bold text-dark" style="">No Dealer Selected</h4>
+                <p class="text-muted mb-0">Select an active dealer account from the top right menu to load simulate metrics and lifecycle logs.</p>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+$(document).ready(function() {
+    
+    // Get theme state
+    var isDark = $('body').hasClass('dark-theme');
+
+    // Sync theme options
+    window.addEventListener('globalThemeChanged', function(e) {
+        var dark = e.detail.isDark;
+        var mode = dark ? 'dark' : 'light';
+        if (trendsChart) trendsChart.updateOptions({ theme: { mode: mode } });
+        if (distChart) distChart.updateOptions({ theme: { mode: mode } });
+        if (branchSlabChart) branchSlabChart.updateOptions({ theme: { mode: mode } });
+        if (dealerHistoryChart) dealerHistoryChart.updateOptions({ theme: { mode: mode } });
+    });
+
+    // ----------------------------------------------------
+    // CHARTS ENGINE (WIDGET 9 & 10)
+    // ----------------------------------------------------
+    var trendsChart = null;
+    var distChart = null;
+    var hoChartsInitialized = false;
+
+    // Load data from model
+    var salesTrendData = @Html.Raw(Json.Serialize(Model.ChartData.SalesTrend));
+    // Recreate a matching Target trend based on reference image targets (~1.2x achieved sales)
+    var targetTrendData = salesTrendData.map(function(val) { return Math.round(val * 1.18); });
+    var totalIncentive = @Model.TotalIncentive;
+
+    function initHoCharts() {
+        if (hoChartsInitialized) return;
+        if (!document.querySelector("#widget-trends-chart")) return;
+        hoChartsInitialized = true;
+
+        // Widget 9: Combination bar/line trends
+        var trendsOptions = {
+            chart: { 
+                height: 300, 
+                type: 'line', 
+                toolbar: { show: false }, 
+                fontFamily: 'Inter, sans-serif'
+            },
+            colors: ['#2563EB', '#0EA5E9'],
+            stroke: { width: [0, 3], curve: 'smooth', dashArray: [0, 5] },
+            plotOptions: { bar: { columnWidth: '45%', borderRadius: 4 } },
+            series: [
+                { name: 'Achieved Sales (₹)', type: 'column', data: salesTrendData },
+                { name: 'Target (₹)', type: 'line', data: targetTrendData }
+            ],
+            xaxis: { 
+                categories: @Html.Raw(Json.Serialize(Model.ChartData.Months)),
+                labels: { style: { fontWeight: 500 } }
+            },
+            yaxis: { 
+                labels: { 
+                    formatter: function(val) { 
+                        if (val >= 10000000) return '₹' + (val / 10000000).toFixed(1) + ' Cr';
+                        if (val >= 100000) return '₹' + (val / 100000).toFixed(1) + ' L';
+                        return '₹' + val.toLocaleString('en-IN'); 
+                    },
+                    style: { fontWeight: 500 }
+                } 
+            },
+            fill: { opacity: [0.85, 1] },
+            legend: { position: 'bottom', fontWeight: 600 },
+            theme: { mode: $('body').hasClass('dark-theme') ? 'dark' : 'light' }
+        };
+        trendsChart = new ApexCharts(document.querySelector("#widget-trends-chart"), trendsOptions);
+        trendsChart.render();
+
+        // Widget 10: Incentive Summary donut
+        var distOptions = {
+            chart: { 
+                height: 300, 
+                type: 'donut', 
+                fontFamily: 'Inter, sans-serif'
+            },
+            colors: ['#2563EB', '#EF4444', '#10B981', 'var(--primary)'],
+            series: [
+                Math.round(totalIncentive * 0.60),
+                Math.round(totalIncentive * 0.20),
+                Math.round(totalIncentive * 0.15),
+                Math.round(totalIncentive * 0.05)
+            ],
+            labels: ['Achieved - 60%', 'Pending Approval - 20%', 'Approved - 15%', 'Paid - 5%'],
+            legend: { position: 'bottom', fontWeight: 500 },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '65%',
+                        labels: {
+                            show: true,
+                            name: { show: true, fontSize: '11px', color: '#94a3b8', formatter: function() { return 'Total Incentive'; } },
+                            value: {
+                                show: true,
+                                fontSize: '15px',
+                                fontWeight: '700',
+                                formatter: function() {
+                                    if (totalIncentive >= 10000000) return '₹' + (totalIncentive / 10000000).toFixed(2) + ' Cr';
+                                    return '₹' + totalIncentive.toLocaleString('en-IN');
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 180 } } }],
+            theme: { mode: $('body').hasClass('dark-theme') ? 'dark' : 'light' }
+        };
+        distChart = new ApexCharts(document.querySelector("#widget-distribution-chart"), distOptions);
+        distChart.render();
+
+        // â”€â”€ Location Split Donut â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        var locationLabels = @Html.Raw(Json.Serialize(Model.ChartData.LocationLabels));
+        var locationSales  = @Html.Raw(Json.Serialize(Model.ChartData.LocationSales));
+
+        var locationSplitOptions = buildCalloutDonut(
+            locationLabels,
+            locationSales,
+            ['#2563EB','#10B981','#F59E0B','#EF4444','var(--primary)','#06B6D4','#EC4899','#84CC16'],
+            'Location Split'
+        );
+        var locationSplitChart = new ApexCharts(document.querySelector("#location-split-chart"), locationSplitOptions);
+        locationSplitChart.render();
+
+        // â”€â”€ Category Mix Donut â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        var categoryLabels = @Html.Raw(Json.Serialize(Model.ChartData.CategoryLabels));
+        var categorySales  = @Html.Raw(Json.Serialize(Model.ChartData.CategorySales));
+
+        var categoryMixOptions = buildCalloutDonut(
+            categoryLabels,
+            categorySales,
+            ['#10B981','#2563EB','#F59E0B','var(--primary)','#EF4444','#06B6D4','#EC4899','#84CC16'],
+            'Category Mix'
+        );
+        var categoryMixChart = new ApexCharts(document.querySelector("#category-mix-chart"), categoryMixOptions);
+        categoryMixChart.render();
+    }
+
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // HELPER: Build an ApexCharts donut config with external callout labels
+    // mimicking the reference design (leader line + label outside the donut)
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    function buildCalloutDonut(labels, series, colors, title) {
+        var hasData = series && series.length > 0 && series.some(function(v){ return v > 0; });
+        var total   = hasData ? series.reduce(function(a,b){ return a+b; }, 0) : 0;
+
+        // Build display labels with "Name - XX%" format
+        var displayLabels = labels.map(function(lbl, i) {
+            var pct = total > 0 ? Math.round(series[i] / total * 100) : 0;
+            return lbl + ' - ' + pct + '%';
+        });
+
+        function fmtAmt(n) {
+            n = Number(n);
+            if (n >= 10000000) return '₹' + (n/10000000).toFixed(1) + ' Cr';
+            if (n >= 100000)   return '₹' + (n/100000).toFixed(1) + ' L';
+            if (n >= 1000)     return '₹' + (n/1000).toFixed(1) + ' K';
+            return '₹' + n.toLocaleString('en-IN');
+        }
+
+        return {
+            chart: {
+                type: 'donut',
+                height: 370,
+                fontFamily: 'Inter, sans-serif',
+                toolbar: { show: false },
+                animations: { enabled: true, speed: 600 }
+            },
+            series: hasData ? series : [1],
+            labels: hasData ? displayLabels : ['No Data'],
+            colors: hasData ? colors.slice(0, series.length) : ['#e2e8f0'],
+            plotOptions: {
+                pie: {
+                    expandOnClick: true,
+                    dataLabels: { offset: 28, minAngleToShowLabel: 8 },
+                    donut: {
+                        size: '58%',
+                        labels: {
+                            show: true,
+                            name: {
+                                show: true, fontSize: '11px', fontWeight: 500,
+                                color: '#94a3b8', offsetY: 2,
+                                formatter: function() { return title; }
+                            },
+                            value: {
+                                show: true, fontSize: '16px', fontWeight: '700',
+                                color: '#1e293b', offsetY: 6,
+                                formatter: function(val) { return fmtAmt(val); }
+                            },
+                            total: {
+                                show: true, label: title,
+                                fontSize: '11px', fontWeight: 500, color: '#94a3b8',
+                                formatter: function(w) {
+                                    var t = w.globals.seriesTotals.reduce(function(a,b){ return a+b; }, 0);
+                                    return fmtAmt(t);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            // External callout-style data labels (shown outside the slice with leader line)
+            dataLabels: {
+                enabled: true,
+                style: {
+                    fontSize: '11px',
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: '600',
+                    colors: ['#374151']
+                },
+                dropShadow: { enabled: false },
+                formatter: function(val, opts) {
+                    if (!hasData) return '';
+                    var name = labels[opts.seriesIndex] || '';
+                    if (name.length > 12) name = name.substring(0, 11) + 'â€¦';
+                    return name + '\n' + Math.round(val) + '%';
+                },
+                background: {
+                    enabled: true,
+                    foreColor: '#1e293b',
+                    borderRadius: 4,
+                    padding: 3,
+                    opacity: 0.92,
+                    borderWidth: 1,
+                    borderColor: '#e2e8f0',
+                    dropShadow: { enabled: false }
+                }
+            },
+            legend: {
+                show: true,
+                position: 'top',
+                horizontalAlign: 'center',
+                fontSize: '12px',
+                fontWeight: 600,
+                fontFamily: 'Inter, sans-serif',
+                markers: { width: 10, height: 10, radius: 50 },
+                itemMargin: { horizontal: 8, vertical: 4 },
+                formatter: function(seriesName) {
+                    return seriesName.split(' - ')[0];
+                }
+            },
+            stroke: { width: 2, colors: ['#fff'] },
+            tooltip: {
+                y: { formatter: function(val) { return fmtAmt(val); } }
+            },
+            responsive: [
+                {
+                    breakpoint: 768,
+                    options: {
+                        chart: { height: 320 },
+                        legend: { position: 'bottom' },
+                        dataLabels: { style: { fontSize: '10px' } }
+                    }
+                },
+                {
+                    breakpoint: 480,
+                    options: {
+                        chart: { height: 280 },
+                        legend: { position: 'bottom', fontSize: '11px' },
+                        dataLabels: { enabled: false }
+                    }
+                }
+            ],
+            theme: { mode: $('body').hasClass('dark-theme') ? 'dark' : 'light' }
+        };
+    }
+
+
+    // ----------------------------------------------------
+    // BRANCH TAB ENGINE (ISOLATING DETAILS)
+    // ----------------------------------------------------
+    let branchSlabChart = null;
+
+    function renderBranchSlabChart(ranges, counts) {
+        const options = {
+            chart: { height: 320, type: 'donut', fontFamily: 'Inter, sans-serif' },
+            colors: ['#2563EB', '#EF4444', '#0ea5e9', '#06b6d4', '#10B981'],
+            series: counts,
+            labels: ranges,
+            responsive: [{ breakpoint: 480, options: { chart: { width: 180 } } }],
+            legend: { position: 'bottom', fontWeight: 600 },
+            theme: { mode: $('body').hasClass('dark-theme') ? 'dark' : 'light' }
+        };
+        if (branchSlabChart) {
+            branchSlabChart.destroy();
+        }
+        branchSlabChart = new ApexCharts(document.querySelector("#branch-slab-dist-chart"), options);
+        branchSlabChart.render();
+    }
+
+    function loadBranchAnalytics(branchId) {
+        $.ajax({ url: `/api/branch/${branchId}/analytics`, method: 'GET' })
+            .done(r => {
+                $('#br-kpi-sales').text('₹' + Math.round(r.totalSales).toLocaleString('en-IN'));
+                $('#br-kpi-payout').text('₹' + Math.round(r.totalIncentive).toLocaleString('en-IN'));
+                $('#br-kpi-growth').text((r.growthPercent >= 0 ? '+' : '') + r.growthPercent.toFixed(2) + '%');
+                $('#br-kpi-slab-ach').text(r.slabAchievementPercent.toFixed(1) + '%');
+
+                // Render top/weak dealers
+                const table = $('#br-top-dealers-table tbody').empty();
+                r.topDealers.forEach(d => {
+                    table.append(`
+                        <tr>
+                            <td>
+                                <span class="fw-bold text-dark">${d.partyName}</span>
+                                <span class="d-block small text-muted font-monospace" style="font-size:0.75rem;">Code: ${d.partyCode}</span>
+                            </td>
+                            <td class="text-end font-monospace fw-bold text-dark">₹${Math.round(d.sales).toLocaleString('en-IN')}</td>
+                            <td class="text-end text-success font-monospace fw-bold">₹${Math.round(d.incentive).toLocaleString('en-IN')}</td>
+                            <td class="text-end fw-bold ${d.growthMoM >= 0 ? 'text-success' : 'text-danger'}">
+                                ${d.growthMoM >= 0 ? '▲' : '▼'} ${Math.abs(d.growthMoM).toFixed(1)}%
+                            </td>
+                        </tr>
+                    `);
+                });
+
+                // Update slab charts
+                const slabRanges = [];
+                const slabCounts = [];
+                const distribution = {};
+                r.topDealers.forEach(d => {
+                    const label = `${d.slabPercent.toFixed(0)}% Slab`;
+                    distribution[label] = (distribution[label] || 0) + 1;
+                });
+                for (const key in distribution) {
+                    slabRanges.push(key);
+                    slabCounts.push(distribution[key]);
+                }
+                renderBranchSlabChart(slabRanges.length ? slabRanges : ['0% Slab'], slabCounts.length ? slabCounts : [1]);
+            })
+            .fail(xhr => {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to load branch analytics.' });
+            });
+    }
+
+    let hoChartsPending = $('#ho-tab').length > 0 && !$('#ho-tab').hasClass('active');
+    let branchAnalyticsPending = $('#branch-tab').length > 0 && !$('#branch-tab').hasClass('active');
+
+    // Trigger Branch analytics reload
+    $('#branch-selector').on('change', function() {
+        loadBranchAnalytics($(this).val());
+        branchAnalyticsPending = false;
+    });
+
+    // Initialize HO charts on page load if active
+    if ($('#ho-tab').hasClass('active')) {
+        initHoCharts();
+    }
+    // Initialize Branch analytics on page load if active
+    if ($('#branch-tab').hasClass('active')) {
+        if ($('#branch-selector').val()) {
+            loadBranchAnalytics($('#branch-selector').val());
+        }
+    }
+
+    // Tab shown listener to load deferred content
+    $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+        const targetId = $(e.target).attr('id');
+        if (targetId === 'ho-tab' && hoChartsPending) {
+            initHoCharts();
+            hoChartsPending = false;
+        } else if (targetId === 'branch-tab' && branchAnalyticsPending) {
+            if ($('#branch-selector').val()) {
+                loadBranchAnalytics($('#branch-selector').val());
+            }
+            branchAnalyticsPending = false;
+        }
+    });
+
+    // ----------------------------------------------------
+    // DEALER TAB & SIMULATION SIMULATOR ENGINE
+    // ----------------------------------------------------
+    let activeDealerSlabs = [];
+    let currentDealerSales = 0;
+    let currentDealerAchievement = 0;
+    let currentDealerIncentive = 0;
+    let nextSlabTarget = 0;
+    let nextSlabPercent = 0;
+    let dealerHistoryChart = null;
+
+    function renderDealerHistoryChart(months, sales, incentives) {
+        const options = {
+            chart: { height: 320, type: 'line', toolbar: { show: false }, fontFamily: 'Inter, sans-serif' },
+            colors: ['#2563EB', '#10B981'],
+            stroke: { width: [3, 3], curve: 'smooth' },
+            series: [
+                { name: 'Net Purchase Value', type: 'area', data: sales },
+                { name: 'Accrued Incentive Payout', type: 'line', data: incentives }
+            ],
+            fill: { type: ['gradient', 'solid'], gradient: { opacityFrom: 0.3, opacityTo: 0.02 } },
+            xaxis: { categories: months, labels: { style: { fontWeight: 500 } } },
+            yaxis: { 
+                labels: { 
+                    formatter: val => '₹' + val.toLocaleString('en-IN'),
+                    style: { fontWeight: 500 }
+                } 
+            },
+            theme: { mode: $('body').hasClass('dark-theme') ? 'dark' : 'light' }
+        };
+        if (dealerHistoryChart) {
+            dealerHistoryChart.destroy();
+        }
+        dealerHistoryChart = new ApexCharts(document.querySelector("#dealer-timeline-chart"), options);
+        dealerHistoryChart.render();
+    }
+
+    function loadDealerIntelligence(partyId) {
+        if (!partyId) {
+            $('#dealer-insights-shell').hide();
+            $('#dealer-empty-state').show();
+            return;
+        }
+
+        // Fetch Summary
+        $.ajax({ url: `/api/party/${partyId}/summary`, method: 'GET' })
+            .done(r => {
+                currentDealerSales = r.currentSale;
+                currentDealerIncentive = r.currentIncentive;
+                currentDealerAchievement = r.currentSale > 0 ? (r.currentSale / (r.currentSale + r.additionalPurchaseRequired)) * 100 : 0;
+                activeDealerSlabs = r.activeSlabs;
+                nextSlabTarget = r.nextSlabTarget;
+                nextSlabPercent = r.nextSlabPercent;
+
+                $('#dl-kpi-sales').text('₹' + Math.round(r.currentSale).toLocaleString('en-IN'));
+                $('#dl-kpi-slab').text(r.currentSlabPercent.toFixed(1) + '%');
+                $('#dl-kpi-incentive').text('₹' + Math.round(r.currentIncentive).toLocaleString('en-IN'));
+                $('#dl-kpi-growth').text(`${r.growthMoM >= 0 ? '+' : ''}${r.growthMoM.toFixed(0)}% MoM / ${r.growthYoY >= 0 ? '+' : ''}${r.growthYoY.toFixed(0)}% YoY`);
+
+                // Update circular ring progress
+                const pct = Math.min(100, Math.round(r.progressPercent));
+                $('#prog-circle-pct').text(pct + '%');
+                const strokeDashOffset = 534 - (534 * pct) / 100;
+                $('#progress-circle').css('stroke-dashoffset', strokeDashOffset);
+
+                if (r.additionalPurchaseRequired > 0) {
+                    $('#next-slab-message').html(`Only <span class="text-primary fw-bold">₹${Math.round(r.additionalPurchaseRequired).toLocaleString('en-IN')}</span> more to unlock ${r.nextSlabPercent.toFixed(0)}% Slab!`);
+                    $('#next-slab-detail').text(`Current purchase: ₹${Math.round(r.currentSale).toLocaleString('en-IN')} | Milestone target: ₹${Math.round(r.currentSale + r.additionalPurchaseRequired).toLocaleString('en-IN')}`);
+                } else {
+                    $('#next-slab-message').text('🎉 Highest Incentive Slab Target Fully Achieved!');
+                    $('#next-slab-detail').text('Maximum available slab rates successfully unlocked');
+                }
+
+                // Reset simulator slider
+                $('#simulator-slider').val(0).trigger('input');
+
+                $('#dealer-empty-state').hide();
+                $('#dealer-insights-shell').show();
+            })
+            .fail(xhr => Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to load dealer summary details.' }));
+
+        // Fetch History Lifecycle
+        $.ajax({ url: `/api/party/${partyId}/history`, method: 'GET' })
+            .done(h => {
+                const months = h.map(x => x.monthName);
+                const sales = h.map(x => x.sales);
+                const incentives = h.map(x => x.incentive);
+                renderDealerHistoryChart(months, sales, incentives);
+
+                const tbody = $('#dl-history-lifecycle-table tbody').empty();
+                const cardContainer = $('#dl-history-cards-container').empty();
+
+                if (h.length === 0) {
+                    tbody.append('<tr><td colspan="9" class="text-center text-muted py-5"><i class="fa-solid fa-inbox fa-xl d-block mb-2"></i> No transaction records found</td></tr>');
+                    cardContainer.append('<div class="col-12 text-center text-muted py-4">No transaction records found</div>');
+                    return;
+                }
+
+                const reverseHist = [...h].reverse();
+
+                reverseHist.forEach(item => {
+                    const isSettled = item.status === "Success" || item.status === "Completed" || item.status === "Reconciled" || item.status === "Paid";
+                    const statusClass = isSettled ? "success" : (item.status === "Pending" ? "warning" : "neutral");
+
+                    tbody.append(`
+                        <tr>
+                            <td class="fw-bold">${item.monthName}</td>
+                            <td class="text-end font-monospace">₹${Math.round(item.sales).toLocaleString('en-IN')}</td>
+                            <td class="text-end"><span class="badge bg-secondary text-dark">${item.slabPercent.toFixed(1)}%</span></td>
+                            <td class="text-end font-monospace fw-bold">₹${Math.round(item.incentive).toLocaleString('en-IN')}</td>
+                            <td class="text-end text-danger font-monospace">₹${Math.round(item.tdsAmount).toLocaleString('en-IN')}</td>
+                            <td class="text-end text-success font-monospace col-net-transfer fw-extrabold" style="font-size:0.95rem;">₹${Math.round(item.netCreditedAmount).toLocaleString('en-IN')}</td>
+                            <td><span class="status-badge ${statusClass}">${item.status === 'Paid' ? 'Reconciled' : item.status}</span></td>
+                            <td><i class="fa-regular fa-calendar-check text-secondary me-1"></i> ${item.creditedOn}</td>
+                            <td><span class="utr-code">${item.utr}</span></td>
+                        </tr>
+                    `);
+
+                    cardContainer.append(`
+                        <div class="col-md-6 col-xl-4 animate-fade-in-up">
+                            <div class="panel h-100 border p-3 card-hover" style="border-radius: 8px; transition: all 0.2s;">
+                                <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-light pb-2">
+                                    <h5 class="fw-bold mb-0 text-dark" style="font-size: 0.92rem;"><i class="fa-regular fa-calendar me-1 text-primary"></i> ${item.monthName}</h5>
+                                    <span class="status-badge ${statusClass}" style="padding: 2px 8px; font-size: 0.7rem;">${item.status === 'Paid' ? 'Reconciled' : item.status}</span>
+                                </div>
+                                <div class="row g-2 small">
+                                    <div class="col-6 text-muted">Purchase Sales:</div>
+                                    <div class="col-6 text-end fw-bold text-dark font-monospace">₹${Math.round(item.sales).toLocaleString('en-IN')}</div>
+                                    
+                                    <div class="col-6 text-muted">Accrued Gross:</div>
+                                    <div class="col-6 text-end fw-bold text-dark font-monospace">₹${Math.round(item.incentive).toLocaleString('en-IN')}</div>
+                                    
+                                    <div class="col-6 text-muted">TDS Deducted:</div>
+                                    <div class="col-6 text-end fw-bold text-danger font-monospace">₹${Math.round(item.tdsAmount).toLocaleString('en-IN')}</div>
+                                    
+                                    <div class="col-6 text-muted">Net Settled Credited:</div>
+                                    <div class="col-6 text-end fw-extrabold text-success font-monospace" style="font-size: 0.95rem;">₹${Math.round(item.netCreditedAmount).toLocaleString('en-IN')}</div>
+                                    
+                                    <hr class="my-2" style="grid-column: span 2; opacity: 0.08;">
+                                    
+                                    <div class="col-6 text-muted">Credit Date:</div>
+                                    <div class="col-6 text-end text-dark">${item.creditedOn}</div>
+                                    
+                                    <div class="col-6 text-muted">UTR Code:</div>
+                                    <div class="col-6 text-end text-dark font-monospace"><code>${item.utr}</code></div>
+                                </div>
+                            </div>
+                        </div>
+                    `);
+                });
+            });
+    }
+
+    // simulator slider triggers
+    $('#simulator-slider').on('input', function() {
+        const val = Number($(this).val());
+        $('#simulator-purchase-text').text('+ ₹' + val.toLocaleString('en-IN'));
+
+        const simulatedSale = currentDealerSales + val;
+        $('#sim-sale').text('₹' + Math.round(simulatedSale).toLocaleString('en-IN'));
+
+        const baseTarget = currentDealerSales > 0 ? (currentDealerSales * 100) / currentDealerAchievement : currentDealerSales;
+        const simAchievement = baseTarget > 0 ? (simulatedSale / baseTarget) * 100 : 100;
+
+        let matchedSlab = activeDealerSlabs[0];
+        activeDealerSlabs.forEach(s => {
+            if (simAchievement >= s.minAchievement && simAchievement <= s.maxAchievement) {
+                matchedSlab = s;
+            }
+        });
+
+        const slabPercent = matchedSlab ? matchedSlab.percentage : 0;
+        const fixedAmt = matchedSlab ? matchedSlab.fixedAmount : 0;
+        const projectedIncentive = Math.round(fixedAmt + (simulatedSale * (slabPercent / 100)));
+        const increase = Math.max(0, projectedIncentive - currentDealerIncentive);
+
+        $('#sim-slab').text(slabPercent.toFixed(0) + '% Slab');
+        $('#sim-incentive').text('₹' + projectedIncentive.toLocaleString('en-IN'));
+        $('#sim-increase-text').text(`Simulated payout increase of: ₹${increase.toLocaleString('en-IN')}`);
+
+        if (nextSlabTarget > 0) {
+            const simProgress = Math.min(100, Math.round((simulatedSale / nextSlabTarget) * 100));
+            $('#prog-circle-pct').text(simProgress + '%');
+            const strokeDashOffset = 534 - (534 * simProgress) / 100;
+            $('#progress-circle').css('stroke-dashoffset', strokeDashOffset);
+
+            if (simulatedSale >= nextSlabTarget) {
+                $('#next-slab-message').html('🎉 Simulated target achieved! <strong>' + nextSlabPercent.toFixed(0) + '% Slab rate unlocked!</strong>');
+                $('#next-slab-detail').text('Maximum simulated slab rate successfully achieved');
+            } else {
+                const remaining = Math.max(0, nextSlabTarget - simulatedSale);
+                $('#next-slab-message').html(`Simulated: Only <span class="text-primary fw-bold">₹${Math.round(remaining).toLocaleString('en-IN')}</span> more to unlock ${nextSlabPercent.toFixed(0)}% Slab!`);
+                $('#next-slab-detail').text(`Simulated purchase: ₹${Math.round(simulatedSale).toLocaleString('en-IN')} | Target threshold: ₹${Math.round(nextSlabTarget).toLocaleString('en-IN')}`);
+            }
+        }
+    });
+
+    $('#dealer-selector').on('change', function() {
+        loadDealerIntelligence($(this).val());
+    });
+});
+</script>
+}
+
+
+

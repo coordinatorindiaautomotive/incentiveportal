@@ -1,0 +1,256 @@
+/* ==========================================================================
+   RESPONSIVE DESIGN — ThessBuddy Breakpoint Layout Adjustments
+   Optimizes margins, padding sizes, typography, cards, and navigation.
+   ========================================================================== */
+
+/* ── 1. LARGE DESKTOP (min-width: 1440px) ── */
+@media (min-width: 1440px) {
+  .stat-cards-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ── 2. LAPTOP / SMALL DESKTOP (max-width: 1200px) ── */
+@media (max-width: 1200px) {
+  .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  
+  .stat-cards-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 3. TABLET LANDSCAPE / PORTRAIT (max-width: 900px) ── */
+@media (max-width: 900px) {
+  /* Sidebar slides into drawer, main content takes full viewport width */
+  .app-shell {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    width: var(--sidebar-w, 260px) !important;
+    transform: translateX(-100%) !important;
+    z-index: 1050 !important;
+    padding: 20px 14px !important;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  /* Force navigation labels visible inside drawer on mobile */
+  .app-shell.sidebar-collapsed .nav-label,
+  .sidebar .nav-label,
+  .sidebar .brand-subtitle,
+  .sidebar .nav-section,
+  .sidebar-footer .sb-user-info .sb-details,
+  .sidebar-footer .sb-env-pill span:not(.env-dot) {
+    opacity: 1 !important;
+    width: auto !important;
+    pointer-events: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .app-shell.sidebar-collapsed .side-nav .nav-link {
+    justify-content: flex-start !important;
+    padding: 10px 12px !important;
+    gap: 10px !important;
+  }
+
+  .app-shell.sidebar-collapsed .brand-block {
+    justify-content: flex-start !important;
+    padding: 8px 8px 24px !important;
+  }
+
+  .app-shell.sidebar-collapsed .side-nav .nav-link::after {
+    display: none !important;
+  }
+
+  /* Sidebar Open State */
+  .sidebar-open .sidebar {
+    transform: translateX(0) !important;
+  }
+
+  .main-content {
+    padding: 12px 10px !important;
+  }
+
+  /* Topbar wraps gracefully on medium/small viewports */
+  .topbar {
+    margin: -12px -10px 16px -10px !important;
+    padding: 12px 14px !important;
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+    height: auto !important;
+    min-height: var(--topbar-h, 64px) !important;
+  }
+
+  .page-title-text {
+    font-size: 1.15rem !important;
+  }
+
+  .topbar-right {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+  }
+
+  .topbar-search-box {
+    flex-grow: 1 !important;
+    width: auto !important;
+  }
+
+  .topbar-actions {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .topbar-actions .btn-command span,
+  .topbar-actions button span {
+    display: none !important; /* Keep only icons on action buttons on tablet */
+  }
+
+  .topbar-actions .btn-command,
+  .topbar-actions button {
+    padding: 6px 10px !important;
+    height: 34px !important;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .stat-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .process-steps {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .import-shell {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Settings Console Tab Menus wrap into grid columns on tablets */
+  #ct-tabs {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+  }
+  #ct-tabs > div {
+    width: 50% !important;
+  }
+}
+
+/* ── 4. MOBILE VIEWS (max-width: 640px) ── */
+@media (max-width: 640px) {
+  /* Main Content Padding minimizes for small mobile viewports */
+  .main-content {
+    padding: 8px 6px !important;
+  }
+
+  .topbar {
+    margin: -8px -6px 12px -6px !important;
+    padding: 8px 10px !important;
+  }
+
+  /* Bento stats grids stack vertically on phone screens */
+  .stat-cards-grid,
+  .metric-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Bento Scorecard sizes down to prevent numbers wrapping */
+  .stat-card {
+    min-height: 96px !important;
+    padding: 12px 14px !important;
+  }
+  .stat-card .stat-value {
+    font-size: 1.25rem !important;
+  }
+  .stat-card .stat-label {
+    font-size: 9px !important;
+  }
+
+  /* Tables Scroll horizontally with soft smooth glide behavior */
+  .corp-table-wrapper,
+  .dataTables_wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important; /* Native momentum scrolling */
+  }
+
+  .corp-table thead th {
+    font-size: 9px !important;
+    padding: 8px 6px !important;
+  }
+
+  .corp-table tbody td {
+    padding: 8px 6px !important;
+    font-size: 11.5px !important;
+  }
+
+  /* Hide secondary column mappings on mobile tables to prevent wide scroll bounds */
+  .hide-mobile-col {
+    display: none !important;
+  }
+
+  /* Minimize margins on Modals dialog to take up max available screen space */
+  .modal-dialog {
+    margin: 8px !important;
+    width: calc(100% - 16px) !important;
+    max-width: none !important;
+  }
+
+  /* Form spacing tweaks */
+  .panel {
+    padding: 14px !important;
+  }
+
+  .panel-header h2 {
+    font-size: 0.95rem !important;
+  }
+
+  .form-label {
+    font-size: 10.5px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .form-control,
+  .form-select {
+    height: 36px !important;
+    font-size: 12.5px !important;
+    padding: 6px 10px !important;
+  }
+
+  /* Stack Settings tab navigation columns vertically on phones */
+  #ct-tabs > div {
+    width: 100% !important;
+  }
+
+  /* Buttons sized to at least 36px for mobile tap friendliness */
+  .btn {
+    height: 36px !important;
+    font-size: 11.5px !important;
+    padding: 0 12px !important;
+  }
+}
+
+/* ── 5. SMALL MOBILE / PROFILE LABELS HIDING (max-width: 576px) ── */
+@media (max-width: 576px) {
+  .user-details {
+    display: none !important;
+  }
+
+  .topbar {
+    padding: 8px 10px !important;
+  }
+}

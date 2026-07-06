@@ -1,0 +1,125 @@
+@model IEnumerable<IncentivePortal.Models.SystemNotification>
+@{
+    ViewData["Title"] = "Notification center Hub";
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Block -->
+    <div class="card p-3 mb-4 border-0 shadow-sm" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 class="mb-1 text-primary fw-bold" style="font-family:'Inter',sans-serif;"><i class="fa-solid fa-bell me-2"></i> Notification Center</h4>
+                <p class="text-muted small mb-0">Review system warnings, cash closing variances, approval updates, and broadcast announcements.</p>
+            </div>
+            <div class="col-md-6 text-end d-flex justify-content-md-end gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="markAllNotificationsRead()"><i class="fa-solid fa-check-double me-1"></i> Mark All Read</button>
+                @if (User.IsInRole("Super Admin"))
+                {
+                    <button class="btn btn-primary btn-sm bg-primary border-0" data-bs-toggle="modal" data-bs-target="#broadcastModal"><i class="fa-solid fa-bullhorn me-1"></i> Send Broadcast</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications List Panel -->
+    <div class="card border-0 shadow-sm p-4">
+        <h5 class="fw-bold text-secondary mb-3">Notification History</h5>
+        <div class="list-group" id="notificationHistoryList">
+            @if (Model != null && Model.Any())
+            {
+                foreach (var item in Model)
+                {
+                    <div class="list-group-item list-group-item-action border-0 border-bottom p-3 d-flex justify-content-between align-items-center rounded mb-2 @(item.IsRead ? "bg-light text-muted" : "bg-light-glow text-dark border-primary")" id="notif-item-@item.Id" style="transition: all 0.2s;">
+                        <div class="d-flex align-items-start gap-3">
+                            <span class="pt-1">
+                                <i class="fa-solid @(item.NotificationType == "Workflow" ? "fa-circle-check text-success" : item.NotificationType == "Escalation" ? "fa-triangle-exclamation text-danger" : "fa-info-circle text-primary") fs-4"></i>
+                            </span>
+                            <div>
+                                <h6 class="fw-bold mb-1">@item.Title</h6>
+                                <p class="mb-0 small text-secondary">@item.Message</p>
+                                <span class="small text-muted" style="font-size:0.75rem;"><i class="fa-regular fa-clock me-1"></i> @item.CreatedAt.ToString("dd MMM yyyy HH:mm") | Type: @item.NotificationType</span>
+                            </div>
+                        </div>
+                        <div>
+                            @if (!item.IsRead)
+                            {
+                                <button class="btn btn-xs btn-outline-primary px-2 py-1 fs-7" onclick="markNotifRead(@item.Id)">Mark Read</button>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center text-muted py-5">
+                    <i class="fa-regular fa-bell-slash fa-3x mb-3 opacity-55"></i>
+                    <p class="small mb-0">You have no notification items.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Broadcast Notification -->
+<div class="modal fade" id="broadcastModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <div class="modal-header border-bottom bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-bullhorn me-1"></i> Send System Broadcast</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/NotificationCenter/Broadcast" method="post" data-ajax="true">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Title / Subject</label>
+                        <input type="text" class="form-control" name="title" required placeholder="e.g. Server Maintenance / Month Closure" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Message details</label>
+                        <textarea class="form-control" name="message" rows="4" required placeholder="Write details here..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Notification Severity</label>
+                        <select class="form-select" name="type">
+                            <option value="System">Info</option>
+                            <option value="Workflow">Success</option>
+                            <option value="Escalation">Warning / Alert</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm bg-primary border-0">Send Broadcast</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function markNotifRead(id) {
+            $.ajax({
+                url: '/NotificationCenter/MarkAsRead/' + id,
+                type: 'POST',
+                success: function(res) {
+                    $('#notif-item-' + id).addClass('bg-light text-muted border-0').removeClass('bg-light-glow text-dark border-primary').find('button').remove();
+                    refreshNotifBadge();
+                }
+            });
+        }
+
+        function markAllNotificationsRead() {
+            $.ajax({
+                url: '/NotificationCenter/MarkAllAsRead',
+                type: 'POST',
+                success: function(res) {
+                    portalToast(res.message, 'success');
+                    setTimeout(() => { location.reload(); }, 800);
+                }
+            });
+        }
+    </script>
+}
+

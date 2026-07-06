@@ -1,0 +1,193 @@
+@model IEnumerable<IncentivePortal.Models.AutomationRule>
+@{
+    ViewData["Title"] = "Automation Center Hub";
+    var history = (ViewBag.History as Array) ?? Array.Empty<object>();
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Block -->
+    <div class="card p-3 mb-4 border-0 shadow-sm" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 class="mb-1 text-primary fw-bold" style="font-family:'Inter',sans-serif;"><i class="fa-solid fa-bolt me-2"></i> Automation Center Console</h4>
+                <p class="text-muted small mb-0">Define smart event-driven triggers to alert administrators, audit branches, or notify dealers automatically.</p>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-primary btn-sm bg-primary border-0" data-bs-toggle="modal" data-bs-target="#createRuleModal"><i class="fa-solid fa-plus-circle me-1"></i> Add Automation Rule</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Automation Rules List (Left) -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <h5 class="fw-bold text-secondary mb-3">Event Action Rules</h5>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle custom-table">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th>Rule Name</th>
+                                <th>Trigger Event</th>
+                                <th>Scheduled Action</th>
+                                <th>Conditions Config</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="small">
+                            @if (Model != null && Model.Any())
+                            {
+                                foreach (var rule in Model)
+                                {
+                                    <tr>
+                                        <td class="fw-bold text-dark">@rule.RuleName</td>
+                                        <td><span class="badge bg-light text-dark border">@rule.TriggerType</span></td>
+                                        <td><span class="badge bg-primary">@rule.ActionType</span></td>
+                                        <td class="text-muted" style="font-family: monospace; font-size:0.75rem;">@rule.ConditionsJson</td>
+                                        <td>
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" role="switch" checked="@(rule.IsActive ? "checked" : null)" onchange="toggleRuleActive(@rule.Id)" />
+                                            </div>
+                                        </td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="deleteRule(@rule.Id)"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="6" class="text-center py-5 text-muted">No automation rules registered.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Logs Execution History (Right) -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm p-4 h-100" style="background: rgba(255,255,255,0.9);">
+                <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-clock-rotate-left me-1"></i> Live Trigger Activity Logs</h6>
+                <p class="text-muted small mb-3">Real-time reports of automated scripts triggered within the platform.</p>
+
+                <div class="trigger-history scrollbar" style="max-height: 420px; overflow-y: auto;">
+                    @foreach (dynamic h in history)
+                    {
+                        <div class="p-3 mb-2 rounded border border-success bg-success-light" style="font-size: 0.8rem;">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="fw-bold text-success">@h.Rule</span>
+                                <span class="text-muted" style="font-size:0.7rem;">@h.Time</span>
+                            </div>
+                            <div class="text-secondary small mb-2">@h.Event</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-success">@h.Status</span>
+                                <span class="small text-muted"><i class="fa-solid fa-envelope me-1"></i> @h.Action</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add Rule -->
+<div class="modal fade" id="createRuleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <div class="modal-header border-bottom bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-plus-circle me-1"></i> Add Automation Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/Automation/Save" method="post" data-ajax="true">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Rule Name</label>
+                        <input type="text" class="form-control" name="RuleName" required placeholder="e.g. Overdue Warning Alert" />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold small text-muted">Trigger Event</label>
+                            <select class="form-select" name="TriggerType" id="ruleTrigger">
+                                <option value="OutstandingLimit">Outstanding Limit Exceeded</option>
+                                <option value="ClosingMismatch">Daily Closing Mismatch</option>
+                                <option value="SlaWarning">SLA Expiry Approaching</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold small text-muted">Action Type</label>
+                            <select class="form-select" name="ActionType">
+                                <option value="Notification">System Notification</option>
+                                <option value="Email">Send Email</option>
+                                <option value="WhatsApp">Send WhatsApp Message</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Conditions Config (JSON parameters)</label>
+                        <textarea class="form-control" name="ConditionsJson" rows="3" style="font-family:monospace; font-size:0.8rem;">{"limit": 500000}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm bg-primary border-0">Save Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $('#ruleTrigger').on('change', function() {
+            const v = $(this).val();
+            const configArea = $('textarea[name="ConditionsJson"]');
+            if (v === 'OutstandingLimit') {
+                configArea.val('{"limit": 500000}');
+            } else if (v === 'ClosingMismatch') {
+                configArea.val('{"tolerance": 0}');
+            } else if (v === 'SlaWarning') {
+                configArea.val('{"hoursBefore": 4}');
+            }
+        });
+
+        function toggleRuleActive(id) {
+            $.ajax({
+                url: '/Automation/ToggleActive/' + id,
+                type: 'POST',
+                success: function(res) {
+                    portalToast(res.message, 'success');
+                }
+            });
+        }
+
+        function deleteRule(id) {
+            Swal.fire({
+                title: 'Delete Rule?',
+                text: 'This will delete the automation script.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ba1a1a',
+                confirmButtonText: 'Delete'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    $.ajax({
+                        url: '/Automation/Delete/' + id,
+                        type: 'POST',
+                        success: function(ok) {
+                            portalToast(ok.message, 'success');
+                            location.reload();
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+}
+

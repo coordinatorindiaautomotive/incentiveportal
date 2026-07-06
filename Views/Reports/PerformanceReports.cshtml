@@ -1,0 +1,329 @@
+﻿@model IncentivePortal.Controllers.PerformanceReportsViewModel
+@{
+    ViewData["Title"] = "Dealer Sales Performance";
+    Layout = "_Layout";
+}
+
+@section Styles {
+<link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+<style>
+  :root {
+    --bg-page: #f8fafc;
+    --panel: #ffffff;
+    --border-subtle: #e2e8f0;
+    --primary: #2563eb;
+    --primary-light: #eff6ff;
+    --primary-glow: rgba(37, 99, 235, 0.15);
+    --success: #10b981;
+    --danger: #ef4444;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --text-tertiary: #94a3b8;
+    
+    --grad-sales-start: #3b82f6; --grad-sales-end: #1d4ed8;
+    --grad-incentive-start: #10b981; --grad-incentive-end: #047857;
+    --grad-cashin-start: #8b5cf6; --grad-cashin-end: #6d28d9;
+    --grad-cashout-start: #f59e0b; --grad-cashout-end: #b45309;
+    --grad-netbalance-start: #0ea5e9; --grad-netbalance-end: #0369a1;
+
+    --radius-lg: 16px;
+    --shadow-card: 0 4px 20px -2px rgba(0,0,0,0.05);
+    --shadow-floating: 0 10px 30px -5px rgba(0,0,0,0.1);
+    
+    --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  [data-theme="dark"] {
+    --bg-page: #0f172a;
+    --panel: #1e293b;
+    --border-subtle: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text-tertiary: #64748b;
+    --shadow-card: 0 4px 20px -2px rgba(0,0,0,0.4);
+    --primary-light: #1e3a8a;
+  }
+</style>
+}
+
+<div class="db-wrap">
+  <div id="bgfx"></div>
+
+  <!-- LOADING SCREEN -->
+  <div id="ls">
+    <div class="ls-logo">RJ<span>06</span></div>
+    <div class="ls-bar"><div class="ls-fill"></div></div>
+    <div class="ls-txt">LOADING ANALYTICS ENGINE...</div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="hdr" id="hdr" style="opacity:0;transition:opacity .5s .9s">
+    <div class="hdr-brand">
+      <button class="btn-toggle-filters" id="btnToggleFilters" title="Hide Filters" onclick="toggleFilters()">
+        <i class="fa-solid fa-sliders" id="toggleFiltersIcon"></i>
+      </button>
+      <div class="hdr-logo">R</div>
+      <div>
+        <div class="hdr-title">Sales Analytics Dashboard</div>
+        <div class="hdr-sub">Premium SaaS Analytics</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="pill-live">
+        <div class="dot-live"></div>
+        LIVE ENGINE
+      </div>
+      <div class="hdr-stat">
+        Sales: <b id="hdrTotal">—</b>
+      </div>
+      <div class="hdr-stat">
+        Txns: <b id="hdrTxns">—</b>
+      </div>
+      <div class="hdr-stat">
+        Anchor Year: <b>@Model.AnchorYear</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap" id="wrap" style="opacity:0;transition:opacity .5s .9s">
+    <!-- SIDEBAR -->
+    <div class="sb">
+
+      <div class="fg">
+        <div class="fl">Fiscal Year</div>
+        <select class="sel" id="yrSel" onchange="go()">
+          <option value="current">FY @Model.AnchorYear - @(Model.AnchorYear + 1) (Current)</option>
+          <option value="last">FY @(Model.AnchorYear - 1) - @Model.AnchorYear (Last Year)</option>
+        </select>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Comparison <span class="afc" id="compAfc" style="display:none">—</span></div>
+        <select class="sel" id="cmpSel" onchange="go()">
+          <option value="none">Full Year Overview</option>
+          <option value="mom">Month vs Prev Month</option>
+          <option value="qoq">Quarter vs Prev Quarter</option>
+        </select>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Quarter <span class="afc" id="qAfc" style="display:none"></span></div>
+        <div class="chips" id="qChips"></div>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Month <span class="afc" id="mAfc" style="display:none"></span></div>
+        <div class="mgrid" id="mChips"></div>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Party Type <span class="afc" id="pAfc" style="display:none"></span></div>
+        <div class="chips" id="pChips"></div>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Part Category <span class="afc" id="catAfc" style="display:none"></span></div>
+        <div class="chips" id="catChips"></div>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Consignee <span class="afc" id="conAfc" style="display:none"></span></div>
+        <div class="chips" id="conChips"></div>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Dealer Sub-Type <span class="afc" id="dAfc" style="display:none"></span></div>
+        <div class="chips" id="dChips"></div>
+      </div>
+
+      <div class="fg">
+        <div class="fl">Location <span class="afc" id="lAfc" style="display:none"></span></div>
+        <div class="chips" id="lChips"></div>
+      </div>
+
+      <button class="rst" onclick="resetAll()">&#x21BA; &nbsp;RESET ALL FILTERS</button>
+    </div>
+
+    <!-- MAIN DISPLAY AREA -->
+    <div class="main">
+
+      <!-- KPIs -->
+      <div class="krow" id="krow"></div>
+
+      <!-- TREND CHART -->
+      <div class="cc">
+        <div class="ch">
+          <div><div class="ct" id="trendTitle">Monthly Net Retail Selling Trend</div><div class="cs" id="trendSub">All segments · Full fiscal year</div></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="ctag" id="trendTag">FY @Model.AnchorYear-@(Model.AnchorYear + 1)</span>
+            <select class="sel" style="width:130px;font-size:10px" id="trendView" onchange="Dashboard.go()">
+              <option value="total">All Party Types</option>
+              <option value="stacked">Stacked by Party</option>
+              <option value="category">By Part Category</option>
+              <option value="dealer">By Sub-Type</option>
+            </select>
+            <select class="sel" style="width:90px;font-size:10px;padding:4px 8px;" id="trendMode" onchange="Dashboard.loadTrend()">
+              <option value="value">Value</option>
+              <option value="growth">Growth %</option>
+              <option value="ytd">YTD</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-area-lg"><div id="trendChart"></div></div>
+      </div>
+
+      <!-- PARTY TYPE PERFORMANCE + QUARTERLY SUMMARY SIDE-BY-SIDE -->
+      <div class="g2" style="margin-bottom: 18px;">
+        <div class="cc">
+          <div class="ch" style="display:flex; justify-content:space-between; align-items:center;">
+            <div><div class="ct">Party Type Performance</div><div class="cs">Revenue & transactions by segment</div></div>
+            <select class="sel" style="width:130px;font-size:10px;padding:4px 8px;" id="partyView" onchange="Dashboard.loadPartyMix()">
+              <option value="contribution">Contribution %</option>
+              <option value="growth">YTD Growth %</option>
+            </select>
+          </div>
+          <div class="chart-area" style="min-height: 290px;"><div id="partyChart"></div></div>
+        </div>
+
+        <div class="cc">
+          <div class="ch" style="display:flex; justify-content:space-between; align-items:center;">
+            <div><div class="ct">Quarterly Summary</div><div class="cs">Q1 ? Q4 · current metric</div></div>
+            <select class="sel" style="width:90px;font-size:10px;padding:4px 8px;" id="qtrMode" onchange="Dashboard.loadQuarterSummary()">
+              <option value="value">Value</option>
+              <option value="growth">Growth %</option>
+              <option value="ytd">YTD</option>
+            </select>
+          </div>
+          <div class="chart-area" style="min-height: 290px;"><div id="qtrChart"></div></div>
+        </div>
+      </div>
+
+      <!-- CONSIGNEE & DEALER SUB-TYPE CONTRIBUTION SIDE-BY-SIDE -->
+      <div class="g2" style="margin-bottom: 18px;">
+        <div class="cc">
+          <div class="ch">
+            <div><div class="ct">Consignee Contribution</div><div class="cs">Revenue & transactions by branch</div></div>
+          </div>
+          <div class="chart-area" style="min-height: 290px;"><div id="consigneeChart"></div></div>
+        </div>
+
+        <div class="cc">
+          <div class="ch">
+            <div><div class="ct">Dealer Sub-Type Mix</div><div class="cs">Contribution by secondary segment</div></div>
+          </div>
+          <div class="chart-area" style="min-height: 290px;"><div id="dealerSubChart"></div></div>
+        </div>
+      </div>
+
+      <!-- DEALER SALES PERFORMANCE -->
+      <div class="cc" style="margin-top: 18px;">
+        <div class="ch" style="flex-wrap: wrap; gap: 10px;">
+          <div>
+            <div class="ct" id="dealerTableTitle">Dealer Sales Performance & Comparison</div>
+            <div class="cs">Individual party code sales & year-over-year comparison based on active filters</div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <input type="text" id="dealerSearchInput" placeholder="?? Search dealer name / code..." class="sel" style="width: 220px; font-size: 11px; padding: 6px 10px;" oninput="renderDealerSales()" />
+            <select id="dealerLimitSel" class="sel" style="width: 110px; font-size: 11px; padding: 6px 20px 6px 10px;" onchange="renderDealerSales()">
+              <option value="50">Show Top 50</option>
+              <option value="100">Show Top 100</option>
+              <option value="15">Show Top 15</option>
+              <option value="all">Show All</option>
+            </select>
+            <span class="ctag" id="dealerCountTag">DEALERS</span>
+          </div>
+        </div>
+        <div class="tw" style="max-height: 500px; overflow-y: auto; overflow-x: auto; width: 100%;">
+          <table class="table" style="position: relative; width: 100%; min-width: 800px; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; z-index: 2;">
+              <tr>
+                <th style="width: 60px; padding: 12px 16px; background: var(--panel); border-bottom: 2px solid var(--border-subtle); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Rank</th>
+                <th style="padding: 12px 16px; background: var(--panel); border-bottom: 2px solid var(--border-subtle); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Dealer / Party</th>
+                <th class="r" id="dealerSalesHeader" style="width: 150px; padding: 12px 16px; background: var(--panel); border-bottom: 2px solid var(--border-subtle); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Sales Value</th>
+                <th class="r" id="dealerCompHeader" style="width: 150px; padding: 12px 16px; background: var(--panel); border-bottom: 2px solid var(--border-subtle); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Comp Sales</th>
+                <th class="r" style="width: 180px; padding: 12px 16px; background: var(--panel); border-bottom: 2px solid var(--border-subtle); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">YoY Comparison</th>
+              </tr>
+            </thead>
+            <tbody id="dealerSalesBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /wrap -->
+</div><!-- /db-wrap -->
+
+@section Scripts {
+<script>
+  window.ANCHOR_YEAR = @Model.AnchorYear;
+  window.DB_PARTY_TYPES = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableDealerTypes));
+  window.DB_CATEGORIES = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableCategories));
+  window.DB_CONSIGNEES = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableBranches.Select(b => b.Consignee).Where(c => !string.IsNullOrEmpty(c)).Distinct()));
+  window.DB_DEALER_SUBTYPES = ["AW", "MW", "RO"];
+  window.DB_LOCATIONS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableBranches.Select(b => b.Code).Distinct()));
+
+  function toggleFilters() {
+    const sb = document.querySelector('.sb');
+    const btn = document.getElementById('btnToggleFilters');
+    if (sb) {
+      sb.classList.toggle('collapsed');
+      const isCollapsed = sb.classList.contains('collapsed');
+      localStorage.setItem('dashboard_filters_collapsed', isCollapsed);
+      if (btn) {
+        if (isCollapsed) {
+          btn.classList.add('collapsed-active');
+          btn.title = "Unhide Filters";
+        } else {
+          btn.classList.remove('collapsed-active');
+          btn.title = "Hide Filters";
+        }
+      }
+    }
+  }
+
+  function go() {
+    Dashboard.go();
+  }
+
+  function resetAll() {
+    Dashboard.resetAll();
+  }
+
+  function renderDealerSales() {
+    Dashboard.renderDealerSales();
+  }
+
+  $(function() {
+    const isCollapsed = localStorage.getItem('dashboard_filters_collapsed') === 'true';
+    if (isCollapsed) {
+      const sb = document.querySelector('.sb');
+      if (sb) sb.classList.add('collapsed');
+      const btn = document.getElementById('btnToggleFilters');
+      if (btn) {
+        btn.classList.add('collapsed-active');
+        btn.title = "Unhide Filters";
+      }
+    }
+
+    setTimeout(() => {
+      const ls = document.getElementById('ls');
+      if (ls) {
+        ls.style.opacity = '0';
+        setTimeout(() => ls.style.display = 'none', 400);
+      }
+      const hdr = document.getElementById('hdr');
+      if (hdr) hdr.style.opacity = '1';
+      const wrap = document.getElementById('wrap');
+      if (wrap) wrap.style.opacity = '1';
+
+      Dashboard.init();
+    }, 500);
+  });
+</script>
+<script src="~/js/dashboard.js" asp-append-version="true"></script>
+}
+

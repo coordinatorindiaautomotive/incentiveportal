@@ -1,0 +1,570 @@
+﻿@model IReadOnlyList<IncentivePortal.Models.Party>
+@{
+    ViewData["Title"] = "Party Ledger Registry";
+    var branches = (IReadOnlyList<IncentivePortal.Models.Branch>)ViewBag.Branches;
+}
+
+<!-- Category Tabs and Parties List -->
+<style>
+    .portal-tabs .nav-link {
+        color: var(--text-muted);
+        border: none;
+        border-bottom: 2px solid transparent;
+        font-weight: 600;
+        padding: 0.8rem 1.2rem;
+        transition: all 0.2s ease;
+    }
+    .portal-tabs .nav-link.active {
+        color: var(--color-1);
+        border-bottom: 2px solid var(--color-1);
+        background: transparent;
+    }
+    .portal-tabs .nav-link:hover:not(.active) {
+        color: var(--color-1-light);
+        border-bottom: 2px solid var(--border-color);
+    }
+    .preview-card {
+        border: 1px dashed var(--color-1);
+        background: rgba(13, 82, 214, 0.02);
+        border-radius: 8px;
+    }
+    .import-preview-table th {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+</style>
+
+<div class="panel">
+    <div class="panel-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center border-0 mb-3">
+        <div>
+            <h2>Party Accounts List</h2>
+            <p>Active corporate dealer and distributor catalog</p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-3 mt-3 mt-md-0">
+            <button type="button" class="btn btn-sm btn-primary" onclick="openPartyModal()"><i class="fa-solid fa-plus me-1"></i> + Register Party</button>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs portal-tabs border-bottom mb-3" id="partyTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="registry-tab" data-bs-toggle="tab" data-bs-target="#registry" type="button" role="tab">Active Registry</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="paste-tab" data-bs-toggle="tab" data-bs-target="#paste" type="button" role="tab">Copy & Paste Excel</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="partyTabsContent">
+        <!-- Active Registry Tab -->
+        <div class="tab-pane fade show active" id="registry" role="tabpanel">
+            <div class="d-flex justify-content-end gap-2 mb-3">
+                <button type="button" onclick="exportTableToCSV('#partiesTable', 'Dealer_Master.csv')" class="btn btn-sm btn-outline-primary" style="height: 40px; font-weight: 600;"><i class="fa-solid fa-download me-1"></i> Export Excel</button>
+                <div class="position-relative" style="width: 250px;">
+                    <input type="text" id="registrySearch" class="form-control corp-input ps-4" placeholder="Search parties..." />
+                    <span class="position-absolute top-50 start-0 translate-middle-y ps-2 text-muted" style="font-size: 0.8rem;">🔍</span>
+                </div>
+            </div>
+            <div class="table-responsive corp-table-wrapper">
+                <table class="table table-hover corp-table align-middle" id="partiesTable">
+            <thead>
+                <tr>
+                    <th>Party Code</th>
+                    <th>Name</th>
+                    <th>GST</th>
+                    <th>Mobile</th>
+                    <th>Branch</th>
+                    <th>Merge Target</th>
+                    <th>Party Type</th>
+                    <th>Status</th>
+                    @if (User.IsInRole(IncentivePortal.Data.AppRoles.SuperAdmin))
+                    {
+                        <th class="text-end">Actions</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="party-row" data-id="@item.Id" data-dealer-type="@item.DealerType" data-party-code="@item.PartyCode" data-party-name="@item.PartyName" data-gst="@item.GST" data-mobile="@item.Mobile" data-branch-id="@item.BranchId" data-address="@item.Address" data-fixed-pct="@item.FixedIncentivePercent" data-original-party-code="@item.OriginalPartyCode" data-status="@item.Status">
+                        <td><span style="background: rgba(30, 64, 175, 0.1); color: var(--color-1); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85rem;">@item.PartyCode</span></td>
+                        <td><strong>@item.PartyName</strong></td>
+                        <td><code>@item.GST</code></td>
+                        <td>@item.Mobile</td>
+                        <td>@item.Branch.Name</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(item.OriginalPartyCode))
+                            {
+                                <span class="badge bg-info text-dark border">@item.OriginalPartyCode</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted small">-</span>
+                            }
+                        </td>
+                        <td>
+                            @if (item.DealerType == "Fixed Incentive")
+                            {
+                                <span class="badge bg-warning text-dark border">Fixed (@item.FixedIncentivePercent.ToString("0.##")%)</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-primary">Slab-Based</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="status-badge @(item.Status == "Active" ? "success" : "danger")">
+                                @item.Status
+                            </span>
+                        </td>
+                        @if (User.IsInRole(IncentivePortal.Data.AppRoles.SuperAdmin))
+                        {
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger delete-party-btn" data-id="@item.Id" style="border-color: var(--primary); color: var(--primary); background: rgba(30, 64, 175, 0.05); font-weight: 600; padding: 4px 10px; border-radius: 6px; transition: all 0.2s;"><i class="fa-solid fa-trash-can me-1"></i> Delete</button>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div> <!-- Close registry tabpane -->
+
+<!-- Copy & Paste Tab -->
+<div class="tab-pane fade" id="paste" role="tabpanel">
+    <div class="mb-3">
+        <h3 class="h5 mb-1">Batch Copy & Paste</h3>
+        <p class="text-muted small">Copy party columns from Excel and paste them directly in the text area below.</p>
+    </div>
+
+    <div class="alert alert-info py-2 small mb-3">
+        <strong>Expected Columns:</strong> Party Code (Col 1), Party Name (Col 2), Branch Code (Col 3), Fixed Incentive % (Col 4, Default: 8%), GST Number (Col 5, Not Required), Mobile (Col 6, Not Required), Address (Col 7, Not Required), Original Party Code (Col 8, Not Required). Header rows are automatically matched.
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label small fw-bold">Paste Tabular Excel Data Here:</label>
+        <textarea id="pasteArea" class="form-control corp-input" rows="6" placeholder="Party Code&#9;Party Name&#9;Branch Code&#9;Fixed Incentive %&#10;WRJ010141843&#9;GURU NANAK MOTORS&#9;PKT&#9;7%&#10;WRJ050318666&#9;SHRI RAJSTHAN ENTERPRISES&#9;ALW&#9;8%" style="font-family: monospace; font-size: 0.85rem;"></textarea>
+    </div>
+
+    <!-- Interactive Parser Preview -->
+    <div id="pastePreviewSection" style="display: none;" class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h4 class="h6 mb-0 text-success">📋 Parsed Data Preview (<span id="previewCount">0</span> rows found)</h4>
+            <button id="btnClearPaste" class="btn btn-sm btn-outline-secondary">Clear</button>
+        </div>
+        <div class="table-responsive corp-table-wrapper mb-3" style="max-height: 400px; border: 1px solid var(--border-color);">
+            <table class="table table-sm corp-table align-middle import-preview-table">
+                <thead>
+                    <tr>
+                        <th>Row</th>
+                        <th>Party Code</th>
+                        <th>Party Name</th>
+                        <th>Branch Code</th>
+                        <th>Fixed Incentive %</th>
+                        <th>GST (Not Required)</th>
+                        <th>Mobile (Not Required)</th>
+                        <th>Address (Not Required)</th>
+                        <th>Merge Target (Not Required)</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="pastePreviewBody"></tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-end">
+            <button id="btnSubmitPaste" class="btn btn-success" style="min-width: 180px;">Import Verified Records</button>
+        </div>
+    </div>
+</div>
+
+</div> <!-- Close partyTabsContent -->
+</div> <!-- Close panel -->
+
+<!-- Premium Interactive Party Modal -->
+<div class="modal fade" id="partyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="partyForm" asp-action="Save" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="partyId" value="0" />
+                <div class="modal-header" style="background: #f8fbff; border-bottom: 1px solid var(--line);">
+                    <h5 class="modal-title fw-bold text-dark" id="partyModalTitle">&#x26A1; Register Party</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Party Code</label>
+                            <input name="PartyCode" id="partyCode" class="form-control corp-input" placeholder="e.g., WRJ010120962" required />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Party Name</label>
+                            <input name="PartyName" id="partyName" class="form-control corp-input" placeholder="e.g., GIYA MOTORS" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">GST Number (Not Required)</label>
+                            <input name="GST" id="partyGst" class="form-control corp-input" placeholder="e.g., 08AAAAA0000A1Z2" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Mobile (Not Required)</label>
+                            <input name="Mobile" id="partyMobile" class="form-control corp-input" placeholder="e.g., 9876543210" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Branch Mapping</label>
+                            <select name="BranchId" id="partyBranchId" class="form-select corp-select">
+                                @foreach (var b in branches)
+                                {
+                                    <option value="@b.Id">@b.Name (@b.Code)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">Address (Not Required)</label>
+                            <input name="Address" id="partyAddress" class="form-control corp-input" placeholder="Enter corporate address" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Incentive Category</label>
+                            <select name="DealerType" id="dealerTypeSelect" class="form-select corp-select">
+                                <option value="Fixed Incentive" selected>Fixed Incentive (Static Payout)</option>
+                                <option value="Slab-Based">Slab-Based Incentive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4" id="fixedPercentCol" style="transition: opacity 0.2s;">
+                            <label class="form-label small fw-bold" data-help-key="FixedIncentivePercent" data-help-page="Parties">Fixed Incentive % <i class="fa-solid fa-circle-info text-muted small ms-1"></i></label>
+                            <input name="FixedIncentivePercent" id="fixedIncentivePercentInput" type="number" step="0.01" min="0" max="100" class="form-control corp-input" placeholder="e.g., 8.00" value="8.00" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Original Party Code (Merge Target) (Not Required)</label>
+                            <input name="OriginalPartyCode" id="partyOriginalCode" class="form-control corp-input" placeholder="e.g., Target Code if merging" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">Account Status</label>
+                            <select name="Status" id="partyStatus" class="form-select corp-select">
+                                <option value="Active" selected>Active</option>
+                                <option value="Blocked">Blocked</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="background: #f8fbff; border-top: 1px solid var(--line); padding: 14px;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success">âœ“ Save Party Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    // -------------------------------------------------------------
+    // REAL-TIME REGISTRY SEARCH
+    // -------------------------------------------------------------
+    $('#registrySearch').on('input', function() {
+        const query = $(this).val().trim().toLowerCase();
+        $('#partiesTable tbody tr').each(function() {
+            const code = ($(this).data('party-code') || '').toString().toLowerCase();
+            const name = ($(this).data('party-name') || '').toString().toLowerCase();
+            const gst = ($(this).data('gst') || '').toString().toLowerCase();
+            if (code.includes(query) || name.includes(query) || gst.includes(query)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+
+    // -------------------------------------------------------------
+    // EXCEL COPY & PASTE PARSER LOGIC
+    // -------------------------------------------------------------
+    let parsedPasteItems = [];
+
+    $('#pasteArea').on('input', function() {
+        const text = $(this).val();
+        if (!text.trim()) {
+            $('#pastePreviewSection').hide();
+            parsedPasteItems = [];
+            return;
+        }
+
+        const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+        if (lines.length === 0) {
+            $('#pastePreviewSection').hide();
+            parsedPasteItems = [];
+            return;
+        }
+
+        // Parse header alignment
+        const firstLineCells = lines[0].split('\t').map(c => c.trim().toLowerCase());
+        
+        let hasHeader = false;
+        let codeIdx = -1;
+        let nameIdx = -1;
+        let branchIdx = -1;
+        let pctIdx = -1;
+        let gstIdx = -1;
+        let mobileIdx = -1;
+        let addressIdx = -1;
+        let origIdx = -1;
+
+        const knownCode = ["party code", "code", "dealer code", "cons party code", "partycode"];
+        const knownName = ["party name", "name", "dealer name", "cons party name", "partyname"];
+        const knownBranch = ["branch code", "branch", "location", "branchcode"];
+        const knownPct = ["fixed incentive %", "fixed incentive", "incentive %", "incentive", "slab", "slab %", "fixed pct", "fixed pct %", "fixed incentive percent"];
+        const knownGst = ["gst number", "gst", "gstin"];
+        const knownMobile = ["mobile", "mobile number", "phone", "phone number"];
+        const knownAddress = ["address", "location address"];
+        const knownOrig = ["original party code", "original code", "originalpartycode", "merge target", "merge code"];
+
+        for (let i = 0; i < firstLineCells.length; i++) {
+            const hVal = firstLineCells[i];
+            if (knownCode.includes(hVal)) { codeIdx = i; hasHeader = true; }
+            else if (knownName.includes(hVal)) { nameIdx = i; hasHeader = true; }
+            else if (knownBranch.includes(hVal)) { branchIdx = i; hasHeader = true; }
+            else if (knownPct.includes(hVal)) { pctIdx = i; hasHeader = true; }
+            else if (knownGst.includes(hVal)) { gstIdx = i; hasHeader = true; }
+            else if (knownMobile.includes(hVal)) { mobileIdx = i; hasHeader = true; }
+            else if (knownAddress.includes(hVal)) { addressIdx = i; hasHeader = true; }
+            else if (knownOrig.includes(hVal)) { origIdx = i; hasHeader = true; }
+        }
+
+        // If no explicit matching header, map sequentially by default positions
+        if (!hasHeader) {
+            codeIdx = 0;
+            nameIdx = firstLineCells.length > 1 ? 1 : -1;
+            branchIdx = firstLineCells.length > 2 ? 2 : -1;
+            pctIdx = firstLineCells.length > 3 ? 3 : -1;
+            gstIdx = firstLineCells.length > 4 ? 4 : -1;
+            mobileIdx = firstLineCells.length > 5 ? 5 : -1;
+            addressIdx = firstLineCells.length > 6 ? 6 : -1;
+            origIdx = firstLineCells.length > 7 ? 7 : -1;
+        }
+
+        const startIndex = hasHeader ? 1 : 0;
+        parsedPasteItems = [];
+        const tbody = $('#pastePreviewBody');
+        tbody.empty();
+
+        let rowCounter = 1;
+        for (let i = startIndex; i < lines.length; i++) {
+            const cells = lines[i].split('\t');
+            if (cells.length < 1) continue;
+
+            const code = codeIdx !== -1 ? (cells[codeIdx] || '').trim() : '';
+            const name = nameIdx !== -1 ? (cells[nameIdx] || '').trim() : '';
+            const branchCode = branchIdx !== -1 ? (cells[branchIdx] || '').trim() : '';
+            const pctStr = pctIdx !== -1 ? (cells[pctIdx] || '').trim() : '';
+            const gst = gstIdx !== -1 ? (cells[gstIdx] || '').trim() : '';
+            const mobile = mobileIdx !== -1 ? (cells[mobileIdx] || '').trim() : '';
+            const address = addressIdx !== -1 ? (cells[addressIdx] || '').trim() : '';
+            const origCode = origIdx !== -1 ? (cells[origIdx] || '').trim() : '';
+
+            if (!code && !name) continue;
+
+            // Parse Fixed Incentive Percent
+            let pct = 8.00;
+            if (pctStr) {
+                const cleanedPct = pctStr.replace('%', '').trim();
+                const parsedPct = parseFloat(cleanedPct);
+                if (!isNaN(parsedPct)) {
+                    pct = parsedPct;
+                }
+            }
+
+            let rowStatus = '<span class="badge bg-success">Valid</span>';
+            if (!code) {
+                rowStatus = '<span class="badge bg-danger">Missing Code</span>';
+            } else if (!name) {
+                rowStatus = '<span class="badge bg-danger">Missing Name</span>';
+            }
+
+            parsedPasteItems.push({
+                PartyCode: code,
+                PartyName: name,
+                BranchCode: branchCode || null,
+                FixedIncentivePercent: pct,
+                GST: gst || null,
+                Mobile: mobile || null,
+                Address: address || null,
+                OriginalPartyCode: origCode || null
+            });
+
+            tbody.append(`
+                <tr>
+                    <td class="text-muted small">${rowCounter++}</td>
+                    <td><span class="badge bg-light border text-dark monospace">${code || '-'}</span></td>
+                    <td><strong>${name || '-'}</strong></td>
+                    <td><span class="badge bg-light border text-dark">${branchCode || '<span class="text-muted small">Default</span>'}</span></td>
+                    <td><code>${pct.toFixed(2)}%</code></td>
+                    <td><span class="text-muted small">${gst || '-'}</span></td>
+                    <td><span class="text-muted small">${mobile || '-'}</span></td>
+                    <td><span class="text-muted small">${address || '-'}</span></td>
+                    <td><span class="text-muted small">${origCode || '-'}</span></td>
+                    <td class="text-center">${rowStatus}</td>
+                </tr>
+            `);
+        }
+
+        $('#previewCount').text(parsedPasteItems.length);
+        if (parsedPasteItems.length > 0) {
+            $('#pastePreviewSection').show();
+        } else {
+            $('#pastePreviewSection').hide();
+        }
+    });
+
+    $('#btnClearPaste').on('click', function() {
+        $('#pasteArea').val('');
+        $('#pastePreviewSection').hide();
+        parsedPasteItems = [];
+    });
+
+    $('#btnSubmitPaste').on('click', function() {
+        if (parsedPasteItems.length === 0) return;
+        
+        const btn = this;
+        portalSetBusy(btn, 'Importing ' + parsedPasteItems.length + ' rows...');
+
+        $.ajax({
+            url: '@Url.Action("ImportPartiesBatch", "Parties")',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(parsedPasteItems),
+            headers: {
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+            }
+        })
+        .done(r => {
+            portalToast(r.message || 'Batch imported successfully.');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Batch import failed.');
+        })
+        .always(() => portalClearBusy(btn));
+    });
+
+    // Toggle Fixed Incentive percentage input based on category select
+    $('#dealerTypeSelect').on('change', function() {
+        if ($(this).val() === 'Fixed Incentive') {
+            $('#fixedPercentCol').css({ 'opacity': '1', 'pointer-events': 'auto' });
+            $('#fixedIncentivePercentInput').removeAttr('readonly');
+            if (parseFloat($('#fixedIncentivePercentInput').val()) === 0) {
+                $('#fixedIncentivePercentInput').val('8.00'); // default helpful value
+            }
+        } else {
+            $('#fixedPercentCol').css({ 'opacity': '0.5', 'pointer-events': 'none' });
+            $('#fixedIncentivePercentInput').attr('readonly', 'readonly').val('0');
+        }
+    });
+
+    // Reset Modal on Close
+    $('#partyModal').on('hidden.bs.modal', function() {
+        $('#partyForm')[0].reset();
+        $('#partyId').val(0);
+        $('#partyCode').prop('readonly', false);
+        $('#partyModalTitle').text('\u26A1 Register Party');
+        $('#dealerTypeSelect').trigger('change');
+    });
+
+    // Open Modal for Add
+    window.openPartyModal = function() {
+        $('#partyForm')[0].reset();
+        $('#partyId').val(0);
+        $('#partyCode').prop('readonly', false);
+        $('#partyModalTitle').text('\u26A1 Register Party');
+        $('#dealerTypeSelect').trigger('change');
+        $('#partyModal').modal('show');
+    };
+
+    // Populate form and open Modal for Edit
+    $('.party-row').css('cursor', 'pointer').on('click', function() {
+        const id = $(this).data('id');
+        const code = $(this).data('party-code');
+        const name = $(this).data('party-name');
+        const gst = $(this).data('gst');
+        const mobile = $(this).data('mobile');
+        const branchId = $(this).data('branch-id');
+        const address = $(this).data('address');
+        const dealerType = $(this).data('dealer-type');
+        const fixedPct = $(this).data('fixed-pct');
+        const originalPartyCode = $(this).data('original-party-code');
+        const status = $(this).data('status');
+
+        $('#partyId').val(id || '0');
+        $('#partyCode').val(code).prop('readonly', true);
+        $('#partyName').val(name);
+        $('#partyGst').val(gst);
+        $('#partyMobile').val(mobile);
+        $('#partyBranchId').val(branchId);
+        $('#partyAddress').val(address);
+        $('#dealerTypeSelect').val(dealerType).trigger('change');
+        $('#fixedIncentivePercentInput').val(fixedPct);
+        $('#partyOriginalCode').val(originalPartyCode || '');
+        $('#partyStatus').val(status);
+        
+        $('#partyModalTitle').text('\u26A1 Edit Party: ' + name);
+        $('#partyModal').modal('show');
+    });
+
+    // Form submit AJAX
+    $('#partyForm').on('submit', function(e) {
+        e.preventDefault();
+        const data = $(this).serialize();
+        const button = $(this).find('[type="submit"]')[0];
+        portalSetBusy(button, 'Saving...');
+
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: data
+        })
+        .done(r => {
+            portalToast(r.message || 'Party saved successfully.');
+            $('#partyModal').modal('hide');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to save party.');
+        })
+        .always(() => portalClearBusy(button));
+    });
+
+    // Delete Party Event Handler
+    $(document).on('click', '.delete-party-btn', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "This will soft-delete the party account!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: 'var(--primary)',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: '/Parties/Delete',
+                    method: 'POST',
+                    data: { 
+                        id: id,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    }
+                })
+                .done(r => {
+                    portalToast(r.message || 'Party deleted successfully.');
+                    setTimeout(() => location.reload(), 800);
+                })
+                .fail(xhr => {
+                    portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to delete party.');
+                });
+            }
+        });
+    });
+});
+</script>
+}
+
+

@@ -1,0 +1,1317 @@
+@{
+    ViewData["Title"] = "Upload Management";
+    var isEmbed = Context.Request.Query["embed"].ToString() == "true";
+}
+
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                "colors": {
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed": "#001a41",
+                    "tertiary-fixed": "#b4ebff",
+                    "tertiary-container": "#001f27",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-tint": "#495f84",
+                    "on-primary": "#ffffff",
+                    "secondary-container": "#1d4ed8",
+                    "on-background": "#0b1c30",
+                    "surface": "#f8f9ff",
+                    "inverse-surface": "#213145",
+                    "surface-container-highest": "#d3e4fe",
+                    "surface-container": "#e5eeff",
+                    "on-secondary-container": "#fefcff",
+                    "on-primary-fixed-variant": "#31476b",
+                    "primary-fixed-dim": "#b1c7f2",
+                    "background": "#f8f9ff",
+                    "tertiary": "#000000",
+                    "on-tertiary-fixed-variant": "#004e5f",
+                    "on-primary-fixed": "#001b3d",
+                    "outline-variant": "#c4c6cf",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-tertiary-fixed": "#001f27",
+                    "on-tertiary": "#ffffff",
+                    "secondary-fixed-dim": "#adc7ff",
+                    "error-container": "#ffdad6",
+                    "on-secondary-fixed-variant": "#004493",
+                    "error": "#dc2626",
+                    "surface-container-high": "#dce9ff",
+                    "on-error-container": "#93000a",
+                    "secondary-fixed": "#d8e2ff",
+                    "surface-bright": "#f8f9ff",
+                    "surface-dim": "#cbdbf5",
+                    "on-surface-variant": "#44474e",
+                    "primary-container": "#001b3d",
+                    "inverse-primary": "#b1c7f2",
+                    "on-secondary": "#ffffff",
+                    "primary": "#000000",
+                    "outline": "#74777f",
+                    "primary-fixed": "#d6e3ff",
+                    "surface-container-low": "#eff4ff",
+                    "secondary": "#2563eb",
+                    "on-tertiary-container": "#0090ae",
+                    "surface-variant": "#d3e4fe",
+                    "tertiary-fixed-dim": "#3cd7ff",
+                    "on-surface": "#0b1c30",
+                    "on-primary-container": "#6f84ac"
+                },
+                "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+                },
+                "spacing": {
+                    "margin-desktop": "64px",
+                    "base": "8px",
+                    "md": "24px",
+                    "gutter": "24px",
+                    "xs": "4px",
+                    "sm": "12px",
+                    "lg": "48px",
+                    "xl": "80px",
+                    "margin-mobile": "20px"
+                },
+                "fontFamily": {
+                    "headline-xl": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "label-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Inter"]
+                },
+                "fontSize": {
+                    "headline-xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+                }
+            },
+        },
+    }
+</script>
+
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .sidebar-active {
+        background-color: rgba(37, 99, 235, 0.1);
+        color: #2563eb;
+        font-weight: 600;
+    }
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    .upload-gradient {
+        background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(239,244,255,0.8) 100%);
+    }
+    .card-shadow {
+        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -2px rgba(0, 0, 0, 0.03);
+    }
+    .hero-text-shadow {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .pulse-animation {
+        animation: sf-pulse 1.8s infinite ease-in-out;
+    }
+    @@keyframes sf-pulse {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+    }
+    .slide-down {
+        animation: sf-slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @@keyframes sf-slide-down {
+        from { opacity: 0; transform: translateY(-12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Style resets to play nice inside layout */
+    .w-100 { width: 100% !important; }
+</style>
+
+<div class="w-full text-on-surface font-body-md flex flex-col">
+    <!-- Main Content Body Area -->
+    <div class="space-y-6 flex-1">
+        
+        <!-- Hero Section -->
+        @if (!isEmbed)
+        {
+            <section class="flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 mb-6 rounded-2xl shadow-xl relative overflow-hidden" style="background: linear-gradient(135deg, #0b1c30 0%, #1e3c72 100%);">
+                <!-- Decorative background elements -->
+                <div class="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-white/5 blur-3xl"></div>
+                <div class="absolute right-40 -bottom-20 w-48 h-48 rounded-full bg-blue-400/10 blur-3xl"></div>
+                
+                <div class="space-y-2 relative z-10">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-lg flex items-center justify-center text-white">
+                            <span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">cloud_upload</span>
+                        </div>
+                        <div class="space-y-1">
+                            <h2 class="font-headline-xl text-3xl font-extrabold text-white tracking-tight">Sales Data Hub</h2>
+                            <p class="text-blue-100/80 font-medium max-w-xl text-sm">Centralized, secure intake portal for distributor monthly sales workbooks.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-4 relative z-10">
+                    <a href="/Imports/DownloadMonthlyTemplate" class="flex items-center gap-2 px-6 py-3.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-bold rounded-xl transition-all shadow-sm">
+                        <span class="material-symbols-outlined text-white">file_download</span>
+                        Get Template
+                    </a>
+                    <a href="/Imports/MonthlySales" class="flex items-center gap-2 px-6 py-3.5 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all active:scale-95 group">
+                        <span class="material-symbols-outlined group-hover:rotate-180 transition-transform duration-500">sync</span>
+                        Calculation Engine
+                    </a>
+                </div>
+            </section>
+        }
+        else
+        {
+            <!-- Embed header replacement -->
+            <div class="flex items-center justify-between pb-4 border-b border-outline-variant/30">
+                <div class="flex items-center gap-3">
+                    <div class="w-14 h-14 rounded-2xl bg-secondary shadow-lg shadow-secondary/20 flex items-center justify-center text-white">
+                        <span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">upload_file</span>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg text-ink font-headline-md leading-tight">Sales Intake & Data Locks</h4>
+                        <p class="text-xs text-muted">Centralized workbook imports & period freeze manager.</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <a href="/Imports/DownloadMonthlyTemplate" class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-surface-container-low text-ink border border-outline-variant rounded-lg text-xs font-semibold transition-all">
+                        <span class="material-symbols-outlined text-sm text-secondary">file_download</span> Template
+                    </a>
+                </div>
+            </div>
+        }
+
+        <!-- 1. FILE UPLOAD ZONE -->
+        <div id="upload-card-wrapper" class="grid grid-cols-1 xl:grid-cols-12 gap-gutter items-stretch slide-down">
+            <!-- Upload Drag Drop area -->
+            <div class="xl:col-span-8 bg-surface-container-lowest rounded-2xl card-shadow overflow-hidden flex flex-col h-full border border-outline-variant/30">
+                <div class="p-md py-6 border-b border-outline-variant/20 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 rounded-lg bg-secondary/10 text-secondary">
+                            <span class="material-symbols-outlined">attachment</span>
+                        </div>
+                        <h3 class="font-headline-md text-lg font-bold">Document Intake</h3>
+                    </div>
+                    <span class="text-[10px] px-3 py-1 bg-surface-container-high rounded-full font-bold text-outline tracking-wider uppercase">System Ready</span>
+                </div>
+                <div class="p-md py-8 flex-1 flex flex-col upload-gradient">
+                    <p class="text-body-sm text-on-surface-variant/80 mb-8 max-w-lg">Please upload the standard distributor spreadsheet for the active billing cycle. File validation will occur automatically.</p>
+                    
+                    <div id="drop-zone" class="flex-1 border-2 border-dashed border-secondary/20 bg-white/40 rounded-2xl flex flex-col items-center justify-center py-20 group hover:border-secondary hover:bg-secondary/5 transition-all cursor-pointer relative overflow-hidden">
+                        <!-- Decorative background elements for drag zone -->
+                        <div class="absolute -top-12 -right-12 w-48 h-48 bg-secondary/5 rounded-full blur-3xl group-hover:bg-secondary/10 transition-colors"></div>
+                        <div class="absolute -bottom-12 -left-12 w-48 h-48 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors"></div>
+                        
+                        <div class="relative z-10 flex flex-col items-center text-center px-4">
+                            <div class="w-24 h-24 rounded-full bg-white shadow-xl flex items-center justify-center mb-6 text-blue-600 group-hover:scale-110 group-hover:shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all duration-300">
+                                <span class="material-symbols-outlined text-5xl">cloud_upload</span>
+                            </div>
+                            <p class="font-headline-md text-2xl font-extrabold text-gray-900 mb-2">Drop your workbook here</p>
+                            <p class="text-body-sm text-gray-500 mb-10 text-center px-8">Accepting .xlsx and .xls formats (limit 50MB per file)</p>
+                            <button class="px-12 py-4 text-white font-bold rounded-xl shadow-xl transition-all active:translate-y-0.5" style="background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4);" onclick="document.getElementById('file-input').click()">
+                                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-lg">folder_open</span> Select from Computer</span>
+                            </button>
+                            <input type="file" id="file-input" class="hidden" accept=".xlsx,.xls" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guidelines -->
+            <div class="xl:col-span-4 flex flex-col gap-gutter">
+                <div class="bg-surface-container-lowest rounded-2xl card-shadow p-md border border-outline-variant/30 space-y-6 h-full flex flex-col justify-between">
+                    <div class="space-y-6">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-lg bg-tertiary-fixed text-primary">
+                                <span class="material-symbols-outlined">lightbulb</span>
+                            </div>
+                            <h3 class="font-headline-md text-lg font-bold">Intake Protocols</h3>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex gap-4 items-start p-4 rounded-xl border border-outline-variant/30 hover:border-secondary/30 transition-colors bg-surface-container-low/50">
+                                <div class="mt-1 w-10 h-10 shrink-0 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
+                                    <span class="material-symbols-outlined text-[22px]">auto_graph</span>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-sm text-on-surface mb-1">Dual Intake Process</h4>
+                                    <p class="text-[13px] text-on-surface-variant leading-relaxed">Automatic handling of current periodic data and historical archiving without manual splitting.</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4 items-start p-4 rounded-xl border border-outline-variant/30 hover:border-error/30 transition-colors bg-error-container/5">
+                                <div class="mt-1 w-10 h-10 shrink-0 rounded-lg bg-error/10 flex items-center justify-center text-error">
+                                    <span class="material-symbols-outlined text-[22px]">security</span>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-sm text-on-surface mb-1">Immutability Lock</h4>
+                                    <p class="text-[13px] text-on-surface-variant leading-relaxed">Raw table preservation ensures data is stored exactly as received for complete audit transparency.</p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. PROGRESS / PROCESSING OVERLAY -->
+        <div id="progress-card" class="bg-surface-container-lowest rounded-2xl card-shadow p-6 border border-outline-variant/30 d-none slide-down">
+            <div class="flex align-items-center gap-4 mb-4">
+                <div class="spinner-border text-primary pulse-animation w-6 h-6 border-4 rounded-full border-t-secondary animate-spin" role="status"></div>
+                <div>
+                    <h6 class="font-bold mb-0.5" id="progress-title">Uploading and verifying file...</h6>
+                    <p class="text-xs text-outline mb-0" id="progress-subtitle">Extracting headers and running structural analysis</p>
+                </div>
+            </div>
+            <div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden mb-2">
+                <div id="progress-bar" class="bg-secondary h-full rounded-full transition-all duration-300" style="width: 0%;"></div>
+            </div>
+            <div class="text-right text-xs text-outline"><span id="progress-pct">0</span>% completed</div>
+        </div>
+
+        <!-- 3. ERROR CARD -->
+        <div id="error-card" class="bg-error-container/30 border border-error/30 text-error rounded-2xl p-6 d-none slide-down">
+            <div class="flex items-start gap-4">
+                <span class="material-symbols-outlined text-2xl mt-0.5">warning</span>
+                <div class="flex-grow">
+                    <h6 class="font-bold mb-0.5 text-red-900">Upload Blocked by Validation Errors</h6>
+                    <p id="error-message" class="text-xs text-red-800">Errors found in spreadsheet formatting.</p>
+                </div>
+                <button class="px-4 py-2 bg-white border border-error/20 hover:bg-error-container/10 text-error font-semibold text-xs rounded-xl shadow-sm transition-all" onclick="resetUpload()">
+                    <span class="material-symbols-outlined text-sm mr-1">rotate_left</span> Try Again
+                </button>
+            </div>
+        </div>
+
+        <!-- 4. VALIDATION & PREVIEW PANEL -->
+        <div id="preview-panel" class="d-none space-y-6">
+            <!-- Summary Dashboard stats -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/30 flex items-center justify-between">
+                    <div>
+                        <span class="text-muted text-[10px] font-bold block uppercase tracking-wider">Filename</span>
+                        <h6 class="font-bold text-sm text-truncate block mt-1" id="summary-filename" style="max-width: 180px;">Sales_2026.xlsx</h6>
+                    </div>
+                    <span class="material-symbols-outlined text-3xl text-secondary">draft</span>
+                </div>
+                <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/30 flex items-center justify-between">
+                    <div>
+                        <span class="text-muted text-[10px] font-bold block uppercase tracking-wider">File Size</span>
+                        <h6 class="font-bold text-sm block mt-1" id="summary-filesize">2.4 MB</h6>
+                    </div>
+                    <span class="material-symbols-outlined text-3xl text-outline">hard_drive</span>
+                </div>
+                <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/30 flex items-center justify-between">
+                    <div>
+                        <span class="text-muted text-[10px] font-bold block uppercase tracking-wider">Total Rows</span>
+                        <h6 class="font-bold text-sm block mt-1" id="summary-totalrows">5,412</h6>
+                    </div>
+                    <span class="material-symbols-outlined text-3xl text-outline-variant">tag</span>
+                </div>
+                <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/30 flex items-center justify-between">
+                    <div>
+                        <span class="text-muted text-[10px] font-bold block uppercase tracking-wider">Status</span>
+                        <div id="summary-status" class="mt-1 inline-flex items-center gap-1 text-xs font-bold text-success">
+                            <span class="material-symbols-outlined text-sm">check_circle</span> Ready to Commit
+                        </div>
+                    </div>
+                    <span class="material-symbols-outlined text-3xl text-success">verified_user</span>
+                </div>
+            </div>
+
+            <!-- Identified Target Periods & Warnings -->
+            <div class="bg-surface-container-lowest p-6 rounded-2xl card-shadow border border-outline-variant/30 space-y-4">
+                <h5 class="font-headline-md text-lg font-bold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-outline">calendar_month</span> Identified Target Periods & Processing Modes
+                </h5>
+                <p class="text-xs text-on-surface-variant leading-relaxed">The system scans Month and Year values from each row to apply correct replacement behavior. Active periods are overwritten; locked periods reject the upload.</p>
+                
+                <div id="periods-list-container" class="flex flex-wrap gap-3 items-center">
+                    <!-- Loaded dynamically -->
+                </div>
+                
+                <div class="p-4 rounded-xl border border-amber-200 bg-amber-50" id="payout-status-warning-box">
+                    <div class="flex gap-3 items-start">
+                        <span class="material-symbols-outlined text-amber-600">info</span>
+                        <div class="text-xs text-amber-800 leading-normal">
+                            <strong class="block text-amber-900 mb-0.5">Note on Current Month Overwrite</strong>
+                            June 2026 and subsequent months are active current periods. Overwriting them will erase all existing raw data for those specific months in the Raw database table before importing the new records.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Commit Description -->
+            <div class="bg-surface-container-lowest p-6 rounded-2xl card-shadow border border-outline-variant/30 space-y-3">
+                <h5 class="font-headline-md text-lg font-bold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-outline">edit_note</span> Commit Description
+                </h5>
+                <label class="block text-xs text-on-surface-variant">Provide a brief change reason or remark for the import log (optional):</label>
+                <input type="text" id="commit-reason" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all" placeholder="e.g., Weekly sales intake for current month or Historical record correction." />
+            </div>
+
+            <!-- Grid Preview -->
+            <div class="bg-surface-container-lowest p-6 rounded-2xl card-shadow border border-outline-variant/30 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h5 class="font-headline-md text-lg font-bold flex items-center gap-2">
+                        <span class="material-symbols-outlined text-outline">table_chart</span> Data Intake Preview 
+                        <span class="text-xs font-semibold px-2.5 py-0.5 bg-secondary-container/10 text-secondary border border-secondary/15 rounded-full" id="preview-rowcount">Showing 10 rows</span>
+                    </h5>
+                    <div class="w-full sm:w-72 relative">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline/60 text-sm">search</span>
+                        <input type="text" id="preview-filter" class="w-full pl-9 pr-4 py-2 bg-surface-container-low border border-outline-variant/50 rounded-lg text-xs outline-none focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all" placeholder="Filter preview records..." />
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-outline-variant/30 shadow-inner max-h-[480px]">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-surface-container-low text-[10px] font-bold uppercase text-outline tracking-widest border-b border-outline-variant/30 sticky top-0 z-10">
+                            <tr>
+                                <th class="px-4 py-3">Row #</th>
+                                <th class="px-4 py-3">Month-Year</th>
+                                <th class="px-4 py-3">Location</th>
+                                <th class="px-4 py-3">Distributor Code</th>
+                                <th class="px-4 py-3">Distributor Name</th>
+                                <th class="px-4 py-3 text-right">Sales Value (Net)</th>
+                                <th class="px-4 py-3 text-right">Discount</th>
+                                <th class="px-4 py-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="preview-table-body" class="text-xs divide-y divide-outline-variant/20">
+                            <!-- Loaded dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex justify-between items-center pt-2">
+                    <span class="text-xs text-outline" id="preview-pagination-text">Showing 1 to 10 of 100 rows</span>
+                    <div class="flex gap-2">
+                        <button class="px-3 py-1.5 border border-outline-variant/50 hover:bg-surface rounded-lg text-xs font-bold transition-all" id="btn-prev-page" onclick="prevPage()">Prev</button>
+                        <button class="px-3 py-1.5 border border-outline-variant/50 hover:bg-surface rounded-lg text-xs font-bold transition-all" id="btn-next-page" onclick="nextPage()">Next</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Confirm Actions -->
+            <div class="flex justify-end gap-3">
+                <button class="px-6 py-3 border border-outline-variant/50 hover:bg-surface font-bold text-xs rounded-xl shadow-sm transition-all" onclick="resetUpload()"><span class="material-symbols-outlined text-sm mr-1">close</span> Cancel</button>
+                <button class="px-6 py-3 bg-secondary text-white font-bold text-xs rounded-xl shadow-md hover:bg-secondary-container hover:shadow-lg transition-all" id="btn-confirm-commit" onclick="commitUpload()"><span class="material-symbols-outlined text-sm mr-1">check</span> Confirm &amp; Process Import</button>
+            </div>
+        </div>
+
+        <!-- 5. IMPORT SUCCESS RESULT SUMMARY -->
+        <div id="success-panel" class="bg-surface-container-lowest rounded-2xl card-shadow border border-outline-variant/30 p-8 max-w-xl mx-auto text-center d-none slide-down">
+            <div class="w-16 h-16 bg-success/10 text-success rounded-full flex items-center justify-center mx-auto mb-4 border border-success/20">
+                <span class="material-symbols-outlined text-3xl">check_circle</span>
+            </div>
+            <h4 class="font-headline-md text-xl font-bold text-on-background mb-1">Import Processed Successfully!</h4>
+            <p class="text-xs text-outline mb-6">Workbook records committed successfully to the raw database tables.</p>
+
+            <div class="grid grid-cols-2 gap-4 text-left mb-6">
+                <div class="p-3 bg-surface border border-outline-variant/30 rounded-xl">
+                    <span class="text-[9px] font-bold text-outline uppercase block tracking-wider">Total Imported</span>
+                    <h5 class="font-bold text-dark text-base mt-1" id="success-imported-rows">0</h5>
+                </div>
+                <div class="p-3 bg-surface border border-outline-variant/30 rounded-xl">
+                    <span class="text-[9px] font-bold text-outline uppercase block tracking-wider">Deleted (Overwritten)</span>
+                    <h5 class="font-bold text-error text-base mt-1" id="success-deleted-rows">0</h5>
+                </div>
+                <div class="p-3 bg-surface border border-outline-variant/30 rounded-xl">
+                    <span class="text-[9px] font-bold text-outline uppercase block tracking-wider">Duration</span>
+                    <h5 class="font-bold text-primary text-base mt-1" id="success-duration">0.00s</h5>
+                </div>
+                <div class="p-3 bg-surface border border-outline-variant/30 rounded-xl">
+                    <span class="text-[9px] font-bold text-outline uppercase block tracking-wider">File Name</span>
+                    <h5 class="font-bold text-dark text-base truncate mt-1" id="success-filename" title="File">File.xlsx</h5>
+                </div>
+            </div>
+
+            <div class="flex gap-3 justify-center">
+                <button class="px-5 py-2.5 border border-outline-variant/50 hover:bg-surface font-bold text-xs rounded-xl transition-all" onclick="resetUpload()"><span class="material-symbols-outlined text-sm mr-1">upload</span> Upload Another</button>
+                <a href="/Imports/MonthlySales" class="px-5 py-2.5 bg-secondary text-white font-bold text-xs rounded-xl hover:bg-secondary-container transition-all" id="btn-go-to-engine"><span class="material-symbols-outlined text-sm mr-1">sync</span> Calculation Engine</a>
+            </div>
+        </div>
+
+        <!-- 6. PERIOD LOCK MANAGER (Data Integrity Locks) -->
+        <div id="lock-manager-card" class="bg-surface-container-lowest rounded-2xl card-shadow border border-outline-variant/30 overflow-hidden slide-down">
+            <div class="p-md py-6 border-b border-outline-variant/20 flex items-center justify-between bg-surface-container-low/30">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 rounded-lg bg-on-background/5 text-on-background">
+                        <span class="material-symbols-outlined">lock_open</span>
+                    </div>
+                    <h3 class="font-headline-md text-lg font-bold">Data Integrity Locks</h3>
+                </div>
+            </div>
+            <div class="p-md space-y-6">
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter items-start">
+                    
+                    <!-- Active Period Locks List -->
+                    <div class="xl:col-span-8 space-y-4">
+                        <p class="text-body-sm text-on-surface-variant/70">Controlled periods prevent accidental modification or recalculation of historical distributor settlements.</p>
+                        
+                        <div class="overflow-x-auto rounded-xl border border-outline-variant/30 shadow-inner">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead class="bg-surface-container-low text-[10px] font-bold uppercase text-outline tracking-widest border-b border-outline-variant/30">
+                                    <tr>
+                                        <th class="px-6 py-4">Year</th>
+                                        <th class="px-6 py-4">Month</th>
+                                        <th class="px-6 py-4">Locked By</th>
+                                        <th class="px-6 py-4">Date Locked</th>
+                                        <th class="px-6 py-4">Reason</th>
+                                        <th class="px-6 py-4 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="locks-table-body" class="divide-y divide-outline-variant/20">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-8 font-bold">
+                                            <span class="spinner-border spinner-border-sm text-primary me-2"></span> Loading lock table records...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Configure Lock Form -->
+                    <div class="xl:col-span-4 bg-surface-container-low/40 p-md rounded-2xl border border-outline-variant/20 flex flex-col">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="p-2 rounded-lg bg-secondary/10 text-secondary">
+                                <span class="material-symbols-outlined">task_alt</span>
+                            </div>
+                            <h3 class="font-headline-md text-lg font-bold">Configure Lock</h3>
+                        </div>
+                        <form class="space-y-5 flex-1" onsubmit="return false;">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="lock-year" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Target Year</label>
+                                    <select id="lock-year" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 text-body-sm focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all outline-none appearance-none cursor-pointer">
+                                        <option value="2024">2024</option>
+                                        <option value="2025">2025</option>
+                                        <option value="2026" selected>2026</option>
+                                        <option value="2027">2027</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="lock-month" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Target Month</label>
+                                    <select id="lock-month" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 text-body-sm focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all outline-none appearance-none cursor-pointer">
+                                        <option value="0">0 - Full Year</option>
+                                        <option value="1">1 - January</option>
+                                        <option value="2">2 - February</option>
+                                        <option value="3">3 - March</option>
+                                        <option value="4">4 - April</option>
+                                        <option value="5">5 - May</option>
+                                        <option value="6">6 - June</option>
+                                        <option value="7">7 - July</option>
+                                        <option value="8">8 - August</option>
+                                        <option value="9">9 - September</option>
+                                        <option value="10">10 - October</option>
+                                        <option value="11">11 - November</option>
+                                        <option value="12">12 - December</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="lock-reason" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Administrative Note</label>
+                                <textarea id="lock-reason" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 text-body-sm focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all outline-none resize-none" placeholder="Enter reason for freeze..." rows="4"></textarea>
+                            </div>
+                            <button class="w-full mt-auto py-4 bg-primary text-white font-bold rounded-xl flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:bg-on-background transition-all" type="button" id="btn-submit-lock" onclick="lockPeriod()">
+                                <span class="material-symbols-outlined text-xl">lock</span> Apply Period Lock
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. DANGER ZONE: RAW DATA DELETION -->
+        <section id="delete-raw-section" class="bg-white rounded-2xl border-2 border-red-100 shadow-lg overflow-hidden mb-12 slide-down relative">
+            <div class="absolute inset-0 bg-gradient-to-b from-red-50/50 to-transparent pointer-events-none"></div>
+            <div class="relative p-md py-6 border-b border-red-100 flex items-center justify-between" style="background: linear-gradient(to right, rgba(254, 226, 226, 0.5), transparent);">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 rounded-lg bg-red-100 text-red-600 shadow-sm">
+                        <span class="material-symbols-outlined">warning</span>
+                    </div>
+                    <h3 class="font-headline-md text-lg font-bold text-red-700">Critical Actions</h3>
+                </div>
+                <span class="text-[10px] bg-red-600 text-white px-3 py-1 rounded-full font-bold uppercase tracking-widest shadow-[0_2px_10px_rgba(220,38,38,0.3)]">Authorized Only</span>
+            </div>
+            
+            <div class="p-md py-8 flex flex-col xl:flex-row gap-gutter">
+                <!-- Left explanation -->
+                <div class="flex-1 space-y-4">
+                    <h4 class="font-bold text-on-surface text-base">Delete Raw Data by Period</h4>
+                    <p class="text-body-sm text-on-surface-variant max-w-2xl">Use this utility to purge faulty uploads. This removes all raw sales records and associated import logs for the selected window. <span class="text-error font-extrabold underline decoration-2 underline-offset-4">This operation is irreversible.</span></p>
+                    <div class="p-4 bg-surface-container rounded-xl flex items-start gap-4 border border-outline-variant/30 text-xs">
+                        <span class="material-symbols-outlined text-outline">info</span>
+                        <p class="text-on-surface-variant italic">Note: The system will require a full recalculation if data from previous months is deleted and re-uploaded.</p>
+                    </div>
+                </div>
+
+                <!-- Right form -->
+                <div class="xl:w-2/5 flex flex-col gap-6 bg-surface-container-low/40 p-6 rounded-2xl border border-outline-variant/20">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">Year</label>
+                            <select id="del-year" class="w-full bg-white border border-outline-variant/30 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-error/20 transition-all outline-none appearance-none cursor-pointer" onchange="rawCountReset()">
+                                <option value="2024">2024</option>
+                                <option value="2025">2025</option>
+                                <option value="2026" selected>2026</option>
+                                <option value="2027">2027</option>
+                            </select>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">Month</label>
+                            <select id="del-month" class="w-full bg-white border border-outline-variant/30 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-error/20 transition-all outline-none appearance-none cursor-pointer" onchange="rawCountReset()">
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5" selected>May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Count status chip area -->
+                    <div id="del-count-area" class="d-none">
+                        <div class="flex items-center gap-2 p-3 bg-white rounded-xl border border-outline-variant/30 text-xs">
+                            <span class="material-symbols-outlined text-outline">database</span>
+                            <span id="del-count-text" class="text-on-surface-variant">–</span>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button class="flex-1 py-3 bg-white border border-outline-variant/30 font-bold text-sm rounded-xl hover:bg-surface transition-all flex items-center justify-center gap-2" id="btn-check-raw" onclick="checkRawCount()">
+                            <span class="material-symbols-outlined text-lg">search_check</span> Check Count
+                        </button>
+                        <button class="flex-1 py-3 bg-error text-white font-bold text-sm rounded-xl hover:bg-error/90 hover:shadow-lg transition-all flex items-center justify-center gap-2" id="btn-delete-raw" onclick="openDeleteModal()" disabled>
+                            <span class="material-symbols-outlined text-lg">delete_forever</span> Execute Purge
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<!-- Deletion Confirmation Modal -->
+<div class="modal fade" id="deleteRawModal" tabindex="-1" aria-labelledby="deleteRawModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-2xl overflow-hidden">
+            <div class="modal-header border-b-0 pb-0 pt-6 px-6 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-error text-white rounded-full flex items-center justify-center">
+                        <span class="material-symbols-outlined">warning</span>
+                    </div>
+                    <h5 class="modal-title font-headline-md text-base font-bold text-on-background" id="deleteRawModalLabel">Confirm Deletion</h5>
+                </div>
+                <button type="button" class="btn-close text-outline hover:text-black" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-6 py-4 space-y-3">
+                <p class="text-xs text-on-surface-variant">You are about to permanently delete:</p>
+                <div class="p-3.5 bg-red-50 text-red-800 rounded-xl border border-red-100 font-bold text-xs" id="del-modal-summary">
+                    – records for –
+                </div>
+                <p class="text-xs text-on-surface-variant">This action <strong>cannot be undone</strong> and will clear associated logs. Type <code class="bg-surface px-1.5 py-0.5 rounded text-error font-extrabold">DELETE</code> to confirm:</p>
+                <input type="text" id="del-confirm-input" class="w-full bg-surface border border-outline-variant rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-error/20" placeholder="Type DELETE to confirm" />
+            </div>
+            <div class="modal-body px-6 pb-6 pt-0 flex justify-end gap-3 border-t-0">
+                <button type="button" class="px-4 py-2 border border-outline-variant rounded-xl text-xs font-semibold hover:bg-surface" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="px-5 py-2 bg-error text-white font-bold text-xs rounded-xl hover:bg-error/90" id="btn-modal-confirm-delete" onclick="confirmDeleteRaw()" disabled>
+                    <span class="material-symbols-outlined text-sm mr-1">delete</span> Yes, Delete Permanently
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Module states
+    let currentFile = null;
+    let previewToken = null;
+    let previewRows = [];
+    let filteredPreviewRows = [];
+    let currentPage = 1;
+    const pageSize = 10;
+    
+    let pollInterval = null;
+    let importStartTime = null;
+
+    // Month name utility
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    function getMonthLabel(monthNum, yearNum) {
+        if (monthNum >= 1 && monthNum <= 12) {
+            return `${monthNames[monthNum - 1]} ${yearNum}`;
+        }
+        return `${monthNum} ${yearNum}`;
+    }
+
+    // Initialize Event Listeners
+    document.addEventListener("DOMContentLoaded", () => {
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        if (dropZone) {
+            // Drag and Drop
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('border-secondary', 'bg-secondary/15', 'scale-[1.01]');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-secondary', 'bg-secondary/15', 'scale-[1.01]');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    handleFileSelection(files[0]);
+                }
+            }, false);
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    handleFileSelection(this.files[0]);
+                }
+            });
+        }
+
+        // Filter text box
+        const previewFilter = document.getElementById('preview-filter');
+        if (previewFilter) {
+            previewFilter.addEventListener('input', function() {
+                filterPreviewData(this.value);
+            });
+        }
+
+        // Load month locks list
+        loadLocks();
+    });
+
+    // Reset view
+    function resetUpload() {
+        clearInterval(pollInterval);
+        currentFile = null;
+        previewRows = [];
+        filteredPreviewRows = [];
+        currentPage = 1;
+        
+        document.getElementById('file-input').value = "";
+        document.getElementById('commit-reason').value = "";
+        document.getElementById('preview-filter').value = "";
+        
+        document.getElementById('upload-card-wrapper').classList.remove('d-none');
+        document.getElementById('progress-card').classList.add('d-none');
+        document.getElementById('error-card').classList.add('d-none');
+        document.getElementById('preview-panel').classList.add('d-none');
+        document.getElementById('success-panel').classList.add('d-none');
+    }
+
+    // Set UI Progress state
+    function updateProgress(percentage, title, subtitle) {
+        document.getElementById('progress-card').classList.remove('d-none');
+        document.getElementById('progress-bar').style.width = percentage + '%';
+        document.getElementById('progress-pct').innerText = Math.round(percentage);
+        
+        if (title) document.getElementById('progress-title').innerText = title;
+        if (subtitle) document.getElementById('progress-subtitle').innerText = subtitle;
+    }
+
+    // Show Error
+    function showError(message) {
+        document.getElementById('progress-card').classList.add('d-none');
+        document.getElementById('preview-panel').classList.add('d-none');
+        document.getElementById('success-panel').classList.add('d-none');
+        
+        document.getElementById('error-card').classList.remove('d-none');
+        document.getElementById('error-message').innerText = message;
+    }
+
+    // File selection entry point
+    function handleFileSelection(file) {
+        if (!file) return;
+        currentFile = file;
+        
+        document.getElementById('error-card').classList.add('d-none');
+        document.getElementById('upload-card-wrapper').classList.add('d-none');
+        
+        updateProgress(20, "Reading Excel File...", "Extracting sheets and columns structures");
+        
+        // Post file to preview endpoint
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("uploadMode", "Sales");
+
+        fetch('/Imports/Preview', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        })
+        .then(async response => {
+            const text = await response.text();
+            let json = null;
+            try {
+                json = text ? JSON.parse(text) : null;
+            } catch (e) { }
+
+            if (!response.ok) {
+                const errorMsg = (json && json.message) || text || "The selected spreadsheet structure is invalid. Verify column names.";
+                throw new Error(errorMsg);
+            }
+            return json;
+        })
+        .then(data => {
+            updateProgress(100, "Spreadsheet read successfully", "Parsing row records");
+            previewToken = data.previewToken || null;
+            const rowsToDisplay = data.rows || data;
+            setTimeout(() => {
+                document.getElementById('progress-card').classList.add('d-none');
+                displayPreview(file, rowsToDisplay);
+            }, 400);
+        })
+        .catch(err => {
+            showError(err.message);
+        });
+    }
+
+    // Process and display preview data
+    function displayPreview(file, rows) {
+        previewRows = rows;
+        filteredPreviewRows = [...rows];
+        currentPage = 1;
+        
+        // Populate Summary dashboard
+        document.getElementById('summary-filename').innerText = file.name;
+        document.getElementById('summary-filename').title = file.name;
+        document.getElementById('summary-filesize').innerText = formatBytes(file.size);
+        document.getElementById('summary-totalrows').innerText = rows.length.toLocaleString();
+        
+        // Month year analysis
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+        const periodsMap = new Map();
+        
+        let fatalErrorCount = 0;
+        
+        rows.forEach(r => {
+            const key = `${r.month}-${r.year}`;
+            if (!periodsMap.has(key)) {
+                periodsMap.set(key, { month: r.month, year: r.year, label: getMonthLabel(r.month, r.year) });
+            }
+            if (r.error && r.validationStatus === "Invalid") {
+                fatalErrorCount++;
+            }
+        });
+        
+        // Generate period impact badges
+        let periodsHtml = "";
+        periodsMap.forEach(p => {
+            const isCurrent = p.year > currentYear || (p.year === currentYear && p.month >= currentMonth);
+            const badgeClass = isCurrent ? 'text-[10px] font-bold text-error bg-error-container/20 border border-error/25 px-2.5 py-0.5 rounded-full uppercase tracking-wider' : 'text-[10px] font-bold text-secondary bg-secondary-container/10 border border-secondary/15 px-2.5 py-0.5 rounded-full uppercase tracking-wider';
+            const actionLabel = isCurrent ? 'Overwrite Month' : 'Append Raw';
+            const tooltip = isCurrent ? 'Current period: all existing data for this month will be cleared first.' : 'Historical month: records will be appended without clearing previous data.';
+            
+            periodsHtml += `
+                <div class="d-inline-flex align-items-center gap-2 p-2 border border-outline-variant/30 bg-surface rounded-xl shadow-sm" title="${tooltip}">
+                    <strong class="text-xs text-on-surface font-headline-md">${p.label}</strong>
+                    <span class="${badgeClass}">${actionLabel}</span>
+                </div>
+            `;
+        });
+        document.getElementById('periods-list-container').innerHTML = periodsHtml || '<span class="text-muted small">No target months found</span>';
+        
+        // Show status badge based on errors
+        const statusBadge = document.getElementById('summary-status');
+        const commitBtn = document.getElementById('btn-confirm-commit');
+        
+        if (fatalErrorCount > 0) {
+            statusBadge.className = "mt-1 inline-flex items-center gap-1 text-xs font-bold text-error";
+            statusBadge.innerHTML = `<span class="material-symbols-outlined text-sm">cancel</span> ${fatalErrorCount} Blockers Found`;
+            commitBtn.disabled = true;
+            commitBtn.title = "Please resolve fatal errors before importing data.";
+        } else {
+            statusBadge.className = "mt-1 inline-flex items-center gap-1 text-xs font-bold text-success";
+            statusBadge.innerHTML = `<span class="material-symbols-outlined text-sm">check_circle</span> Ready to Commit`;
+            commitBtn.disabled = false;
+            commitBtn.title = "";
+        }
+        
+        // Render preview table
+        renderTablePage();
+        document.getElementById('preview-panel').classList.remove('d-none');
+    }
+
+    // Render preview page of data
+    function renderTablePage() {
+        const tbody = document.getElementById('preview-table-body');
+        tbody.innerHTML = "";
+        
+        const start = (currentPage - 1) * pageSize;
+        const end = Math.min(start + pageSize, filteredPreviewRows.length);
+        
+        const pageData = filteredPreviewRows.slice(start, end);
+        
+        if (pageData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-6">No matching records found.</td></tr>`;
+            document.getElementById('preview-pagination-text').innerText = "0 records";
+            return;
+        }
+
+        pageData.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-surface-container-low transition-colors";
+            
+            let statusBadge = `<span class="inline-flex items-center text-[10px] font-bold text-success bg-success/15 border border-success/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Valid</span>`;
+            if (r.error) {
+                if (r.validationStatus === "Invalid") {
+                    statusBadge = `<span class="inline-flex items-center text-[10px] font-bold text-error bg-error-container/20 border border-error/25 px-2 py-0.5 rounded-full uppercase tracking-wider" title="${r.error}">Blocker</span>`;
+                } else {
+                    statusBadge = `<span class="inline-flex items-center text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" title="${r.error}">Warning</span>`;
+                }
+            }
+            
+            const monthLabel = getMonthLabel(r.month, r.year);
+            const salesVal = typeof r.saleValue === 'number' ? r.saleValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : r.saleValue;
+            const discVal = typeof r.discount === 'number' ? r.discount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : r.discount;
+            
+            tr.innerHTML = `
+                <td class="px-4 py-3 text-muted font-bold">#${r.rowNumber}</td>
+                <td class="px-4 py-3 font-semibold">${monthLabel}</td>
+                <td class="px-4 py-3"><span class="px-2 py-0.5 text-[11px] bg-surface-container text-on-surface border border-outline-variant/30 rounded-lg">${r.location}</span></td>
+                <td class="px-4 py-3 font-medium text-truncate" style="max-width:140px;" title="${r.partyCode}">${r.partyCode}</td>
+                <td class="px-4 py-3 text-on-surface-variant text-truncate" style="max-width:240px;" title="${r.partyName}">${r.partyName}</td>
+                <td class="px-4 py-3 text-end font-bold text-on-background">₹ ${salesVal}</td>
+                <td class="px-4 py-3 text-end text-outline">₹ ${discVal}</td>
+                <td class="px-4 py-3">${statusBadge}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // Update pagination text
+        document.getElementById('preview-pagination-text').innerText = `Showing ${start + 1} to ${end} of ${filteredPreviewRows.length.toLocaleString()} rows`;
+        document.getElementById('preview-rowcount').innerText = `${filteredPreviewRows.length.toLocaleString()} rows`;
+        
+        // Enable/Disable pagination buttons
+        document.getElementById('btn-prev-page').disabled = currentPage === 1;
+        document.getElementById('btn-next-page').disabled = end >= filteredPreviewRows.length;
+    }
+
+    // Filter preview rows
+    function filterPreviewData(query) {
+        if (!query) {
+            filteredPreviewRows = [...previewRows];
+        } else {
+            const q = query.toLowerCase().trim();
+            filteredPreviewRows = previewRows.filter(r => 
+                r.partyCode.toLowerCase().includes(q) ||
+                r.partyName.toLowerCase().includes(q) ||
+                r.location.toLowerCase().includes(q) ||
+                getMonthLabel(r.month, r.year).toLowerCase().includes(q)
+            );
+        }
+        currentPage = 1;
+        renderTablePage();
+    }
+
+    // Pagination controls
+    function prevPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTablePage();
+        }
+    }
+
+    function nextPage() {
+        if ((currentPage * pageSize) < filteredPreviewRows.length) {
+            currentPage++;
+            renderTablePage();
+        }
+    }
+
+    // Format bytes to string
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    // Commit file upload
+    function commitUpload() {
+        if (!currentFile) return;
+        
+        document.getElementById('preview-panel').classList.add('d-none');
+        document.getElementById('error-card').classList.add('d-none');
+        
+        updateProgress(5, "Queueing upload task...", "Initializing database writer transaction");
+        
+        const changeReason = document.getElementById('commit-reason').value;
+        
+        const formData = new FormData();
+        formData.append("file", currentFile);
+        formData.append("uploadMode", "Sales");
+        formData.append("rewriteSales", "true");
+        formData.append("changeReason", changeReason || "Periodic upload of sales data");
+        if (previewToken) {
+            formData.append("previewToken", previewToken);
+        }
+        
+        importStartTime = performance.now();
+
+        fetch('/Imports/Commit', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        })
+        .then(async response => {
+            const text = await response.text();
+            let json = null;
+            try {
+                json = text ? JSON.parse(text) : null;
+            } catch (e) { }
+
+            if (!response.ok) {
+                const errorMsg = (json && json.message) || text || "Failed to initiate import commit.";
+                throw new Error(errorMsg);
+            }
+            return json;
+        })
+        .then(data => {
+            if (data.ok && data.jobId) {
+                pollJobStatus(data.jobId);
+            } else {
+                throw new Error(data.message || "Invalid response structure from commit server.");
+            }
+        })
+        .catch(err => {
+            showError(err.message);
+        });
+    }
+
+    // Poll background import job status
+    function pollJobStatus(jobId) {
+        let fakePct = 10;
+        
+        pollInterval = setInterval(() => {
+            fetch(`/Imports/GetJobStatus?jobId=${jobId}`)
+            .then(async res => {
+                const text = await res.text();
+                let json = null;
+                try {
+                    json = text ? JSON.parse(text) : null;
+                } catch(e) {}
+                if (!res.ok) {
+                    throw new Error((json && json.message) || text || "Could not reach background worker registry.");
+                }
+                return json;
+            })
+            .then(state => {
+                if (state.status === "Processing" || state.status === "Pending") {
+                    fakePct = Math.min(fakePct + 8, 95);
+                    updateProgress(fakePct, "Importing Sales Data...", state.message || "Writing rows to Raw Sales table");
+                }
+                else if (state.status === "Succeeded") {
+                    clearInterval(pollInterval);
+                    updateProgress(100, "Intake finished successfully", "Parsing commit aggregates");
+                    
+                    const durationSeconds = ((performance.now() - importStartTime) / 1000).toFixed(2);
+                    
+                    setTimeout(() => {
+                        document.getElementById('progress-card').classList.add('d-none');
+                        
+                        // Show success view
+                        document.getElementById('success-imported-rows').innerText = (state.successRows || 0).toLocaleString();
+                        document.getElementById('success-deleted-rows').innerText = (state.deletedRows || 0).toLocaleString();
+                        document.getElementById('success-duration').innerText = `${durationSeconds} seconds`;
+                        document.getElementById('success-filename').innerText = currentFile.name;
+                        document.getElementById('success-filename').title = currentFile.name;
+                        
+                        document.getElementById('success-panel').classList.remove('d-none');
+                        
+                        // If embedded, notify parent tower of changes
+                        if (window.parent && typeof window.parent.notifyDataChanged === 'function') {
+                            window.parent.notifyDataChanged();
+                        }
+                    }, 400);
+                }
+                else if (state.status === "Failed") {
+                    clearInterval(pollInterval);
+                    showError(state.error || "Background execution aborted. Check server logs.");
+                }
+            })
+            .catch(err => {
+                clearInterval(pollInterval);
+                showError("Status polling failure: " + err.message);
+            });
+        }, 1000);
+    }
+
+    // Fetch and render active month locks
+    function loadLocks() {
+        const tbody = document.getElementById('locks-table-body');
+        if (!tbody) return;
+
+        fetch('/UploadManagement/GetLocks')
+        .then(res => res.json())
+        .then(data => {
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No active month/period locks found.</td></tr>`;
+                return;
+            }
+
+            let html = "";
+            data.forEach(x => {
+                html += `
+                    <tr class="hover:bg-surface-container-low transition-colors">
+                        <td class="px-4 py-3 font-bold text-on-surface">${x.lockYear}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-0.5 text-xs bg-surface-container text-on-surface border border-outline-variant/30 rounded-lg">${x.monthLabel}</span></td>
+                        <td class="px-4 py-3 text-on-surface-variant font-medium">${x.lockedBy || 'system'}</td>
+                        <td class="px-4 py-3 text-outline text-[11px]">${x.lockedAt}</td>
+                        <td class="px-4 py-3 text-on-surface-variant text-truncate" style="max-width:200px;" title="${x.unlockReason || ''}">${x.unlockReason || '-'}</td>
+                        <td class="px-4 py-3 text-center">
+                            <button class="px-2.5 py-1 border border-red-200 text-error bg-red-50 hover:bg-red-100 rounded-lg text-xs font-semibold flex items-center gap-1 mx-auto" onclick="unlockPeriod(${x.id})">
+                                <span class="material-symbols-outlined text-[14px]">lock_open</span> Unlock
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        })
+        .catch(err => {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger p-4">Failed to load locks: ${err.message}</td></tr>`;
+        });
+    }
+
+    // Submit lock request
+    function lockPeriod() {
+        const year = document.getElementById('lock-year').value;
+        const month = document.getElementById('lock-month').value;
+        const reason = document.getElementById('lock-reason').value;
+
+        const formData = new FormData();
+        formData.append("year", year);
+        formData.append("month", month);
+        formData.append("reason", reason || "Manually locked via Lock Manager");
+
+        fetch('/UploadManagement/LockPeriod', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        })
+        .then(async res => {
+            const text = await res.text();
+            let json = null;
+            try { json = text ? JSON.parse(text) : null; } catch(e) {}
+
+            if (!res.ok) {
+                throw new Error((json && json.message) || text || "Failed to lock period.");
+            }
+            return json;
+        })
+        .then(data => {
+            document.getElementById('lock-reason').value = "";
+            loadLocks();
+            alert("Period locked successfully.");
+        })
+        .catch(err => {
+            alert(err.message);
+        });
+    }
+
+    // Submit unlock request
+    function unlockPeriod(id) {
+        if (!confirm("Are you sure you want to unlock this period? This will allow uploads and modifications.")) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("id", id);
+
+        fetch('/UploadManagement/UnlockPeriod', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        })
+        .then(async res => {
+            const text = await res.text();
+            let json = null;
+            try { json = text ? JSON.parse(text) : null; } catch(e) {}
+
+            if (!res.ok) {
+                throw new Error((json && json.message) || text || "Failed to unlock period.");
+            }
+            return json;
+        })
+        .then(data => {
+            loadLocks();
+        })
+        .catch(err => {
+            alert(err.message);
+        });
+    }
+
+    // ── Delete Raw Data ──
+    let _delCount = 0;
+
+    function rawCountReset() {
+        _delCount = 0;
+        document.getElementById('del-count-area').classList.add('d-none');
+        document.getElementById('btn-delete-raw').disabled = true;
+    }
+
+    function checkRawCount() {
+        const year  = document.getElementById('del-year').value;
+        const month = document.getElementById('del-month').value;
+        const btn   = document.getElementById('btn-check-raw');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1 w-3 h-3 border-2 border-t-transparent rounded-full animate-spin inline-block"></span> Checking...';
+
+        fetch(`/UploadManagement/GetRawDataCount?year=${year}&month=${month}`)
+        .then(async res => {
+            const text = await res.text();
+            let json = null;
+            try { json = JSON.parse(text); } catch(e) {}
+            if (!res.ok) throw new Error((json && json.message) || text || 'Failed to fetch count.');
+            return json;
+        })
+        .then(data => {
+            _delCount = data.count;
+            const countArea = document.getElementById('del-count-area');
+            const countText = document.getElementById('del-count-text');
+            countArea.classList.remove('d-none');
+            const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+            if (data.count === 0) {
+                countText.innerHTML = `<span class="text-on-surface-variant font-medium">No raw records found for <strong>${monthNames[month]} ${year}</strong>. Nothing to delete.</span>`;
+                document.getElementById('btn-delete-raw').disabled = true;
+            } else {
+                countText.innerHTML = `<span class="text-error font-extrabold">${data.count.toLocaleString()} record(s)</span> found for <strong>${monthNames[month]} ${year}</strong> — ready to purge.`;
+                document.getElementById('btn-delete-raw').disabled = false;
+            }
+        })
+        .catch(err => alert('Error: ' + err.message))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined text-sm">search_check</span> Check Count';
+        });
+    }
+
+    function openDeleteModal() {
+        const year   = document.getElementById('del-year').value;
+        const month  = document.getElementById('del-month').value;
+        const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        document.getElementById('del-modal-summary').textContent =
+            `${_delCount.toLocaleString()} raw record(s) for ${monthNames[month]} ${year}`;
+        document.getElementById('del-confirm-input').value = '';
+        document.getElementById('btn-modal-confirm-delete').disabled = true;
+        const modal = new bootstrap.Modal(document.getElementById('deleteRawModal'));
+        modal.show();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const confirmInput = document.getElementById('del-confirm-input');
+        if (confirmInput) {
+            confirmInput.addEventListener('input', function () {
+                document.getElementById('btn-modal-confirm-delete').disabled = this.value.trim() !== 'DELETE';
+            });
+        }
+    });
+
+    function confirmDeleteRaw() {
+        const year  = document.getElementById('del-year').value;
+        const month = document.getElementById('del-month').value;
+        const confirmBtn = document.getElementById('btn-modal-confirm-delete');
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1 w-3 h-3 border-2 border-t-transparent rounded-full animate-spin inline-block"></span> Deleting...';
+
+        const formData = new FormData();
+        formData.append('year', year);
+        formData.append('month', month);
+        formData.append('reason', 'Manually deleted via Delete Raw Data panel');
+
+        fetch('/UploadManagement/DeleteRawData', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        })
+        .then(async res => {
+            const text = await res.text();
+            let json = null;
+            try { json = JSON.parse(text); } catch(e) {}
+            if (!res.ok) throw new Error((json && json.message) || text || 'Deletion failed.');
+            return json;
+        })
+        .then(data => {
+            bootstrap.Modal.getInstance(document.getElementById('deleteRawModal')).hide();
+            const countArea = document.getElementById('del-count-area');
+            const countText = document.getElementById('del-count-text');
+            countArea.classList.remove('d-none');
+            countText.innerHTML = `<span class="text-success font-extrabold"><span class="material-symbols-outlined text-sm mr-1">check_circle</span> ${data.message}</span>`;
+            document.getElementById('btn-delete-raw').disabled = true;
+            _delCount = 0;
+        })
+        .catch(err => {
+            alert('Deletion failed: ' + err.message);
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<span class="material-symbols-outlined text-sm mr-1">delete</span> Yes, Delete Permanently';
+        });
+    }
+</script>
+
+

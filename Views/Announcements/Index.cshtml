@@ -1,0 +1,189 @@
+﻿@model IReadOnlyList<IncentivePortal.Models.Announcement>
+@{
+    ViewData["Title"] = "Announcement Broadcast Control";
+}
+
+<div class="panel">
+    <div class="panel-header d-flex justify-content-between align-items-center border-0 mb-3">
+        <div>
+            <h2>Announcement Ticker Registry</h2>
+            <p>Manage dynamic horizontal marquee notifications displayed across all user portals</p>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" onclick="openAnnouncementModal()">
+            <i class="fa-solid fa-plus me-1"></i> Post Announcement
+        </button>
+    </div>
+
+    <div class="table-responsive corp-table-wrapper" style="margin-top: 16px;">
+        <table class="table table-hover corp-table align-middle" id="announcementsTable">
+            <thead>
+                <tr>
+                    <th style="width: 50px;" class="text-center">#</th>
+                    <th style="width: 140px;">Severity Level</th>
+                    <th>Broadcast Notice Message</th>
+                    <th style="width: 150px;">Posted Date</th>
+                    <th style="width: 120px;" class="text-center">Status</th>
+                    <th style="width: 220px;" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Count == 0)
+                {
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <i class="fa-solid fa-bullhorn fa-2x mb-2 d-block opacity-40"></i>
+                            No announcements posted yet. Click **Post Announcement** to start broadcasting.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    var index = 1;
+                    @foreach (var a in Model)
+                    {
+                        var badgeClass = a.Severity switch
+                        {
+                            "warning" => "status-badge warning",
+                            "danger" => "status-badge danger",
+                            "success" => "status-badge success",
+                            _ => "status-badge neutral"
+                        };
+                        <tr>
+                            <td class="text-center text-muted fw-bold">@index</td>
+                            <td>
+                                <span class="@badgeClass">
+                                    @(a.Severity.ToUpper())
+                                </span>
+                            </td>
+                            <td class="text-dark fw-semibold" style="max-width: 400px; word-wrap: break-word; white-space: normal;">
+                                @a.Message
+                            </td>
+                            <td class="text-muted small">
+                                @a.CreatedAt.ToLocalTime().ToString("dd-MMM-yyyy hh:mm tt")
+                                <span class="d-block small text-muted">By: @a.CreatedBy</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="status-badge @(a.IsActive ? "success" : "neutral")">
+                                    @(a.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex gap-1 justify-content-center">
+                                    <button type="button" class="btn btn-xs @(a.IsActive ? "btn-outline-warning" : "btn-outline-success") toggle-active-btn" data-id="@a.Id">
+                                        <i class="fa-solid @(a.IsActive ? "fa-eye-slash" : "fa-eye") me-1"></i>
+                                        @(a.IsActive ? "Deactivate" : "Activate")
+                                    </button>
+                                    <button type="button" class="btn btn-xs btn-outline-danger delete-announcement-btn" data-id="@a.Id">
+                                        <i class="fa-solid fa-trash me-1"></i> Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        index++;
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Broadcast Announcement Creator Modal -->
+<div class="modal fade" id="announcementModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="announcementForm" asp-action="Create" method="post" data-ajax="true">
+                @Html.AntiForgeryToken()
+                <div class="modal-header" style="background: #f8fbff; border-bottom: 1px solid var(--line);">
+                    <h5 class="modal-title fw-bold text-dark"><i class="fa-solid fa-bullhorn me-2 text-primary"></i> Broadcast New Notice</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Broadcast Message</label>
+                        <textarea name="message" id="announcementMessage" class="form-control corp-input" style="height: 100px; resize: none;" placeholder="Type announcement description here..." required></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Severity Highlight Level</label>
+                        <select name="severity" class="form-select corp-select" required>
+                            <option value="info">Info (Blue - Default)</option>
+                            <option value="success">Success (Green - General announcement)</option>
+                            <option value="warning">Warning (Amber - Maintenance / alert)</option>
+                            <option value="danger">Danger (Red - High urgency alert)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer" style="background: #f8fbff; border-top: 1px solid var(--line); padding: 14px;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success" id="saveAnnouncementBtn">✓ Publish Notice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    window.openAnnouncementModal = function() {
+        $('#announcementMessage').val('');
+        $('#announcementModal').modal('show');
+    };
+
+    // Toggle Active Broadcast Status via AJAX
+    $('.toggle-active-btn').on('click', function() {
+        const id = $(this).data('id');
+        const button = this;
+        portalSetBusy(button, '...');
+
+        $.ajax({
+            url: '@Url.Action("ToggleActive", "Announcements")',
+            method: 'POST',
+            data: { id: id, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }
+        })
+        .done(r => {
+            portalToast(r.message || 'Status updated successfully.', 'success');
+            setTimeout(() => location.reload(), 600);
+        })
+        .fail(xhr => {
+            portalToast('Failed to toggle status.', 'error');
+        })
+        .always(() => portalClearBusy(button));
+    });
+
+    // Soft-Delete Broadcast Notice via AJAX with SweetAlert2 Confirmation
+    $('.delete-announcement-btn').on('click', function() {
+        const id = $(this).data('id');
+        const button = this;
+
+        Swal.fire({
+            title: 'Delete Announcement?',
+            text: "This notice will be removed from the ticker immediately.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, Delete',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                portalSetBusy(button, '...');
+                $.ajax({
+                    url: '@Url.Action("Delete", "Announcements")',
+                    method: 'POST',
+                    data: { id: id, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }
+                })
+                .done(r => {
+                    portalToast(r.message || 'Announcement deleted.', 'success');
+                    setTimeout(() => location.reload(), 600);
+                })
+                .fail(xhr => {
+                    portalToast('Failed to delete notice.', 'error');
+                })
+                .always(() => portalClearBusy(button));
+            }
+        });
+    });
+});
+</script>
+}

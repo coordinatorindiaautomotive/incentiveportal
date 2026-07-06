@@ -1,0 +1,383 @@
+﻿@model List<IncentivePortal.Models.CashReconRecord>
+@using IncentivePortal.Models
+@{
+    ViewData["Title"] = "Reconciliation Console";
+    var branches = ViewData["Branches"] as List<Branch> ?? new();
+    int total   = (int)(ViewBag.TotalCount   ?? 0);
+    int matched = (int)(ViewBag.MatchedCount ?? 0);
+    int partial = (int)(ViewBag.PartialCount ?? 0);
+    int missTally  = (int)(ViewBag.MissTally  ?? 0);
+    int missPortal = (int)(ViewBag.MissPortal ?? 0);
+    string FormatCr(decimal v) => v >= 10000000m ? $"₹{v/10000000m:N2} Cr" : v >= 100000m ? $"₹{v/100000m:N2} L" : $"₹{v:N0}";
+    string ReconBadge(string s) => s switch {
+        "Matched"       => "<span style='background:rgba(34,197,94,.12);color:#16a34a;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>âœ“ Matched</span>",
+        "Partial"       => "<span style='background:rgba(245,158,11,.12);color:#d97706;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>~ Partial</span>",
+        "MissingTally"  => "<span style='background:rgba(239,68,68,.12);color:#ef4444;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>âœ— Missing in Tally</span>",
+        "MissingPortal" => "<span style='background:rgba(249,115,22,.12);color:#ea580c;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>âœ— Missing in Portal</span>",
+        "Approved"      => "<span style='background:rgba(34,197,94,.2);color:#15803d;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>âœ“ Approved</span>",
+        "Rejected"      => "<span style='background:rgba(239,68,68,.12);color:#ef4444;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>âœ— Rejected</span>",
+        "FuzzyMatched"  => "<span style='background:rgba(99,102,241,.12);color:#4f46e5;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>~ Fuzzy Matched</span>",
+        "ExcessCash"    => "<span style='background:rgba(14,165,233,.12);color:#0284c7;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>+ Excess Cash</span>",
+        "ShortCash"     => "<span style='background:rgba(225,29,72,.12);color:#e11d48;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>- Short Cash</span>",
+        "ManuallyMatched" => "<span style='background:rgba(34,197,94,.12);color:#16a34a;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>âœ“ Manually Matched</span>",
+        _ => "<span style='background:#f1f5f9;color:#94a3b8;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'>Pending</span>"
+    };
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" style="border-radius:8px;font-size:.875rem;">
+        <i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- Header -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:.5px;">Cash Management</div>
+        <h2 style="font-size:1.5rem;font-weight:700;color:var(--ink);margin:0;">
+            <i class="fa-solid fa-balance-scale me-2" style="color:#6366f1;"></i>Reconciliation Console
+        </h2>
+        <p class="text-muted mb-0" style="font-size:.82rem;">Tally vs Portal matching engine with intelligent auto-reconciliation</p>
+    </div>
+    <div class="d-flex gap-2">
+        <form id="autoMatchForm" method="post" action="/CashManagement/AutoMatch" style="display:inline;">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="year" id="automatch-year" value="@ViewBag.ResolvedYear" />
+            <input type="hidden" name="month" id="automatch-month" value="@ViewBag.ResolvedMonth" />
+            <button type="submit" class="btn btn-primary d-flex align-items-center gap-2 px-3"
+                    style="background:#6366f1;border:none;height:40px;font-weight:600;font-size:.88rem;border-radius:8px;">
+                <i class="fa-solid fa-magic"></i> Auto Match
+            </button>
+        </form>
+        <a href="@Url.Action("Reconciliation")" class="btn btn-outline-secondary d-flex align-items-center gap-2" style="height:40px;border-radius:8px;font-size:.88rem;font-weight:600;">
+            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        </a>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    @{
+        var kpis = new[] {
+            ("Total Records", total.ToString(), "fa-database", "rgba(30,41,59,.1)", "#1e293b"),
+            ("Matched", matched.ToString(), "fa-check-double", "rgba(34,197,94,.12)", "#22c55e"),
+            ("Partial Match", partial.ToString(), "fa-not-equal", "rgba(245,158,11,.12)", "#d97706"),
+            ("Missing in Tally", missTally.ToString(), "fa-cloud-slash", "rgba(239,68,68,.12)", "#ef4444"),
+            ("Missing in Portal", missPortal.ToString(), "fa-triangle-exclamation", "rgba(249,115,22,.12)", "#f97316"),
+        };
+    }
+    @foreach (var (label, val, icon, bg, color) in kpis)
+    {
+        <div class="col-12 col-sm-6 col-lg">
+            <div class="stat-card" style="background:#fff;border-radius:8px;padding:18px 20px;box-shadow:0 4px 20px rgba(0,0,0,.03);border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
+                <div style="background:@bg;color:@color;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
+                    <i class="fa-solid @icon"></i>
+                </div>
+                <div>
+                    <div style="font-size:.72rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">@label</div>
+                    <div style="font-size:1.6rem;font-weight:800;color:@color;line-height:1.1;">@val</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Tally Sync Status Banner -->
+<div class="d-flex align-items-center gap-3 mb-4 p-3" style="background:@(ViewBag.IsTallyConfigured ? "rgba(34,197,94,.06)" : "rgba(100,116,139,.06)");border:1px solid @(ViewBag.IsTallyConfigured ? "rgba(34,197,94,.2)" : "rgba(100,116,139,.2)");border-radius:8px;">
+    <div style="width:10px;height:10px;border-radius:50%;background:@(ViewBag.IsTallyConfigured ? "#22c55e" : "#64748b");animation:pulse 1.5s ease infinite;flex-shrink:0;"></div>
+    <span style="font-size:.85rem;font-weight:600;color:@(ViewBag.IsTallyConfigured ? "#15803d" : "#475569");">
+        <i class="fa-solid fa-plug me-1"></i> @(ViewBag.IsTallyConfigured ? "Tally Prime Connected" : "Tally Local Sync (Offline)")
+    </span>
+    <span style="font-size:.78rem;color:#64748b;">Tolerance: Exact Match: &le; &#x20B9;@ViewBag.ExactTolerance, Partial Match: &le; &#x20B9;@ViewBag.PartialToleranceAmt (or @ViewBag.PartialTolerancePct%)</span>
+    <div class="ms-auto d-flex gap-2">
+        <span style="font-size:.75rem;background:rgba(34,197,94,.1);color:#16a34a;padding:3px 10px;border-radius:20px;font-weight:600;">Matched (Diff &le; &#x20B9;@ViewBag.ExactTolerance)</span>
+        <span style="font-size:.75rem;background:rgba(245,158,11,.1);color:#d97706;padding:3px 10px;border-radius:20px;font-weight:600;">Partial Match</span>
+        <span style="font-size:.75rem;background:rgba(239,68,68,.1);color:#ef4444;padding:3px 10px;border-radius:20px;font-weight:600;">Missing Tally</span>
+        <span style="font-size:.75rem;background:rgba(249,115,22,.1);color:#ea580c;padding:3px 10px;border-radius:20px;font-weight:600;">Missing Portal</span>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="panel mb-3" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
+    <form method="get" class="d-flex flex-wrap align-items-end gap-3" id="reconFilterForm">
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Recon Status</label>
+            <select name="reconStatus" class="form-select form-select-sm" style="width:170px;border-radius:8px;">
+                <option value="">All Status</option>
+                <option value="Pending" selected="@(ViewBag.FilterStatus == "Pending")">Pending</option>
+                <option value="Matched" selected="@(ViewBag.FilterStatus == "Matched")">Matched</option>
+                <option value="Partial" selected="@(ViewBag.FilterStatus == "Partial")">Partial Match</option>
+                <option value="MissingTally" selected="@(ViewBag.FilterStatus == "MissingTally")">Missing in Tally</option>
+                <option value="MissingPortal" selected="@(ViewBag.FilterStatus == "MissingPortal")">Missing in Portal</option>
+                <option value="Approved" selected="@(ViewBag.FilterStatus == "Approved")">Approved</option>
+            </select>
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</label>
+            <select name="branchId" class="form-select form-select-sm" style="width:160px;border-radius:8px;">
+                <option value="">All Branches</option>
+                @foreach (var b in branches)
+                {
+                    <option value="@b.Id" selected="@(ViewBag.FilterBranch == b.Id)">@b.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Month</label>
+            <select id="cashrecon-month" name="month" class="form-select form-select-sm" style="width:120px;border-radius:8px;">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m" selected="@(ViewBag.ResolvedMonth == m)">@System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(m)</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Year</label>
+            <select id="cashrecon-year" name="year" class="form-select form-select-sm" style="width:100px;border-radius:8px;">
+                @for (int y = 2024; y <= 2028; y++)
+                {
+                    <option value="@y" selected="@(ViewBag.ResolvedYear == y)">@y</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-secondary" style="height:32px;border-radius:8px;font-weight:600;font-size:.8rem;">
+            <i class="fa-solid fa-filter me-1"></i>Apply
+        </button>
+    </form>
+</div>
+
+<!-- Reconciliation Table -->
+<div class="panel" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+    <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom">
+        <div style="font-size:.88rem;font-weight:700;color:var(--ink);">
+            <i class="fa-solid fa-table-cells me-2 text-muted"></i>Reconciliation Records
+        </div>
+        <input type="text" placeholder="Search..." class="form-control form-control-sm" style="width:220px;border-radius:20px;font-size:.82rem;" oninput="filterTable(this.value,'reconTbody')">
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.83rem;">
+            <thead style="background:#f8fafc;">
+                <tr>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;padding:12px 16px;">Recon Ref</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Date</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Type</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Portal Ref</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Portal Amt</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Tally Voucher</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Tally Amt</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Variance</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Status</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="reconTbody">
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="11" class="text-center py-5 text-muted">
+                        <i class="fa-solid fa-balance-scale fa-2x mb-2 d-block" style="opacity:.2;"></i>
+                        No reconciliation records. Run <strong>Auto Match</strong> to begin.
+                    </td></tr>
+                }
+                @foreach (var r in Model)
+                {
+                    var portalRef = r.CashIn?.TransactionNo ?? r.CashOut?.TransactionNo ?? "—";
+                    <tr>
+                        <td><code style="font-size:.78rem;color:#6366f1;font-weight:700;">@r.ReconRef</code></td>
+                        <td style="font-weight:500;">@r.Branch?.Name</td>
+                        <td>@r.ReconDate.ToString("dd MMM yyyy")</td>
+                        <td>
+                            <span style="font-size:.72rem;padding:2px 8px;border-radius:20px;font-weight:600;background:@(r.TransactionType=="CashIn"?"rgba(34,197,94,.1)":"rgba(239,68,68,.1)");color:@(r.TransactionType=="CashIn"?"#22c55e":"#ef4444");">
+                                @(r.TransactionType == "CashIn" ? "Cash In" : "Cash Out")
+                            </span>
+                        </td>
+                        <td style="font-size:.75rem;color:#64748b;">@portalRef</td>
+                        <td style="font-weight:700;color:#22c55e;font-family:monospace;">@FormatCr(r.PortalAmount)</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(r.TallyVoucherNo))
+                            {
+                                <span style="font-size:.72rem;font-weight:700;color:#6366f1;background:rgba(99,102,241,.1);padding:2px 8px;border-radius:20px;font-family:monospace;">@r.TallyVoucherNo</span>
+                            }
+                            else { <span style="color:#cbd5e1;">—</span> }
+                        </td>
+                        <td style="font-weight:700;color:#3b82f6;font-family:monospace;">@(r.TallyAmount > 0 ? FormatCr(r.TallyAmount) : "—")</td>
+                        <td style="font-weight:700;color:@(r.Variance != 0 ? "#ef4444" : "#22c55e");">
+                            @(r.Variance != 0 ? FormatCr(Math.Abs(r.Variance)) : "—")
+                        </td>
+                        <td>@Html.Raw(ReconBadge(r.ReconStatus))</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                @if (r.ReconStatus == ReconStatus.Matched && r.ReconStatus != ReconStatus.Approved)
+                                {
+                                    <form method="post" action="/CashManagement/ApproveRecon" style="display:inline;">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@r.Id">
+                                        <input type="hidden" name="remarks" value="Approved by HO">
+                                        <button type="submit" class="btn btn-sm btn-outline-success" style="border-radius:6px;font-size:.75rem;padding:3px 10px;font-weight:600;"
+                                                onclick="return confirm('Approve this reconciliation?')">
+                                            <i class="fa-solid fa-check-double me-1"></i>Approve
+                                        </button>
+                                    </form>
+                                }
+                                @if (r.ReconStatus != ReconStatus.Matched && r.ReconStatus != ReconStatus.Approved)
+                                {
+                                    <button class="btn btn-sm btn-outline-primary" style="border-radius:6px;font-size:.75rem;padding:3px 10px;font-weight:600;"
+                                            onclick="showManualMatchModal(@r.Id, @r.PortalAmount)">
+                                        <i class="fa-solid fa-link me-1"></i>Match
+                                    </button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function filterTable(val, id) {
+    document.querySelectorAll('#'+id+' tr').forEach(r => r.style.display = r.textContent.toLowerCase().includes(val.toLowerCase())?'':'none');
+}
+
+function showManualMatchModal(id, currentPortalAmount) {
+    Swal.fire({
+        title: 'Manual Match',
+        html:
+            '<div style="text-align: left; margin-bottom: 8px;"><label class="small fw-bold text-muted">Tally Voucher No</label></div>' +
+            '<input id="swal-voucher-no" class="swal2-input m-0 w-100" style="height: 38px; font-size: 0.9rem;" placeholder="e.g. TLY-12345">' +
+            '<div style="text-align: left; margin-top: 15px; margin-bottom: 8px;"><label class="small fw-bold text-muted">Tally Voucher Amount (₹)</label></div>' +
+            '<input id="swal-tally-amount" type="number" step="0.01" class="swal2-input m-0 w-100" style="height: 38px; font-size: 0.9rem;" value="' + currentPortalAmount + '">',
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Match',
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#64748b',
+        preConfirm: () => {
+            var voucherNo = document.getElementById('swal-voucher-no').value.trim();
+            var tallyAmountStr = document.getElementById('swal-tally-amount').value.trim();
+            if (!voucherNo) {
+                Swal.showValidationMessage('Tally Voucher No is required.');
+                return false;
+            }
+            if (!tallyAmountStr || isNaN(parseFloat(tallyAmountStr)) || parseFloat(tallyAmountStr) < 0) {
+                Swal.showValidationMessage('A valid positive Tally Amount is required.');
+                return false;
+            }
+            return {
+                tallyVoucherNo: voucherNo,
+                tallyAmount: parseFloat(tallyAmountStr)
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            var token = $('input[name="__RequestVerificationToken"]').val();
+            
+            Swal.fire({
+                title: 'Saving Match...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            $.ajax({
+                url: '/CashManagement/ManualMatch',
+                type: 'POST',
+                data: {
+                    id: id,
+                    tallyVoucherNo: result.value.tallyVoucherNo,
+                    tallyAmount: result.value.tallyAmount,
+                    __RequestVerificationToken: token
+                },
+                success: function(res) {
+                    Swal.close();
+                    if (res.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Matched',
+                            text: res.message,
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Match Failed',
+                            text: res.message,
+                            confirmButtonColor: '#6366f1'
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    var msg = xhr.responseJSON ? xhr.responseJSON.message : "Error performing manual match.";
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Match Failed',
+                        text: msg,
+                        confirmButtonColor: '#6366f1'
+                    });
+                }
+            });
+        }
+    });
+}
+
+$(document).ready(function() {
+    var savedMonth = sessionStorage.getItem('cashrecon_month');
+    var savedYear = sessionStorage.getItem('cashrecon_year');
+
+    var urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.has('month') && savedMonth) {
+        $('#cashrecon-month').val(savedMonth);
+    }
+    if (!urlParams.has('year') && savedYear) {
+        $('#cashrecon-year').val(savedYear);
+    }
+
+    // Sync to automatch form inputs initially and on change
+    $('#automatch-month').val($('#cashrecon-month').val());
+    $('#automatch-year').val($('#cashrecon-year').val());
+
+    $('#cashrecon-month, #cashrecon-year').on('change', function() {
+        var m = $('#cashrecon-month').val();
+        var y = $('#cashrecon-year').val();
+        sessionStorage.setItem('cashrecon_month', m);
+        sessionStorage.setItem('cashrecon_year', y);
+        $('#automatch-month').val(m);
+        $('#automatch-year').val(y);
+    });
+
+    $('#reconFilterForm').on('submit', function() {
+        sessionStorage.setItem('cashrecon_month', $('#cashrecon-month').val());
+        sessionStorage.setItem('cashrecon_year', $('#cashrecon-year').val());
+    });
+
+    $('#autoMatchForm').on('submit', function(e) {
+        e.preventDefault();
+        var form = this;
+        Swal.fire({
+            title: 'Run Auto Match?',
+            text: 'Run auto-match engine on all approved transactions for the selected period?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, run match',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#6366f1',
+            cancelButtonColor: '#64748b'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                form.submit();
+            }
+        });
+    });
+});
+</script>
+}
+

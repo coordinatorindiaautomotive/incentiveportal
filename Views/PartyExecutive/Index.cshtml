@@ -1,0 +1,423 @@
+﻿@model IReadOnlyList<IncentivePortal.Models.PartyExecutiveMapping>
+@{
+    ViewData["Title"] = "Executive Mapping Registry";
+}
+
+<!-- Split Layout/Grid -->
+<div class="panel">
+    <div class="panel-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center border-0 mb-3">
+        <div>
+            <h2>Sales Executive & Party Mapping</h2>
+            <p>Direct boundary linkages between dealer parties, executives, and regional branches</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-3 mt-md-0">
+            <button type="button" onclick="exportTableToCSV('#mappingTable', 'Executive_Mappings.csv')" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-download me-1"></i> Export Excel</button>
+            <button type="button" class="btn btn-sm btn-primary" onclick="openMappingModal(0)"><i class="fa-solid fa-plus me-1"></i> + Single Mapping</button>
+            <button type="button" class="btn btn-sm btn-outline-teal" data-bs-toggle="modal" data-bs-target="#excelUploadModal"><i class="fa-solid fa-file-excel me-1"></i> Excel Import</button>
+            <button type="button" class="btn btn-sm btn-outline-purple" data-bs-toggle="modal" data-bs-target="#copyPasteModal"><i class="fa-solid fa-clipboard me-1"></i> Copy & Paste Grid</button>
+            <button type="button" class="btn btn-sm btn-danger" id="clearAllBtn"><i class="fa-solid fa-trash-can me-1"></i> Clear All</button>
+        </div>
+    </div>
+
+    <div class="table-responsive corp-table-wrapper">
+        <table class="table table-hover corp-table align-middle" id="mappingTable">
+            <thead>
+                <tr>
+                    <th>Executive Code</th>
+                    <th>Executive Name</th>
+                    <th>Party Code</th>
+                    <th>Party Name</th>
+                    <th>Branch Code</th>
+                    <th class="text-center" style="width: 130px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="mapping-row" 
+                        data-id="@item.Id" 
+                        data-party-code="@item.PartyCode" 
+                        data-party-name="@item.PartyName" 
+                        data-exec-code="@item.ExecutiveCode" 
+                        data-exec-name="@item.ExecutiveName" 
+                        data-branch-code="@item.BranchCode">
+                        <td><span style="background: rgba(30, 64, 175, 0.1); color: var(--color-1); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85rem;">@item.ExecutiveCode</span></td>
+                        <td><strong>@item.ExecutiveName</strong></td>
+                        <td><span class="badge bg-light text-dark border">@item.PartyCode</span></td>
+                        <td><strong>@item.PartyName</strong></td>
+                        <td><code>@item.BranchCode</code></td>
+                        <td class="text-center">
+                            <div class="d-flex gap-1 justify-content-center">
+                                <button type="button" class="btn btn-xs btn-outline-primary" onclick="openMappingModal(@item.Id, this)"><i class="fa-solid fa-pencil"></i> Edit</button>
+                                <button type="button" class="btn btn-xs btn-outline-danger" onclick="deleteMapping(@item.Id, this)"><i class="fa-solid fa-trash-can"></i> Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Premium Interactive Single Mapping Modal -->
+<div class="modal fade" id="mappingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="mappingForm" asp-action="Save" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" id="mappingId" value="0" />
+                <div class="modal-header" style="background: #f8fbff; border-bottom: 1px solid var(--line);">
+                    <h5 class="modal-title fw-bold text-dark" id="mappingModalTitle">&#x26A1; Register Executive Linkage</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Executive Code</label>
+                            <input name="ExecutiveCode" id="mappingExecCode" class="form-control corp-input" placeholder="e.g. EMP4209" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Executive Name</label>
+                            <input name="ExecutiveName" id="mappingExecName" class="form-control corp-input" placeholder="e.g. Rahul Sharma" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Party Code</label>
+                            <input name="PartyCode" id="mappingPartyCode" class="form-control corp-input" placeholder="e.g. WRJ0101209" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Party Name</label>
+                            <input name="PartyName" id="mappingPartyName" class="form-control corp-input" placeholder="e.g. Giya Motors" required />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Regional Branch Code</label>
+                            <input name="BranchCode" id="mappingBranchCode" class="form-control corp-input" placeholder="e.g. VBZ" required />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="background: #f8fbff; border-top: 1px solid var(--line); padding: 14px;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success">âœ“ Save Linkage</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Excel Upload Modal -->
+<div class="modal fade" id="excelUploadModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
+            <form id="excelUploadForm" asp-action="UploadExcel" method="post" enctype="multipart/form-data">
+                <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); color: white;">
+                    <div>
+                        <h4 class="modal-title fw-bold" style="font-size: 1.25rem; margin:0;"><i class="fa-solid fa-cloud-arrow-up me-2"></i> Bulk Excel Mappings Import</h4>
+                        <p style="margin: 4px 0 0 0; font-size: 0.82rem; opacity: 0.85;">Upload an Excel sheet mapping sales boundaries</p>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4" style="background: #ffffff;">
+                    <div id="dropZone" class="mb-4 text-center p-4" style="border: 2px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; cursor: pointer; transition: all 0.25s ease;" onclick="$('#excelFileInput').click();">
+                        <i class="fa-regular fa-file-excel fa-3x text-success mb-3"></i>
+                        <h6 class="fw-bold text-dark mb-1">Drag & Drop Excel File Here</h6>
+                        <p class="text-muted small mb-3">or click to browse local folders</p>
+                        <input type="file" name="file" id="excelFileInput" style="display: none;" accept=".xlsx" required onclick="event.stopPropagation();" />
+                        <span id="selectedFileName" class="badge bg-secondary px-3 py-2 fw-semibold d-none" style="font-size: 0.78rem; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"></span>
+                    </div>
+
+                    <div class="alert alert-info py-2 small mb-0 text-start" style="border-radius: 8px; background-color: #e0f2fe; border-color: #bae6fd; color: #0369a1;">
+                        <i class="fa-solid fa-circle-info text-info me-1"></i>
+                        <strong>Spreadsheet Requirements:</strong> The sheet must contain columns for: <strong>PartyCode | PartyName | ExecutiveCode | ExecutiveName | BranchCode</strong>.
+                    </div>
+                </div>
+                <div class="modal-footer border-0" style="padding: 14px 24px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 8px; font-weight: 600;">Cancel</button>
+                    <button type="submit" id="btnUploadSubmit" class="btn btn-success" style="border-radius: 8px; font-weight: 600; background-color: #22c55e; border-color: #22c55e;" disabled>Process Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Copy & Paste Grid Modal -->
+<div class="modal fade" id="copyPasteModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="copyPasteForm" asp-action="UploadCopyPaste" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header" style="background: #f8fbff; border-bottom: 1px solid var(--line);">
+                    <h5 class="modal-title fw-bold text-dark">📋 Copy & Paste Excel Grid Mappings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <p class="text-muted small mb-3">Copy mapping rows directly from Excel or Google Sheets (Ctrl+C) and paste them in the text grid area below. The grid will automatically parse tab-separated or comma-separated rows. <br/>Format: <code>PartyCode [Tab] PartyName [Tab] ExecutiveCode [Tab] ExecutiveName [Tab] BranchCode</code></p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Excel Sheet Text Paste Area</label>
+                        <textarea name="pasteData" id="pasteGridArea" class="form-control" rows="12" style="font-family: monospace; font-size: 0.85rem;" placeholder="Paste copied spreadsheet grid data here..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer" style="background: #f8fbff; border-top: 1px solid var(--line); padding: 14px;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">âœ“ Parse & Map Rows</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    // DataTable Setup
+    $('#mappingTable').DataTable({
+        pageLength: 25,
+        ordering: true,
+        language: {
+            search: "Filter mappings:",
+            lengthMenu: "Show _MENU_ mappings"
+        }
+    });
+
+    // Autofill Party Name and Branch Code on Party Code change
+    var fetchTimer;
+    $('#mappingPartyCode').on('input change blur', function () {
+        var code = $(this).val().trim();
+        if (!code) return;
+        clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(function () {
+            if (code.length >= 3) {
+                $.ajax({
+                    url: '/Parties/GetPartyDetails',
+                    method: 'GET',
+                    data: { code: code }
+                }).done(function (res) {
+                    if (res.ok) {
+                        $('#mappingPartyName').val(res.partyName);
+                        $('#mappingBranchCode').val(res.branchCode);
+                    }
+                });
+            }
+        }, 300); // 300ms debounce
+    });
+
+    // Drag and Drop for PartyExecutive Excel Upload Modal Dropzone
+    var dropZone = document.getElementById('dropZone');
+    var excelFileInput = document.getElementById('excelFileInput');
+
+    if (dropZone && excelFileInput) {
+        dropZone.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            dropZone.style.background = '#f0fdf4';
+            dropZone.style.borderColor = '#22c55e';
+        });
+
+        dropZone.addEventListener('dragleave', function () {
+            dropZone.style.background = '#f8fafc';
+            dropZone.style.borderColor = '#cbd5e1';
+        });
+
+        dropZone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dropZone.style.background = '#f8fafc';
+            dropZone.style.borderColor = '#cbd5e1';
+            
+            if (e.dataTransfer.files.length > 0) {
+                excelFileInput.files = e.dataTransfer.files;
+                $(excelFileInput).trigger('change');
+            }
+        });
+    }
+
+    // File input selection tracking
+    $('#excelFileInput').on('change', function () {
+        var file = this.files[0];
+        if (file) {
+            $('#selectedFileName').text(file.name).removeClass('d-none');
+            $('#btnUploadSubmit').prop('disabled', false);
+        } else {
+            $('#selectedFileName').addClass('d-none');
+            $('#btnUploadSubmit').prop('disabled', true);
+        }
+    });
+
+    // Reset modals on hide
+    $('#mappingModal').on('hidden.bs.modal', function() {
+        $('#mappingForm')[0].reset();
+        $('#mappingId').val(0);
+        $('#mappingModalTitle').text('\u26A1 Register Executive Linkage');
+    });
+
+    $('#excelUploadModal').on('hidden.bs.modal', function() {
+        $('#excelUploadForm')[0].reset();
+        $('#selectedFileName').addClass('d-none').text('');
+        $('#btnUploadSubmit').prop('disabled', true);
+    });
+
+    $('#copyPasteModal').on('hidden.bs.modal', function() {
+        $('#copyPasteForm')[0].reset();
+    });
+
+    // Mapping modal open for add or edit
+    window.openMappingModal = function(id, btn) {
+        if (id > 0) {
+            const row = $(btn).closest('tr');
+            const partyCode = row.data('party-code');
+            const partyName = row.data('party-name');
+            const execCode = row.data('exec-code');
+            const execName = row.data('exec-name');
+            const branchCode = row.data('branch-code');
+
+            $('#mappingId').val(id);
+            $('#mappingExecCode').val(execCode);
+            $('#mappingExecName').val(execName);
+            $('#mappingPartyCode').val(partyCode);
+            $('#mappingPartyName').val(partyName);
+            $('#mappingBranchCode').val(branchCode);
+            $('#mappingModalTitle').text('\u26A1 Edit Executive Linkage: ' + execName);
+        } else {
+            $('#mappingForm')[0].reset();
+            $('#mappingId').val(0);
+            $('#mappingModalTitle').text('\u26A1 Register Executive Linkage');
+        }
+        $('#mappingModal').modal('show');
+    };
+
+    // Manual Save Linkage Form AJAX
+    $('#mappingForm').on('submit', function(e) {
+        e.preventDefault();
+        const data = $(this).serialize();
+        const button = $(this).find('[type="submit"]')[0];
+        portalSetBusy(button, 'Saving...');
+
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: data
+        })
+        .done(r => {
+            portalToast(r.message || 'Mapping saved successfully.');
+            $('#mappingModal').modal('hide');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to save mapping.');
+        })
+        .always(() => portalClearBusy(button));
+    });
+
+    // Excel file upload import AJAX
+    $('#excelUploadForm').on('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const button = $(this).find('[type="submit"]')[0];
+        portalSetBusy(button, 'Importing...');
+
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false
+        })
+        .done(r => {
+            portalToast(r.message || 'Excel imported successfully.');
+            $('#excelUploadModal').modal('hide');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to import excel.');
+        })
+        .always(() => portalClearBusy(button));
+    });
+
+    // Copy Paste parser import AJAX
+    $('#copyPasteForm').on('submit', function(e) {
+        e.preventDefault();
+        const data = $(this).serialize();
+        const button = $(this).find('[type="submit"]')[0];
+        portalSetBusy(button, 'Mapping...');
+
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: data
+        })
+        .done(r => {
+            portalToast(r.message || 'Grid data mapped successfully.');
+            $('#copyPasteModal').modal('hide');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to map grid data.');
+        })
+        .always(() => portalClearBusy(button));
+    });
+
+    // Single record delete
+    window.deleteMapping = function(id, btn) {
+        Swal.fire({
+            title: 'Delete Mapping?',
+            text: 'Are you sure you want to remove this executive-party mapping record?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: 'var(--primary)',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, Delete!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const token = $('input[name="__RequestVerificationToken"]').val();
+                $.ajax({
+                    url: '@Url.Action("Delete", "PartyExecutive")',
+                    method: 'POST',
+                    data: { id: id, __RequestVerificationToken: token }
+                })
+                .done(r => {
+                    portalToast('Mapping deleted successfully.');
+                    setTimeout(() => location.reload(), 800);
+                })
+                .fail(xhr => {
+                    portalToast('Failed to delete mapping.');
+                });
+            }
+        });
+    };
+
+    // Bulk delete/clear mappings
+    $('#clearAllBtn').on('click', function() {
+        Swal.fire({
+            title: 'Clear All Mappings?',
+            text: 'Warning! This will permanently delete ALL sales executive-party boundary mappings in the system. Mapped details on incentive ledgers will not be shown correctly until mapped again.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, Clear All!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const token = $('input[name="__RequestVerificationToken"]').val();
+                $.ajax({
+                    url: '@Url.Action("ClearAll", "PartyExecutive")',
+                    method: 'POST',
+                    data: { __RequestVerificationToken: token }
+                })
+                .done(r => {
+                    portalToast('All mappings cleared successfully.');
+                    setTimeout(() => location.reload(), 800);
+                })
+                .fail(xhr => {
+                    portalToast('Failed to clear mappings.');
+                });
+            }
+        });
+    });
+});
+</script>
+}
+
+@section DataTableScripts {
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+}
+
+

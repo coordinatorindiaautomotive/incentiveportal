@@ -1,0 +1,531 @@
+@model IncentivePortal.Controllers.LoginViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Login | ThessBuddy - Your Intelligent Business Companion</title>
+
+    <!-- Google Fonts: Inter + Inter + Material Symbols -->
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --secondary:             #0059bb;
+            --secondary-container:   #0070ea;
+            --on-surface-variant:    #44474e;
+            --outline-variant:       #c4c6cf;
+            --outline:               #74777f;
+            --surface:               #f8f9ff;
+            --surface-lowest:        #ffffff;
+            --surface-container-low: #eff4ff;
+            --on-background:         #0b1c30;
+            --on-surface:            #0b1c30;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--surface);
+            color: var(--on-surface);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Material Symbols ── */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-family: 'Material Symbols Outlined';
+            font-style: normal;
+            line-height: 1;
+            display: inline-block;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+
+        /* ── TopAppBar ── */
+        .stitch-topbar {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 64px;
+            background: rgba(248, 249, 255, 0.80);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 1px 3px rgba(11, 28, 48, 0.06);
+        }
+
+        .stitch-topbar-logo { display: flex; align-items: center; gap: 8px; }
+        .stitch-topbar-logo img { height: 32px; width: auto; }
+
+        .stitch-topbar-nav { display: flex; gap: 32px; }
+        .stitch-topbar-nav a {
+            color: var(--on-surface-variant);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            transition: color 0.15s;
+        }
+        .stitch-topbar-nav a:hover { color: var(--secondary); }
+
+        .stitch-signin-btn {
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            background: var(--secondary);
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .stitch-signin-btn:hover  { background: var(--secondary-container); }
+        .stitch-signin-btn:active { transform: scale(0.95); }
+
+        /* ── Main ── */
+        .stitch-main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 96px 20px 48px;
+            background-image: url('/plexus_background.png');
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+        }
+
+        .stitch-center { width: 100%; max-width: 448px; }
+
+        /* ── Login Card ── */
+        .login-card {
+            background: var(--surface-lowest);
+            border-radius: 12px;
+            padding: 40px;
+            border: 1px solid rgba(196, 198, 207, 0.3);
+            box-shadow: 0 10px 25px -5px rgba(11, 28, 48, 0.08), 0 8px 10px -6px rgba(11, 28, 48, 0.05);
+            transition: transform 0.05s linear;
+            position: relative;
+        }
+
+        /* ── Card Header ── */
+        .card-logo-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        .card-logo-wrap img {
+            height: 96px;
+            width: auto;
+            margin-bottom: 24px;
+            object-fit: contain;
+        }
+        .card-welcome {
+            font-family: 'Inter', sans-serif;
+            font-size: 24px;
+            font-weight: 600;
+            line-height: 32px;
+            color: var(--on-background);
+            text-align: center;
+        }
+        .card-sub {
+            font-size: 14px;
+            color: var(--on-surface-variant);
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* ── Form ── */
+        .form-space { display: flex; flex-direction: column; gap: 24px; }
+
+        .field-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--on-surface-variant);
+            margin-bottom: 8px;
+        }
+
+        .input-wrap { position: relative; }
+
+        .input-icon-left {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--outline);
+            font-size: 20px;
+            pointer-events: none;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 12px 16px 12px 40px;
+            background: #ffffff;
+            border: 1px solid var(--outline-variant);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            color: var(--on-background);
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .auth-input::placeholder { color: #94a3b8; }
+        .auth-input:focus {
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 4px rgba(0, 89, 187, 0.10);
+        }
+
+        .auth-input-pr { padding-right: 48px; }
+
+        .toggle-pw-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--outline);
+            transition: color 0.15s;
+            display: flex;
+            align-items: center;
+        }
+        .toggle-pw-btn:hover { color: var(--secondary); }
+
+        /* ── Remember / Forgot ── */
+        .remember-forgot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .checkbox-label input {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            border: 1px solid var(--outline-variant);
+            accent-color: var(--secondary);
+            cursor: pointer;
+        }
+        .checkbox-label span {
+            font-size: 14px;
+            color: var(--on-surface-variant);
+            transition: color 0.15s;
+        }
+        .checkbox-label:hover span { color: var(--on-surface); }
+
+        .forgot-link {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--secondary);
+            text-decoration: none;
+            transition: text-decoration 0.15s;
+        }
+        .forgot-link:hover { text-decoration: underline; }
+
+        /* ── Submit Button ── */
+        .btn-login {
+            width: 100%;
+            padding: 16px;
+            background: var(--secondary);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 89, 187, 0.15);
+            transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+        }
+        .btn-login:hover  { background: var(--secondary-container); box-shadow: 0 6px 12px rgba(0, 89, 187, 0.2); }
+        .btn-login:active { transform: scale(0.98); }
+
+        /* ── Validation error ── */
+        .validation-alert {
+            background: #ffdad6;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: #93000a;
+            border: 1px solid #ffb4ab;
+        }
+        .validation-alert:empty { display: none; }
+
+        /* ── Divider / Signup ── */
+        .card-divider {
+            margin-top: 40px;
+            padding-top: 32px;
+            border-top: 1px solid rgba(196, 198, 207, 0.3);
+            text-align: center;
+        }
+        .card-divider p {
+            font-size: 14px;
+            color: var(--on-surface-variant);
+        }
+        .card-divider a {
+            color: var(--secondary);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-decoration: none;
+            margin-left: 4px;
+        }
+        .card-divider a:hover { text-decoration: underline; }
+
+        /* ── Security Assurance ── */
+        .security-badge {
+            margin-top: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            font-size: 14px;
+            color: var(--on-surface-variant);
+        }
+        .security-badge .badge-item { display: flex; align-items: center; gap: 4px; }
+        .security-badge .badge-item .material-symbols-outlined { font-size: 18px; }
+        .security-badge .dot {
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: var(--outline-variant);
+        }
+
+        /* ── Loader Overlay ── */
+        .login-loader {
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.96);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s, visibility 0.25s;
+        }
+        .login-loader.show { opacity: 1; visibility: visible; }
+
+        .spinner {
+            width: 56px; height: 56px;
+            border: 4px solid rgba(0, 89, 187, 0.1);
+            border-left-color: #0059bb;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        @@keyframes spin { to { transform: rotate(360deg); } }
+        .loader-text  { font-family: 'Inter', sans-serif; font-weight: 700; color: #0b1c30; margin-top: 16px; font-size: 15px; }
+        .loader-sub   { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+        /* ── Footer ── */
+        .stitch-footer {
+            background: var(--surface-lowest);
+            border-top: 1px solid rgba(196, 198, 207, 0.3);
+            padding: 32px 64px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .footer-brand { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 700; color: var(--on-background); }
+        .footer-copy  { font-size: 14px; color: var(--on-surface-variant); margin-top: 4px; }
+        .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+        .footer-links a { font-size: 14px; color: var(--on-surface-variant); text-decoration: none; transition: color 0.15s; }
+        .footer-links a:hover { color: var(--secondary); }
+
+        @@media (max-width: 768px) {
+            .stitch-topbar { padding: 14px 20px; }
+            .stitch-topbar-nav { display: none; }
+            .stitch-footer { padding: 24px 20px; flex-direction: column; align-items: flex-start; }
+            .login-card { padding: 28px 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── TopAppBar ── -->
+    <header class="stitch-topbar">
+        <div class="stitch-topbar-logo">
+            <img src="/thessbuddy-logo.png" alt="ThessBuddy Logo">
+        </div>
+        <nav class="stitch-topbar-nav">
+            <a href="#">Platform</a>
+            <a href="#">Solutions</a>
+            <a href="#">Resources</a>
+            <a href="#">Pricing</a>
+        </nav>
+        <div>
+            <button class="stitch-signin-btn" onclick="return false;">Sign In</button>
+        </div>
+    </header>
+
+    <!-- ── Main ── -->
+    <main class="stitch-main">
+        <div class="stitch-center">
+
+            <!-- Login Card -->
+            <div class="login-card" id="loginCard">
+
+                <!-- Loader Overlay -->
+                <div class="login-loader" id="loginLoader">
+                    <div class="spinner"></div>
+                    <div class="loader-text">Authenticating…</div>
+                    <div class="loader-sub">Securing your connection</div>
+                </div>
+
+                <!-- Logo + Heading -->
+                <div class="card-logo-wrap">
+                    <img src="/thessbuddy-logo.png" alt="ThessBuddy Logo">
+                    <h1 class="card-welcome">Welcome back</h1>
+                    <p class="card-sub">Log in to your account</p>
+                </div>
+
+                <!-- Form -->
+                <form method="post" id="loginForm" class="form-space">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="ReturnUrl" />
+
+                    <!-- Validation -->
+                    <div asp-validation-summary="ModelOnly" class="validation-alert"></div>
+
+                    <!-- Username -->
+                    <div>
+                        <label class="field-label" for="UserName">Email Address</label>
+                        <div class="input-wrap">
+                            <span class="material-symbols-outlined input-icon-left">mail</span>
+                            <input asp-for="UserName"
+                                   id="UserName"
+                                   class="auth-input"
+                                   placeholder="name@company.com"
+                                   autocomplete="username"
+                                   required />
+                        </div>
+                    </div>
+
+                    <!-- Password -->
+                    <div>
+                        <label class="field-label" for="Password">Password</label>
+                        <div class="input-wrap">
+                            <span class="material-symbols-outlined input-icon-left">lock</span>
+                            <input asp-for="Password"
+                                   id="Password"
+                                   type="password"
+                                   class="auth-input auth-input-pr"
+                                   placeholder="••••••••"
+                                   autocomplete="current-password"
+                                   required />
+                            <button class="toggle-pw-btn" type="button" id="togglePw" aria-label="Toggle password visibility">
+                                <span class="material-symbols-outlined" id="togglePwIcon">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Remember me / Forgot -->
+                    <div class="remember-forgot">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rememberMe">
+                            <span>Remember me</span>
+                        </label>
+                        <a asp-action="ForgotPassword" class="forgot-link">Forgot password?</a>
+                    </div>
+
+                    <!-- Submit -->
+                    <button type="submit" class="btn-login">Login</button>
+                </form>
+
+                <!-- Sign up link -->
+                <div class="card-divider">
+                    <p>Don't have an account? <a href="#">Sign up</a></p>
+                </div>
+            </div>
+
+            <!-- Security Assurance -->
+            <div class="security-badge">
+                <div class="badge-item">
+                    <span class="material-symbols-outlined">verified_user</span>
+                    <span>Secure Login</span>
+                </div>
+                <div class="dot"></div>
+                <div class="badge-item">
+                    <span class="material-symbols-outlined">encrypted</span>
+                    <span>256-bit Encryption</span>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ── Footer ── -->
+    <footer class="stitch-footer">
+        <div>
+            <div class="footer-brand">ThessBuddy</div>
+            <div class="footer-copy">&copy; 2026 ThessBuddy. Your Intelligent Business Companion.</div>
+        </div>
+        <div class="footer-links">
+            <a href="#">Privacy Policy</a>
+            <a href="#">Terms of Service</a>
+            <a href="#">Security</a>
+            <a href="#">Contact Support</a>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script>
+        // ── Password visibility toggle ──
+        const toggleBtn  = document.getElementById('togglePw');
+        const pwInput    = document.getElementById('Password');
+        const toggleIcon = document.getElementById('togglePwIcon');
+
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = pwInput.type === 'password';
+            pwInput.type       = isPassword ? 'text' : 'password';
+            toggleIcon.textContent = isPassword ? 'visibility_off' : 'visibility';
+        });
+
+        // ── Parallax card on mouse move ──
+        const card = document.getElementById('loginCard');
+        document.addEventListener('mousemove', (e) => {
+            const moveX = (e.clientX - window.innerWidth  / 2) / 100;
+            const moveY = (e.clientY - window.innerHeight / 2) / 100;
+            card.style.transform = `translate(${moveX}px, ${moveY}px)`;
+        });
+
+        // ── Show loader on submit ──
+        document.getElementById('loginForm').addEventListener('submit', function () {
+            if (this.checkValidity()) {
+                document.getElementById('loginLoader').classList.add('show');
+            }
+        });
+    </script>
+</body>
+</html>
+

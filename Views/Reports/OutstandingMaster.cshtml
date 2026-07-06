@@ -1,0 +1,962 @@
+@model IEnumerable<IncentivePortal.DTOs.OutstandingMasterRow>
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Outstanding Master Registry";
+    var totalOutstanding = Model.Sum(x => x.Outstanding);
+    var activeDealers = Model.Count(x => x.Outstanding > 0);
+    
+    // Calculate Overdue (>30 Days)
+    var overdue = Model.Sum(x => (x.Outstanding28To35Days ?? 0) + (x.Outstanding35To50Days ?? 0) + (x.Outstanding50To80Days ?? 0) + (x.OutstandingMore80Days ?? 0));
+    var overduePercent = totalOutstanding > 0 ? Math.Round(overdue * 100m / totalOutstanding, 1) : 0m;
+    
+    // Calculate Collection Efficiency
+    var collectionEfficiency = totalOutstanding > 0 ? Math.Round(100m - (overdue * 100m / totalOutstanding), 1) : 100m;
+
+    var rawSync = Model.Any(x => x.Outstanding > 0) ? Model.Max(x => x.Outstanding > 0 ? x.LastSyncedAt : DateTime.MinValue) : DateTime.UtcNow;
+    var utcSync = rawSync.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(rawSync, DateTimeKind.Utc) : rawSync.ToUniversalTime();
+    var lastSync = TimeZoneInfo.ConvertTimeFromUtc(utcSync, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+
+    // Modern HTML helper method for rendering empty cells as muted hyphens
+    Func<decimal?, string, Microsoft.AspNetCore.Html.IHtmlContent> FormatCell = (val, classes) => {
+        if (val.HasValue && val.Value != 0m) {
+            return new Microsoft.AspNetCore.Html.HtmlString($"<span class='{classes}'>₹{val.Value.ToString("N0")}</span>");
+        }
+        return new Microsoft.AspNetCore.Html.HtmlString("<span class='text-slate-300 font-normal'>-</span>");
+    };
+}
+
+<!-- Tailwind CSS scoped via preflight disable -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+        corePlugins: {
+            preflight: false,
+        },
+        theme: {
+            extend: {
+                colors: {
+                    "surface-container-low": "#eff4ff",
+                    "secondary-fixed": "#d8e2ff",
+                    "error-container": "#ffdad6",
+                    "surface-container-highest": "#d3e4fe",
+                    "primary-fixed": "#d6e3ff",
+                    "primary": "#000000",
+                    "outline": "#74777f",
+                    "on-surface-variant": "#44474e",
+                    "secondary-container": "#1d4ed8",
+                    "on-secondary-fixed": "#001a41",
+                    "on-secondary-fixed-variant": "#004493",
+                    "surface-bright": "#f8f9ff"
+                }
+            }
+        }
+    }
+</script>
+
+<!-- Google Material Symbols & Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
+
+<style>
+    .glass-card {
+        background: #ffffff !important;
+        border: 1px solid rgba(196, 198, 207, 0.4) !important;
+        box-shadow: 0 4px 10px rgba(11, 28, 48, 0.02) !important;
+        border-radius: 12px !important;
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    /* Ambient Shadow Level 1 */
+    .ambient-shadow-1 {
+        background: #ffffff !important;
+        border: 1px solid rgba(196, 198, 207, 0.4) !important;
+        box-shadow: 0 4px 10px rgba(11, 28, 48, 0.02) !important;
+        border-radius: 12px !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+    }
+    .ambient-shadow-1:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 10px 24px rgba(11, 28, 48, 0.05) !important;
+    }
+
+    .terminal-logs-window {
+        background: #0f172a;
+        color: #38bdf8;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.82rem;
+        padding: 16px;
+        border-radius: 8px;
+        max-height: 350px;
+        overflow-y: auto;
+        border: 1px solid #334155;
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+    }
+    .terminal-logs-window p {
+        margin: 0 0 6px 0;
+        line-height: 1.4;
+    }
+    .soft-green-pulse {
+        animation: softGreenPulseAnim 1.5s ease-out;
+    }
+    @@keyframes softGreenPulseAnim {
+        0% { background-color: rgba(34, 197, 94, 0.25); }
+        100% { background-color: transparent; }
+    }
+
+    /* DataTables Style Overrides */
+    .dataTables_wrapper .dataTables_filter {
+        display: none !important;
+    }
+    .dataTables_wrapper .dataTables_length {
+        display: none !important;
+    }
+    .dataTables_wrapper .dataTables_paginate,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_paginate,
+    .dataTables_info {
+        display: none !important;
+    }
+
+    /* Style for table headers to guarantee contrast and sticky background */
+    #outstandingGrid thead th {
+        background: linear-gradient(135deg, #0b1c30 0%, #002244 100%) !important;
+        color: #ffffff !important;
+        font-family: 'Inter', 'Inter', sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 9px;
+        padding: 10px 12px !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: 2px solid #2563eb !important;
+    }
+
+    /* Sidebar sticky positioning fix */
+    .sidebar {
+        position: sticky !important;
+        top: 0 !important;
+        align-self: start !important;
+        height: 100vh !important;
+    }
+
+    /* Branch row premium style - clean very soft blue gradient */
+    .branch-header-row {
+        background: linear-gradient(90deg, rgba(37, 99, 235, 0.03) 0%, rgba(255, 255, 255, 0) 100%) !important;
+        border-bottom: 1px solid rgba(196, 198, 207, 0.3) !important;
+        border-left: 4px solid #2563eb !important;
+        transition: all 0.2s ease;
+    }
+    .branch-header-row:hover {
+        background: linear-gradient(90deg, rgba(37, 99, 235, 0.06) 0%, rgba(37, 99, 235, 0.01) 100%) !important;
+    }
+
+    /* Expand chevron rotation */
+    .expand-icon {
+        transition: transform 0.2s ease, color 0.2s ease;
+    }
+    .branch-header-row.expanded .expand-icon {
+        transform: rotate(90deg);
+        color: #2563eb !important;
+    }
+
+    /* Child row slide animation */
+    .branch-child-row {
+        transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .branch-child-row:not(.hidden) {
+        animation: slideDownRow 0.2s ease forwards;
+    }
+    @@keyframes slideDownRow {
+        0% { opacity: 0; transform: translateY(-4px); }
+        100% { opacity: 1; transform: translateY(0); }
+    }
+    .branch-child-row:hover {
+        background-color: rgba(37, 99, 235, 0.04) !important;
+    }
+    .branch-child-row:hover td:first-child {
+        box-shadow: inset 3px 0 0 #2563eb !important;
+    }
+
+    /* Grand Total Row styling */
+    .grand-total-row {
+        background: #f8f9ff !important;
+        border-top: 2px solid rgba(196, 198, 207, 0.6) !important;
+        border-bottom: 3px double #2563eb !important;
+    }
+</style>
+
+<div class="p-4 bg-[#f1f5f9] rounded-2xl relative">
+    <!-- Executive Metrics (Bento Grid Style) -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <!-- Total Outstanding -->
+        <div class="bg-white rounded-xl p-4 ambient-shadow-1 border border-[#E2E8F0] relative overflow-hidden group">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-surface-container-highest rounded-bl-full opacity-50 -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+            <div class="flex justify-between items-start mb-3 relative z-10">
+                <h3 class="font-label-md text-[10px] text-outline uppercase tracking-wider">Total Outstanding</h3>
+                <div class="w-7 h-7 rounded-full bg-secondary-fixed/30 flex items-center justify-center text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">currency_rupee</span>
+                </div>
+            </div>
+            <div class="font-headline-xl text-2xl font-extrabold text-primary mb-0.5 relative z-10">₹@totalOutstanding.ToString("N0")</div>
+            <div class="flex items-center text-[10px] text-outline relative z-10">
+                <span class="text-on-tertiary-container bg-tertiary-fixed-dim/20 px-1.5 py-0.2 rounded-sm mr-2 flex items-center font-medium">
+                    <span class="material-symbols-outlined text-[12px] mr-0.5">trending_up</span> 2.4%
+                </span>
+                vs last month
+            </div>
+        </div>
+
+        <!-- Overdue Amount -->
+        <div class="bg-white rounded-xl p-4 ambient-shadow-1 border border-[#E2E8F0] relative overflow-hidden group">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-error-container rounded-bl-full opacity-30 -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+            <div class="flex justify-between items-start mb-3 relative z-10">
+                <h3 class="font-label-md text-[10px] text-outline uppercase tracking-wider">Overdue (&gt;30 Days)</h3>
+                <div class="w-7 h-7 rounded-full bg-error-container/50 flex items-center justify-center text-error">
+                    <span class="material-symbols-outlined text-[16px]">warning</span>
+                </div>
+            </div>
+            <div class="font-headline-xl text-2xl font-extrabold text-error mb-0.5 relative z-10">₹@overdue.ToString("N0")</div>
+            <div class="flex items-center text-[10px] text-outline relative z-10">
+                <span class="text-error bg-error-container/30 px-1.5 py-0.2 rounded-sm mr-2 flex items-center font-medium">
+                    @overduePercent%
+                </span>
+                of total outstanding
+            </div>
+        </div>
+
+        <!-- Sync Status & Efficiency -->
+        <div class="grid grid-cols-2 gap-4">
+            <div class="bg-white rounded-xl p-3.5 ambient-shadow-1 border border-[#E2E8F0] flex items-center justify-between">
+                <div>
+                    <h3 class="font-label-md text-[10px] text-outline uppercase tracking-wider mb-0.5">Collection Efficiency</h3>
+                    <div class="font-headline-md text-lg font-bold text-primary">@collectionEfficiency%</div>
+                </div>
+                <div class="w-8 h-8">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f1f5f9" stroke-width="3"></circle>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#2563eb" stroke-dasharray="@collectionEfficiency, 100" stroke-linecap="round" stroke-width="3"></circle>
+                    </svg>
+                </div>
+            </div>
+            <div class="bg-secondary-fixed/20 rounded-xl p-3.5 ambient-shadow-1 border border-secondary-fixed/50 flex flex-col justify-center">
+                <div class="flex justify-between items-center mb-0.5">
+                    <h3 class="font-label-md text-[10px] text-on-secondary-fixed-variant uppercase tracking-wider">Last Synced (Tally)</h3>
+                    <span class="material-symbols-outlined text-[14px] text-on-secondary-fixed-variant" id="syncStatusIcon">sync</span>
+                </div>
+                <div class="font-body-md text-[11px] font-semibold text-on-secondary-fixed">@lastSync.ToString("dd-MMM-yyyy hh:mm tt")</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Registry Area -->
+    <section class="bg-white rounded-xl ambient-shadow-1 border border-[#E2E8F0] overflow-hidden flex flex-col min-h-[450px]">
+        <!-- Header & Actions -->
+        <div class="p-3.5 border-b border-[#E2E8F0] flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-surface-bright shrink-0">
+            <div>
+                <h2 class="font-headline-md text-base font-bold text-primary flex items-center" style="margin: 0;">
+                    <span class="material-symbols-outlined mr-1.5 text-secondary text-[20px]">receipt_long</span>
+                    Advanced Outstanding Registry
+                </h2>
+                <p class="font-body-sm text-[11px] text-outline mb-0">Monitor dealer balances, grouped by branch, with deep ageing analysis.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                {
+                    <button class="bg-white border border-secondary text-secondary hover:bg-secondary-fixed/20 px-3 py-1.5 rounded-lg font-label-md text-[11px] font-bold flex items-center transition-colors" data-bs-toggle="modal" data-bs-target="#uploadExcelModal">
+                        <span class="material-symbols-outlined text-[16px] mr-1.5">upload_file</span>
+                        Upload Excel
+                    </button>
+                }
+                <button id="exportExcelBtn" class="bg-white border border-secondary text-secondary hover:bg-secondary-fixed/20 px-3 py-1.5 rounded-lg font-label-md text-[11px] font-bold flex items-center transition-colors">
+                    <span class="material-symbols-outlined text-[16px] mr-1.5">download</span>
+                    Export
+                </button>
+                @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                {
+                    <button class="bg-secondary text-white hover:bg-secondary/90 px-4 py-1.5 rounded-lg font-label-md text-[11px] font-bold flex items-center transition-colors shadow-sm" id="syncTallyBtn">
+                        <span class="material-symbols-outlined text-[16px] mr-1.5 spinner-icon">sync_alt</span>
+                        Dynamic Sync
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Controls Bar -->
+        <div class="p-2.5 bg-white border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <div class="flex items-center space-x-3">
+                <button id="advancedFiltersToggleBtn" class="text-on-surface-variant hover:text-secondary flex items-center font-semibold text-[11px] border border-outline-variant px-2.5 py-1 rounded bg-surface-container-low transition-colors shadow-sm">
+                    <span class="material-symbols-outlined text-[14px] mr-1 text-secondary">tune</span>
+                    Advanced Filters
+                    <span class="ml-1.5 w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                </button>
+                <div class="relative w-56">
+                    <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-outline text-[14px]">search</span>
+                    <input id="quickSearchInput" class="pl-7 pr-3 py-1 border border-outline-variant rounded w-full text-[11px] focus:border-secondary focus:ring-1 focus:ring-secondary/50 outline-none h-7" placeholder="Quick search dealer..." type="text">
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-3 text-[11px] text-outline">
+                <div class="flex items-center">
+                    <label for="periodMonthFilter" class="mr-1.5">Month:</label>
+                    <select id="periodMonthFilter" class="border border-outline-variant rounded py-0.5 px-2 text-primary focus:outline-none h-7 bg-white text-[11px]">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" selected="@(ViewBag.SelectedMonth == m)">@System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(m)</option>
+                        }
+                    </select>
+                </div>
+                <div class="flex items-center">
+                    <label for="periodYearFilter" class="mr-1.5">Year:</label>
+                    <select id="periodYearFilter" class="border border-outline-variant rounded py-0.5 px-2 text-primary focus:outline-none h-7 bg-white text-[11px]">
+                        @for (int y = ViewBag.SelectedYear - 2; y <= ViewBag.SelectedYear + 1; y++)
+                        {
+                            <option value="@y" selected="@(ViewBag.SelectedYear == y)">@y</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collapsible Advanced Filters Panel -->
+        <div id="advancedFiltersPanel" class="hidden p-3 bg-surface-container-low border-b border-[#E2E8F0] grid grid-cols-1 md:grid-cols-4 gap-3 transition-all duration-300">
+            <div>
+                <label class="block text-[10px] font-semibold text-outline mb-0.5">Branch</label>
+                <select id="branchFilter" class="border border-outline-variant rounded py-1 px-2.5 text-primary text-[11px] w-full bg-white h-8 focus:outline-none">
+                    <option value="">All Branches</option>
+                    @foreach (var br in Model.Select(x => x.BranchName).Distinct().OrderBy(x => x))
+                    {
+                        <option value="@br">@br</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-semibold text-outline mb-0.5">Min Pending Bills (₹)</label>
+                <input type="number" id="minOutstandingInput" placeholder="Min balance" class="border border-outline-variant rounded py-1 px-2.5 text-primary text-[11px] w-full h-8 focus:outline-none bg-white" />
+            </div>
+            <div>
+                <label class="block text-[10px] font-semibold text-outline mb-0.5">Max Pending Bills (₹)</label>
+                <input type="number" id="maxOutstandingInput" placeholder="Max balance" class="border border-outline-variant rounded py-1 px-2.5 text-primary text-[11px] w-full h-8 focus:outline-none bg-white" />
+            </div>
+            <div class="flex items-end gap-2">
+                <button id="applyFiltersBtn" class="flex-1 px-3 py-1.5 bg-secondary text-white font-bold text-[11px] rounded-lg hover:bg-secondary/90 transition-colors h-8">
+                    Apply Filters
+                </button>
+                <button id="resetFiltersBtn" class="px-2 py-1.5 border border-outline-variant bg-white text-outline font-bold text-[11px] rounded-lg hover:bg-surface transition-colors h-8">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="overflow-auto flex-1 relative bg-white">
+            <table class="w-full text-left border-collapse" id="outstandingGrid">
+                <thead>
+                    <tr class="text-white font-label-md text-[9px] uppercase tracking-wider sticky top-0 z-20">
+                        <th class="p-2 px-3 whitespace-nowrap sticky left-0 z-20" data-sticky-header="true">BRANCH / Particulars</th>
+                        <th class="p-2 px-3">Particulars / Party Code</th>
+                        <th class="p-2 px-3 text-right">Pending Bills</th>
+                        <th class="p-2 px-3 text-right">&lt; 7 Days</th>
+                        <th class="p-2 px-3 text-right">7 to 14 Days</th>
+                        <th class="p-2 px-3 text-right">14 to 21 Days</th>
+                        <th class="p-2 px-3 text-right">21 to 28 Days</th>
+                        <th class="p-2 px-3 text-right">28 to 35 Days</th>
+                        <th class="p-2 px-3 text-right">35 to 50 Days</th>
+                        <th class="p-2 px-3 text-right">50 to 80 Days</th>
+                        <th class="p-2 px-3 text-right font-bold">&gt; 80 Days</th>
+                        <th class="p-2 px-3 text-center">Quick Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="font-body-sm text-[11px]">
+                    @{
+                        var groupedByBranch = Model.GroupBy(x => new { x.BranchCode, x.BranchName })
+                                                   .OrderBy(g => g.Key.BranchName)
+                                                   .ToList();
+                        int groupIndex = 0;
+                    }
+                    @foreach (var g in groupedByBranch)
+                    {
+                        var branchTotal = g.Sum(x => x.Outstanding);
+                        var less7 = g.Sum(x => x.OutstandingLess7Days ?? 0m);
+                        var days7To14 = g.Sum(x => x.Outstanding7To14Days ?? 0m);
+                        var days14To21 = g.Sum(x => x.Outstanding14To21Days ?? 0m);
+                        var days21To28 = g.Sum(x => x.Outstanding21To28Days ?? 0m);
+                        var days28To35 = g.Sum(x => x.Outstanding28To35Days ?? 0m);
+                        var days35To50 = g.Sum(x => x.Outstanding35To50Days ?? 0m);
+                        var days50To80 = g.Sum(x => x.Outstanding50To80Days ?? 0m);
+                        var daysMore80 = g.Sum(x => x.OutstandingMore80Days ?? 0m);
+                        
+                        var branchId = "branch_" + groupIndex;
+                        groupIndex++;
+
+                        <!-- Branch Header Row -->
+                        <tr class="branch-header-row border-b border-[#E2E8F0] font-bold text-primary cursor-pointer transition-colors" data-target-branch="@branchId">
+                            <td class="p-1.5 px-3 sticky left-0 z-10 flex items-center gap-1.5" style="background: inherit;">
+                                <span class="material-symbols-outlined text-[20px] text-secondary expand-icon">chevron_right</span>
+                                <span>@g.Key.BranchName</span>
+                                <span class="ml-2 px-1.5 py-0.2 bg-secondary/10 text-secondary border border-secondary/20 rounded-full text-[9px] font-semibold">@g.Count() Dealer(s)</span>
+                            </td>
+                            <td class="p-1.5 px-3"></td>
+                            <td class="p-1.5 px-3 text-right text-[#001b3d] font-bold">₹@branchTotal.ToString("N0")</td>
+                            <td class="p-1.5 px-3 text-right bg-emerald-50/40">@FormatCell(less7, "text-emerald-700 font-bold")</td>
+                            <td class="p-1.5 px-3 text-right bg-teal-50/40">@FormatCell(days7To14, "text-teal-700 font-bold")</td>
+                            <td class="p-1.5 px-3 text-right bg-cyan-50/40">@FormatCell(days14To21, "text-cyan-700 font-bold")</td>
+                            <td class="p-1.5 px-3 text-right bg-sky-50/40">@FormatCell(days21To28, "text-sky-700 font-bold")</td>
+                            <td class="p-1.5 px-3 text-right bg-amber-50/40">@FormatCell(days28To35, "text-amber-700 font-bold")</td>
+                            <td class="p-1.5 px-3 text-right bg-orange-50/40">@FormatCell(days35To50, "text-orange-700 font-bold")</td>
+                            <td class="p-1.5 px-3 text-right bg-rose-50/40">@FormatCell(days50To80, "text-rose-700 font-bold")</td>
+                            <td class="p-1.5 px-3 text-right bg-red-100/40">@FormatCell(daysMore80, "bg-red-100 text-red-800 border border-red-300 px-1.5 py-0.5 rounded font-bold")</td>
+                            <td class="p-1.5 px-3 text-center"></td>
+                        </tr>
+
+                        <!-- Branch Child Rows -->
+                        @foreach (var item in g)
+                        {
+                            var initials = "";
+                            if (!string.IsNullOrWhiteSpace(item.PartyName))
+                            {
+                                var parts = item.PartyName.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                                if (parts.Length > 1) {
+                                    initials = (parts[0][0].ToString() + parts[1][0].ToString()).ToUpper();
+                                } else if (parts.Length == 1 && parts[0].Length > 0) {
+                                    initials = parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+                                }
+                            }
+                            if (string.IsNullOrEmpty(initials)) initials = "DL";
+
+                            <tr class="branch-child-row hidden border-b border-[#E2E8F0] transition-colors group" data-branch-parent="@branchId">
+                                <td class="p-1.5 px-3 sticky left-0 bg-white group-hover:bg-slate-50 z-10 text-outline pl-8">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-6.5 h-6.5 rounded-full bg-secondary-fixed/50 flex items-center justify-center text-secondary font-bold text-[10px] shrink-0 shadow-sm border border-secondary/10">
+                                            @initials
+                                        </div>
+                                        <div>
+                                            <div class="font-semibold text-primary text-[11px] leading-tight">@item.PartyName</div>
+                                            <div class="text-[9px] text-outline flex items-center gap-1 mt-0.5" data-code="@item.PartyCode">@item.PartyCode</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="p-1.5 px-3 font-semibold text-primary">@item.PartyCode</td>
+                                <td class="p-1.5 px-3 text-right font-bold text-primary outstanding-cell">₹@item.Outstanding.ToString("N0")</td>
+                                
+                                <td class="p-1.5 px-3 text-right bg-emerald-50/20">@FormatCell(item.OutstandingLess7Days, "text-emerald-700 font-semibold")</td>
+                                <td class="p-1.5 px-3 text-right bg-teal-50/20">@FormatCell(item.Outstanding7To14Days, "text-teal-700 font-semibold")</td>
+                                <td class="p-1.5 px-3 text-right bg-cyan-50/20">@FormatCell(item.Outstanding14To21Days, "text-cyan-700 font-semibold")</td>
+                                <td class="p-1.5 px-3 text-right bg-sky-50/25">@FormatCell(item.Outstanding21To28Days, "text-sky-700 font-semibold")</td>
+                                
+                                <td class="p-1.5 px-3 text-right bg-amber-50/30">@FormatCell(item.Outstanding28To35Days, "text-amber-700 font-bold")</td>
+                                <td class="p-1.5 px-3 text-right bg-orange-50/30">@FormatCell(item.Outstanding35To50Days, "text-orange-700 font-bold")</td>
+                                <td class="p-1.5 px-3 text-right bg-rose-50/40">@FormatCell(item.Outstanding50To80Days, "text-rose-700 font-bold")</td>
+                                <td class="p-1.5 px-3 text-right bg-red-100/30">@FormatCell(item.OutstandingMore80Days, "bg-red-100 text-red-800 border border-red-300 px-1.5 py-0.5 rounded font-bold shadow-sm")</td>
+                                
+                                <td class="p-1.5 px-3 text-center">
+                                    <div class="flex items-center justify-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <a href="tel:@item.PartyCode" class="p-0.5 hover:bg-surface-container-high rounded text-secondary transition-colors" title="Call Dealer"><span class="material-symbols-outlined text-[14px]">call</span></a>
+                                        <a href="mailto:info@thessbuddy.com?subject=Outstanding Balance: @item.PartyName" class="p-0.5 hover:bg-surface-container-high rounded text-secondary transition-colors" title="Email Statement"><span class="material-symbols-outlined text-[14px]">mail</span></a>
+                                        <button class="p-0.5 hover:bg-surface-container-high rounded text-secondary transition-colors" title="Log Action note" onclick="logNote('@item.PartyCode', '@item.PartyName')"><span class="material-symbols-outlined text-[14px]">note_add</span></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    <!-- Grand Total Row -->
+                    @{
+                        var grandTotal = Model.Sum(x => x.Outstanding);
+                        var grandLess7 = Model.Sum(x => x.OutstandingLess7Days ?? 0m);
+                        var grand7To14 = Model.Sum(x => x.Outstanding7To14Days ?? 0m);
+                        var grand14To21 = Model.Sum(x => x.Outstanding14To21Days ?? 0m);
+                        var grand21To28 = Model.Sum(x => x.Outstanding21To28Days ?? 0m);
+                        var grand28To35 = Model.Sum(x => x.Outstanding28To35Days ?? 0m);
+                        var grand35To50 = Model.Sum(x => x.Outstanding35To50Days ?? 0m);
+                        var grand50To80 = Model.Sum(x => x.Outstanding50To80Days ?? 0m);
+                        var grandMore80 = Model.Sum(x => x.OutstandingMore80Days ?? 0m);
+                    }
+                    <tr class="grand-total-row border-b border-[#E2E8F0] font-extrabold text-primary sticky bottom-0 z-20 shadow-md">
+                        <td class="p-2 px-3 sticky left-0 z-10" style="background: inherit;">Grand Total</td>
+                        <td class="p-2 px-3"></td>
+                        <td class="p-2 px-3 text-right">₹@grandTotal.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right">₹@grandLess7.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right">₹@grand7To14.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right">₹@grand14To21.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right">₹@grand21To28.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right">₹@grand28To35.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right">₹@grand35To50.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right text-error font-medium">₹@grand50To80.ToString("N0")</td>
+                        <td class="p-2 px-3 text-right text-error font-bold">₹@grandMore80.ToString("N0")</td>
+                        <td class="p-2 px-3 text-center"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="custom-table-footer" class="p-2.5 px-4 border-t border-[#E2E8F0] bg-surface flex items-center justify-between font-body-sm text-[11px] text-outline shrink-0">
+            <div class="font-semibold">Showing @groupedByBranch.Count branch(es) with @activeDealers active dealer(s)</div>
+            <div class="text-xs font-semibold text-secondary">Hierarchy View (Click branch row to expand/collapse)</div>
+        </div>
+    </section>
+</div>
+
+<!-- Dynamic Tally Logs Terminal Modal -->
+<div class="modal fade" id="tallySyncLogsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-xl rounded-2xl overflow-hidden">
+            <div class="modal-header p-5 border-b-0 flex items-center justify-between" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white;">
+                <div>
+                    <h4 class="modal-title font-headline-md text-base font-bold" style="margin:0;"><span class="material-symbols-outlined text-warning mr-1">terminal</span> Tally SOAP XML Gateway Console</h4>
+                    <p style="margin: 4px 0 0 0; font-size: 0.75rem; opacity: 0.85;">Reconciliation logs from Tally ERP 9 Dynamic HTTP sync pipeline</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-5" style="background: #0f172a;">
+                <div class="terminal-logs-window" id="terminalLogsGrid">
+                    <!-- Logs stream in real-time here -->
+                </div>
+            </div>
+            <div class="modal-footer border-t-0 p-4 bg-light d-flex justify-content-between">
+                <span class="text-xs text-outline font-mono"><span class="material-symbols-outlined text-sm mr-1">lan</span> Gateways Active</span>
+                <button type="button" class="px-5 py-2 bg-secondary text-white font-bold text-xs rounded-xl hover:bg-secondary-container transition-all" data-bs-dismiss="modal">Done & Refresh Page</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Excel Modal -->
+<div class="modal fade" id="uploadExcelModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-xl rounded-2xl overflow-hidden">
+            <div class="modal-header p-5 border-b-0 flex items-center justify-between" style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); color: white;">
+                <div>
+                    <h4 class="modal-title font-headline-md text-base font-bold" style="margin:0;"><span class="material-symbols-outlined text-white mr-1">cloud_upload</span> Upload Outstanding Spreadsheet</h4>
+                    <p style="margin: 4px 0 0 0; font-size: 0.75rem; opacity: 0.85;">Import closing balances in bulk from exported spreadsheets</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-6 bg-white space-y-4">
+                <form id="uploadOutstandingForm" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <div id="modalDropZone" class="text-center p-8 border-2 border-dashed border-outline-variant/60 rounded-xl bg-surface cursor-pointer hover:border-success hover:bg-success/5 transition-all flex flex-col items-center justify-center" onclick="$('#excelFileInput').click();">
+                        <span class="material-symbols-outlined text-4xl text-success mb-2">draft</span>
+                        <h6 class="font-bold text-sm text-dark mb-0.5">Drag & Drop Excel File Here</h6>
+                        <p class="text-xs text-outline mb-4">or click to browse local folders</p>
+                        <input type="file" id="excelFileInput" name="file" accept=".xlsx,.xls" class="hidden" onclick="event.stopPropagation();" />
+                        <span id="selectedFileName" class="px-3 py-1 bg-secondary/15 text-secondary border border-secondary/20 rounded text-[11px] font-semibold hidden max-w-full truncate"></span>
+                    </div>
+                    
+                    <div class="p-3 bg-surface border border-outline-variant/30 rounded-xl flex items-start gap-3">
+                        <input type="checkbox" id="rewriteCheckbox" checked class="mt-1 w-4 h-4 rounded text-secondary border-outline-variant focus:ring-secondary/20" style="cursor: pointer;">
+                        <div>
+                            <label class="block font-bold text-xs text-dark" for="rewriteCheckbox" style="cursor: pointer;">
+                                Overwrite/Reset Outstanding Balances (Rewrite Option)
+                            </label>
+                            <span class="block text-[10px] text-outline mt-0.5 leading-normal">Check this to completely reset all outstanding balances to ₹0 for the current period before importing. Uncheck to accumulate/merge onto existing balances.</span>
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-xl border border-blue-200 bg-blue-50 flex items-start gap-2.5">
+                        <span class="material-symbols-outlined text-blue-600 text-sm mt-0.5">info</span>
+                        <div class="text-[11px] text-blue-800 leading-normal">
+                            <strong>Spreadsheet Requirements:</strong> The sheet must contain a column for <strong>Dealer Code/Name</strong> and a column for <strong>Outstanding Balance</strong>.
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-t-0 p-4 bg-light flex justify-end gap-3">
+                <button type="button" class="px-4 py-2 border border-outline-variant rounded-xl text-xs font-semibold hover:bg-surface" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="processUploadBtn" class="px-5 py-2 bg-success text-white font-bold text-xs rounded-xl hover:bg-success/90 transition-all disabled:opacity-50" disabled>Process Upload</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
+    <script>
+        function updateNoteIndicator(partyCode) {
+            var note = localStorage.getItem('dealerNote_' + partyCode);
+            var parent = $(`[data-code="${partyCode}"]`);
+            if (parent.length) {
+                parent.find('.note-badge').remove();
+                if (note && note.trim()) {
+                    parent.append(`
+                        <span class="note-badge ml-2 inline-flex items-center text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full font-semibold" title="${note.replace(/"/g, '&quot;')}">
+                            <span class="material-symbols-outlined text-[10px] mr-0.5" style="font-variation-settings: 'FILL' 1;">sticky_note_2</span> Note
+                        </span>
+                    `);
+                }
+            }
+        }
+
+        $(document).ready(function () {
+            // Expand/Collapse Branch Rows
+            $('.branch-header-row').on('click', function () {
+                var targetBranchId = $(this).data('target-branch');
+                var childRows = $('[data-branch-parent="' + targetBranchId + '"]');
+                $(this).toggleClass('expanded');
+
+                if (childRows.hasClass('hidden')) {
+                    childRows.removeClass('hidden');
+                } else {
+                    childRows.addClass('hidden');
+                }
+            });
+
+            // Scan and update note indicators for all dealer code containers
+            $('[data-code]').each(function() {
+                var code = $(this).attr('data-code');
+                updateNoteIndicator(code);
+            });
+
+            // Hierarchy Search & Advanced Filter Engine
+            function applyFilters() {
+                var branchVal = $('#branchFilter').val() || "";
+                var minVal = parseFloat($('#minOutstandingInput').val()) || 0;
+                var maxVal = parseFloat($('#maxOutstandingInput').val()) || Infinity;
+                var query = $('#quickSearchInput').val().toLowerCase().trim();
+
+                // If all filters are empty, restore the default collapsed state
+                if (branchVal === "" && minVal === 0 && maxVal === Infinity && query === "") {
+                    $('.branch-header-row').show();
+                    $('.branch-child-row').addClass('hidden');
+                    $('.branch-header-row').removeClass('expanded');
+                    return;
+                }
+
+                // Hide all rows initially
+                $('.branch-header-row').hide();
+                $('.branch-child-row').addClass('hidden');
+                $('.branch-header-row').removeClass('expanded');
+
+                // Map to track which branches contain matched children
+                var visibleBranches = {};
+
+                $('.branch-child-row').each(function () {
+                    var partyCode = $(this).find('[data-code]').attr('data-code') || "";
+                    var partyName = $(this).find('.font-semibold.text-primary').text() || "";
+                    
+                    var rawVal = $(this).find('.outstanding-cell').text() || "";
+                    var val = parseFloat(rawVal.replace(/[^0-9.-]+/g,"")) || 0;
+
+                    var parentBranchId = $(this).data('branch-parent');
+                    var headerRow = $('[data-target-branch="' + parentBranchId + '"]');
+                    var branchName = headerRow.find('span:nth-child(2)').text() || "";
+
+                    var matchesBranch = (branchVal === "" || branchName.toLowerCase().indexOf(branchVal.toLowerCase()) !== -1);
+                    var matchesQuery = (query === "" || partyCode.toLowerCase().indexOf(query) !== -1 || partyName.toLowerCase().indexOf(query) !== -1);
+                    var matchesRange = (val >= minVal && val <= maxVal);
+
+                    if (matchesBranch && matchesQuery && matchesRange) {
+                        $(this).removeClass('hidden');
+                        visibleBranches[parentBranchId] = true;
+                    }
+                });
+
+                // Show parent branch rows and toggle to expanded state for branches with matching children
+                for (var branchId in visibleBranches) {
+                    var headerRow = $('[data-target-branch="' + branchId + '"]');
+                    headerRow.show();
+                    headerRow.addClass('expanded');
+                }
+            }
+
+            // Trigger filters on input/change events
+            $('#applyFiltersBtn').on('click', function () {
+                applyFilters();
+            });
+
+            // Reset Filters
+            $('#resetFiltersBtn').on('click', function () {
+                $('#minOutstandingInput').val('');
+                $('#maxOutstandingInput').val('');
+                $('#branchFilter').val('');
+                $('#quickSearchInput').val('');
+                
+                // Reset to default collapsed state
+                $('.branch-header-row').show();
+                $('.branch-child-row').addClass('hidden');
+                $('.branch-header-row').removeClass('expanded');
+            });
+
+            $('#quickSearchInput').on('keyup', function () {
+                applyFilters();
+            });
+
+            $('#branchFilter').on('change', function () {
+                applyFilters();
+            });
+
+            // Toggle Advanced Filters Panel
+            $('#advancedFiltersToggleBtn').on('click', function () {
+                var panel = $('#advancedFiltersPanel');
+                panel.slideToggle('fast').toggleClass('hidden flex');
+                
+                // Expand all branch header rows and show all dealer child rows
+                $('.branch-header-row').addClass('expanded');
+                $('.branch-child-row').removeClass('hidden');
+            });
+
+            // Export Excel redirect
+            $('#exportExcelBtn').on('click', function() {
+                var m = $('#periodMonthFilter').val();
+                var y = $('#periodYearFilter').val();
+                window.location.href = '@Url.Action("DownloadOutstandingMaster", "Reports")?month=' + m + '&year=' + y;
+            });
+
+            // Period filtering
+            $('#periodMonthFilter, #periodYearFilter').on('change', function () {
+                var m = $('#periodMonthFilter').val();
+                var y = $('#periodYearFilter').val();
+                window.location.href = '@Url.Action("OutstandingMaster", "Reports")?month=' + m + '&year=' + y;
+            });
+
+            // File input selection tracking
+            $('#excelFileInput').on('change', function () {
+                var file = this.files[0];
+                if (file) {
+                    $('#selectedFileName').text(file.name).removeClass('hidden');
+                    $('#processUploadBtn').prop('disabled', false);
+                } else {
+                    $('#selectedFileName').addClass('hidden');
+                    $('#processUploadBtn').prop('disabled', true);
+                }
+            });
+
+            // Drag and Drop for Outstanding Modal Dropzone
+            var modalDropZone = document.getElementById('modalDropZone');
+            var excelFileInput = document.getElementById('excelFileInput');
+
+            if (modalDropZone && excelFileInput) {
+                modalDropZone.addEventListener('dragover', function (e) {
+                    e.preventDefault();
+                    modalDropZone.style.background = '#f0fdf4';
+                    modalDropZone.style.borderColor = '#22c55e';
+                });
+
+                modalDropZone.addEventListener('dragleave', function () {
+                    modalDropZone.style.background = '#f8fafc';
+                    modalDropZone.style.borderColor = '#cbd5e1';
+                });
+
+                modalDropZone.addEventListener('drop', function (e) {
+                    e.preventDefault();
+                    modalDropZone.style.background = '#f8fafc';
+                    modalDropZone.style.borderColor = '#cbd5e1';
+                    
+                    if (e.dataTransfer.files.length > 0) {
+                        excelFileInput.files = e.dataTransfer.files;
+                        $(excelFileInput).trigger('change');
+                    }
+                });
+            }
+
+            // Process Excel Upload
+            $('#processUploadBtn').on('click', function () {
+                var fileInput = $('#excelFileInput')[0];
+                if (fileInput.files.length === 0) return;
+
+                var formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                formData.append('rewrite', $('#rewriteCheckbox').is(':checked'));
+                formData.append('month', $('#periodMonthFilter').val());
+                formData.append('year', $('#periodYearFilter').val());
+
+                $('#uploadExcelModal').modal('hide');
+
+                Swal.fire({
+                    title: 'Processing Outstanding Spreadsheet...',
+                    html: '<div class="d-flex flex-column align-items-center justify-content-center py-3"><div class="spinner-border text-success mb-3" style="width: 3rem; height: 3rem;" role="status"></div><div class="fw-semibold text-secondary" style="font-size:0.92rem;">Mapping headers and syncing dealer balances...</div></div>',
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    customClass: {
+                        popup: 'border-0 shadow-lg'
+                    }
+                });
+
+                $.ajax({
+                    url: '@Url.Action("UploadOutstandingExcel", "Reports")',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function (res) {
+                        Swal.close();
+                        if (res.ok) {
+                            $('#tallySyncLogsModal .modal-title').html('<span class="material-symbols-outlined text-success mr-1">check_circle</span> Excel Outstanding Sync Gateway');
+                            $('#tallySyncLogsModal .modal-header').css('background', 'linear-gradient(135deg, #15803d 0%, #166534 100%)');
+                            
+                            var logsDiv = $('#terminalLogsGrid').empty();
+                            res.logs.forEach(function (logLine, index) {
+                                var colorClass = logLine.indexOf('[Excel]') !== -1 ? 'text-success' : (logLine.indexOf('Warn') !== -1 ? 'text-warning' : 'text-sky');
+                                setTimeout(function () {
+                                    logsDiv.append(`<p class="${colorClass} mb-1">> ${logLine}</p>`);
+                                    logsDiv.scrollTop(logsDiv[0].scrollHeight);
+                                }, index * 65);
+                            });
+
+                            var modal = new bootstrap.Modal(document.getElementById('tallySyncLogsModal'));
+                            modal.show();
+
+                            $('.outstanding-cell').addClass('soft-green-pulse');
+
+                            $('#tallySyncLogsModal').on('hidden.bs.modal', function () {
+                                window.location.reload();
+                            });
+                        }
+                    },
+                    error: function (err) {
+                        Swal.close();
+                        var msg = err.responseJSON && err.responseJSON.message ? err.responseJSON.message : 'Upload failed. Please verify file structure.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Upload Failed',
+                            text: msg,
+                            confirmButtonColor: '#ef4444'
+                        });
+                    }
+                });
+            });
+
+            // Sync Outstanding from Tally
+            $('#syncTallyBtn').on('click', function () {
+                var btn = $(this);
+                var icon = btn.find('.spinner-icon');
+
+                Swal.fire({
+                    title: 'Initiate Tally Outstanding Sync?',
+                    text: 'This will attempt connection with Tally ERP 9 running at @ViewBag.TallyUrl and dynamically reconcile outstanding balances for all active dealers.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Sync Dynamically',
+                    cancelButtonText: 'Cancel',
+                    confirmButtonColor: '#093375',
+                    cancelButtonColor: '#64748b',
+                    customClass: {
+                        popup: 'border-0 shadow-lg',
+                        confirmButton: 'fw-bold px-4 py-2',
+                        cancelButton: 'fw-bold px-4 py-2'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        btn.prop('disabled', true);
+                        icon.addClass('animate-spin text-warning');
+
+                        Swal.fire({
+                            title: 'Syncing Outstanding Balances...',
+                            html: '<div class="d-flex flex-column align-items-center justify-content-center py-3"><div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div><div class="fw-semibold text-secondary" style="font-size:0.92rem;">Connecting to Tally SOAP XML API on Port 9000...</div></div>',
+                            allowOutsideClick: false,
+                            showConfirmButton: false,
+                            customClass: {
+                                popup: 'border-0 shadow-lg'
+                            }
+                        });
+
+                        $.ajax({
+                            url: '@Url.Action("SyncOutstandingFromTally", "Reports")',
+                            type: 'POST',
+                            data: {
+                                month: $('#periodMonthFilter').val(),
+                                year: $('#periodYearFilter').val()
+                            },
+                            success: function (res) {
+                                Swal.close();
+                                btn.prop('disabled', false);
+                                icon.removeClass('animate-spin text-warning');
+
+                                if (res.ok) {
+                                    $('#tallySyncLogsModal .modal-title').html('<span class="material-symbols-outlined text-warning mr-1">terminal</span> Tally SOAP XML Gateway Console');
+                                    $('#tallySyncLogsModal .modal-header').css('background', 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)');
+
+                                    var logsDiv = $('#terminalLogsGrid').empty();
+                                    res.logs.forEach(function (logLine, index) {
+                                        var colorClass = logLine.indexOf('[Sync]') !== -1 ? 'text-success' : (logLine.indexOf('failed') !== -1 || logLine.indexOf('Offline') !== -1 ? 'text-warning' : 'text-sky');
+                                        setTimeout(function () {
+                                            logsDiv.append(`<p class="${colorClass} mb-1">> ${logLine}</p>`);
+                                            logsDiv.scrollTop(logsDiv[0].scrollHeight);
+                                        }, index * 80);
+                                    });
+
+                                    var modal = new bootstrap.Modal(document.getElementById('tallySyncLogsModal'));
+                                    modal.show();
+
+                                    $('.outstanding-cell').addClass('soft-green-pulse');
+
+                                    $('#tallySyncLogsModal').on('hidden.bs.modal', function () {
+                                        window.location.reload();
+                                    });
+                                }
+                            },
+                            error: function (err) {
+                                Swal.close();
+                                btn.prop('disabled', false);
+                                icon.removeClass('animate-spin text-warning');
+
+                                var msg = err.responseJSON && err.responseJSON.message ? err.responseJSON.message : 'Sync failed. Please verify if Tally Integration service is active.';
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Sync Failed',
+                                    text: msg,
+                                    confirmButtonColor: '#ef4444'
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+        });
+
+        function logNote(code, name) {
+            var noteKey = 'dealerNote_' + code;
+            var existingNote = localStorage.getItem(noteKey) || '';
+
+            Swal.fire({
+                title: 'Action Log for ' + name,
+                html: `
+                    <div class="text-left font-body-sm">
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Dealer Code: ${code}</label>
+                        <textarea id="dealerNoteText" class="w-full h-32 text-xs border border-slate-300 rounded-xl p-3 focus:border-secondary focus:ring-1 focus:ring-secondary/50 outline-none resize-none" placeholder="Type dealer conversation summary or follow-up note...">${existingNote}</textarea>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Save Note',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#2563eb',
+                cancelButtonColor: '#64748b',
+                preConfirm: () => {
+                    return document.getElementById('dealerNoteText').value;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    var note = result.value;
+                    if (note !== null) {
+                        if (note.trim()) {
+                            localStorage.setItem(noteKey, note);
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Note Logged',
+                                text: 'Note saved successfully for ' + name,
+                                timer: 1500,
+                                showConfirmButton: false
+                            });
+                        } else {
+                            localStorage.removeItem(noteKey);
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Note Cleared',
+                                text: 'Note cleared for ' + name,
+                                timer: 1200,
+                                showConfirmButton: false
+                            });
+                        }
+                        updateNoteIndicator(code);
+                    }
+                }
+            });
+        }
+    </script>
+}
+
+

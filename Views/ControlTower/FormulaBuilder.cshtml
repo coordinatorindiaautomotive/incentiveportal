@@ -1,0 +1,694 @@
+﻿@{
+    ViewData["Title"] = "Advanced Formula Builder";
+    var schemes = ViewBag.Schemes as List<IncentivePortal.Models.IncentiveScheme> ?? new();
+}
+
+@Html.AntiForgeryToken()
+
+<style>
+    /* â”€â”€ Formula editor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .editor-wrapper {
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,.05);
+        position: relative;
+    }
+    .editor-header {
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        color: #64748b;
+    }
+    .formula-textarea {
+        background: #0f172a !important;
+        color: #38bdf8 !important;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 16px;
+        resize: vertical;
+        box-shadow: none !important;
+        caret-color: #f8fafc;
+    }
+    .formula-textarea::placeholder { color: #475569; }
+
+    /* Autocomplete dropdown */
+    #autocompleteDropdown {
+        position: absolute;
+        z-index: 1000;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        min-width: 200px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.4);
+        display: none;
+    }
+    #autocompleteDropdown .ac-item {
+        padding: 7px 14px;
+        cursor: pointer;
+        font-family: 'Consolas', monospace;
+        font-size: 0.82rem;
+        color: #94a3b8;
+        border-bottom: 1px solid #334155;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    #autocompleteDropdown .ac-item:last-child { border-bottom: none; }
+    #autocompleteDropdown .ac-item:hover,
+    #autocompleteDropdown .ac-item.active { background: #334155; color: #38bdf8; }
+    #autocompleteDropdown .ac-badge {
+        font-size: 0.65rem;
+        padding: 1px 6px;
+        border-radius: 8px;
+        background: rgba(56,189,248,.15);
+        color: #38bdf8;
+        flex-shrink: 0;
+    }
+
+    /* â”€â”€ Pill buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .btn-action-pill {
+        background: #f1f5f9; border: 1.5px solid #cbd5e1; color: #334155;
+        font-family: 'Courier New', monospace; font-weight: 700;
+        border-radius: 20px; padding: 5px 12px; transition: all .2s;
+    }
+    .btn-action-pill:hover { background: #e2e8f0; border-color: #94a3b8; transform: translateY(-1px); }
+    .btn-variable-pill {
+        background: #f0fdf4; border: 1.5px solid #bbf7d0; color: #15803d;
+        font-family: 'Courier New', monospace; font-weight: 700;
+        border-radius: 20px; padding: 5px 12px; transition: all .2s;
+    }
+    .btn-variable-pill:hover { background: #dcfce7; border-color: #86efac; transform: translateY(-1px); }
+    .btn-specialvar-pill {
+        background: #eff6ff; border: 1.5px solid #bfdbfe; color: #1d4ed8;
+        font-family: 'Courier New', monospace; font-weight: 700;
+        border-radius: 20px; padding: 5px 12px; transition: all .2s;
+    }
+    .btn-specialvar-pill:hover { background: #dbeafe; border-color: #93c5fd; transform: translateY(-1px); }
+
+    /* â”€â”€ Validate + Test result panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    #feedbackPanel { display: none; }
+
+    .token-chip {
+        display: inline-block;
+        background: rgba(56,189,248,.12);
+        border: 1px solid rgba(56,189,248,.3);
+        color: #38bdf8;
+        font-family: 'Consolas', monospace;
+        font-size: 0.75rem;
+        border-radius: 12px;
+        padding: 2px 10px;
+        margin: 2px 3px;
+    }
+
+    /* â”€â”€ Test breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .step-trace {
+        background: #0f172a;
+        border-radius: 10px;
+        padding: 14px 16px;
+        font-family: 'Consolas', monospace;
+        font-size: 0.82rem;
+        color: #94a3b8;
+        max-height: 280px;
+        overflow-y: auto;
+        line-height: 1.8;
+    }
+    .step-trace .step-header { color: #475569; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .5px; }
+    .step-trace .step-var    { color: #38bdf8; }
+    .step-trace .step-result { color: #4ade80; font-weight: 700; font-size: 0.95rem; }
+
+    .result-badge {
+        font-size: 1.8rem;
+        font-weight: 800;
+        
+        color: #4ade80;
+        letter-spacing: -1px;
+    }
+
+    /* â”€â”€ Mock inputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    .mock-input {
+        border-radius: 8px;
+        font-family: 'Consolas', monospace;
+        font-size: 0.82rem;
+    }
+    .mock-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+
+    /* dark theme */
+    body.dark-theme .btn-action-pill  { background: #334155; border-color: #475569; color: #f1f5f9; }
+    body.dark-theme .btn-variable-pill { background: #1e3a1e; border-color: #166534; color: #86efac; }
+    body.dark-theme .btn-specialvar-pill { background: #1e2a3a; border-color: #1e40af; color: #93c5fd; }
+    body.dark-theme .editor-wrapper   { border-color: #475569; }
+    body.dark-theme .editor-header    { background: #1e293b; border-bottom-color: #334155; color: #94a3b8; }
+</style>
+
+<div class="container-fluid py-4">
+
+    <!-- Page header -->
+    <div class="card mb-4 border-0 shadow-sm"
+         style="border-radius:16px;background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);color:#f8fafc;">
+        <div class="card-body p-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <span class="badge mb-2"
+                      style="background:rgba(30, 64, 175,.2);color:var(--primary);font-weight:600;font-size:.75rem;letter-spacing:.5px;text-transform:uppercase;">
+                    Maturity Upgrade
+                </span>
+                <h2 class="card-title fw-bold mb-1" style="letter-spacing:-.5px;">
+                    Formula Builder &amp; Simulator
+                </h2>
+                <p class="card-text mb-0" style="font-size:.88rem;color:#94a3b8;">
+                    Design, validate, and dry-run rule engine formulas with real-time logical &amp; mathematical operators.
+                </p>
+            </div>
+            <a asp-controller="ControlTower" asp-action="Index"
+               class="btn btn-outline-light border-2"
+               style="border-radius:10px;font-weight:600;font-size:.85rem;padding:10px 18px;">
+                <i class="fa-solid fa-arrow-left me-2"></i>Back to Control Tower
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+             LEFT: WORKBENCH
+        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card border-0 shadow-sm" style="border-radius:16px;">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 pb-2">
+                    <h5 class="fw-bold m-0" style="color:var(--ink);">
+                        Formula Design Panel
+                    </h5>
+                </div>
+                <div class="card-body px-4 pb-4">
+
+                    <!-- 1. Functions -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold text-muted small text-uppercase mb-2"
+                               style="letter-spacing:.5px;">1. Insert Functions</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('IF(, , )')"  title="Logical IF">IF</button>
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('AND(, )')" title="Logical AND">AND</button>
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('OR(, )')"  title="Logical OR">OR</button>
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('NOT()')"   title="Logical NOT">NOT</button>
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('ROUND(, 2)')" title="Round">ROUND</button>
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('ABS()')"  title="Absolute value">ABS</button>
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('MIN(, )')" title="Minimum">MIN</button>
+                            <button type="button" class="btn btn-sm btn-action-pill" onclick="insertToken('MAX(, )')" title="Maximum">MAX</button>
+                        </div>
+                    </div>
+
+                    <!-- 2. Core Variables -->
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold text-muted small text-uppercase mb-2"
+                               style="letter-spacing:.5px;">2. Insert Variables</label>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <button type="button" class="btn btn-sm btn-variable-pill" onclick="insertToken('SaleValue')">SaleValue</button>
+                            <button type="button" class="btn btn-sm btn-variable-pill" onclick="insertToken('AchievementPercent')">AchievementPercent</button>
+                            <button type="button" class="btn btn-sm btn-variable-pill" onclick="insertToken('SlabRate')">SlabRate</button>
+                            <button type="button" class="btn btn-sm btn-variable-pill" onclick="insertToken('TdsRate')">TdsRate</button>
+                            <button type="button" class="btn btn-sm btn-variable-pill" onclick="insertToken('OnBillDiscount')">OnBillDiscount</button>
+                            <button type="button" class="btn btn-sm btn-variable-pill" onclick="insertToken('GrossIncentive')">GrossIncentive</button>
+                            <button type="button" class="btn btn-sm btn-variable-pill" onclick="insertToken('NetTransferAmount')">NetTransferAmount</button>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('Sales')">Sales</button>
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('Growth')">Growth</button>
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('Outstanding')">Outstanding</button>
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('CollectionPercent')">CollectionPercent</button>
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('Discount')">Discount</button>
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('GrowthPercent')">GrowthPercent</button>
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('OutstandingPercent')">OutstandingPercent</button>
+                            <button type="button" class="btn btn-sm btn-specialvar-pill" onclick="insertToken('TargetAchievement')">TargetAchievement</button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Formula Editor -->
+                    <div class="mb-4 mt-4">
+                        <label for="formulaInput"
+                               class="form-label fw-bold small text-uppercase mb-2"
+                               style="letter-spacing:.5px;color:var(--ink);">3. Formula Expression</label>
+                        <div class="editor-wrapper" style="position:relative;">
+                            <div class="editor-header d-flex align-items-center justify-content-between px-3 py-2">
+                                <span class="editor-title small fw-semibold">
+                                    <i class="fa-solid fa-code me-2"></i>Formula Editor
+                                    <span class="text-muted ms-2" style="font-size:.72rem;font-weight:400;">
+                                        — type variable name or use buttons above; type any letter to autocomplete
+                                    </span>
+                                </span>
+                                <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-secondary"
+                                        onclick="clearEditor()">
+                                    <i class="fa-solid fa-eraser me-1"></i>Clear
+                                </button>
+                            </div>
+                            <textarea id="formulaInput"
+                                      class="form-control formula-textarea"
+                                      rows="6"
+                                      autocomplete="off" autocorrect="off" spellcheck="false"
+                                      placeholder="Example: IF(AchievementPercent >= 100, SaleValue * SlabRate - TdsRate * GrossIncentive, SaleValue * 0.02)"></textarea>
+                            <!-- Autocomplete dropdown anchor -->
+                            <div id="autocompleteDropdown"></div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Action buttons -->
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <button type="button"
+                                class="btn btn-primary px-4 py-2"
+                                style="border-radius:10px;font-weight:600;"
+                                id="validateBtn"
+                                onclick="doValidate()">
+                            <i class="fa-solid fa-shield-halved me-2"></i>Validate Syntax
+                        </button>
+                        <button type="button"
+                                class="btn btn-success px-4 py-2"
+                                style="border-radius:10px;font-weight:600;"
+                                id="testBtn"
+                                onclick="doTestRun()">
+                            <i class="fa-solid fa-vial me-2"></i>Run Test
+                        </button>
+                    </div>
+
+                    <!-- 5. Feedback panel -->
+                    <div id="feedbackPanel" class="mt-4"></div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+             RIGHT: VARIABLE INPUTS + SCHEME REFERENCE
+        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <div class="col-xl-4 col-lg-5">
+
+            <!-- Mock variable inputs -->
+            <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 pb-2 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold m-0" style="color:var(--ink);">
+                        Test Variable Inputs
+                    </h5>
+                    <span class="badge bg-primary-subtle text-primary" style="font-size:.72rem;">Used in "Run Test"</span>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <p class="text-muted small mb-3">
+                        Set values for the variables referenced by your formula. Unused variables are ignored.
+                    </p>
+                    <div class="row g-2 overflow-auto" style="max-height:520px;">
+                        @{
+                            var mockVars = new[]
+                            {
+                                ("SaleValue",         "SaleValue (₹)",          "500000"),
+                                ("AchievementPercent","AchievementPercent (%)",  "105"),
+                                ("SlabRate",          "SlabRate (decimal)",      "0.03"),
+                                ("TdsRate",           "TdsRate (decimal)",       "0.1"),
+                                ("OnBillDiscount",    "OnBillDiscount (₹)",      "1000"),
+                                ("GrossIncentive",    "GrossIncentive (₹)",      "15000"),
+                                ("NetTransferAmount", "NetTransferAmount (₹)",   "13500"),
+                                ("Sales",             "Sales (₹)",               "100000"),
+                                ("Growth",            "Growth (%)",              "25"),
+                                ("Outstanding",       "Outstanding (₹)",         "15000"),
+                                ("CollectionPercent", "Collection (%)",          "98"),
+                                ("Discount",          "Discount (₹)",            "500"),
+                                ("GrowthPercent",     "GrowthPercent (%)",       "25"),
+                                ("OutstandingPercent","Outstanding (%)",         "15"),
+                                ("TargetAchievement", "Target Achieve (%)",      "105"),
+                                ("DealerCategory",    "DealerCategory",          "1"),
+                                ("ProductGroup",      "ProductGroup",            "1"),
+                                ("Branch",            "Branch",                  "1"),
+                                ("Region",            "Region",                  "1"),
+                                ("State",             "State",                   "1"),
+                            };
+                            foreach (var (id, label, defVal) in mockVars)
+                            {
+                                <div class="col-6 mb-2">
+                                    <label class="mock-label mb-1 d-block">@label</label>
+                                    <input type="number"
+                                           id="mock_@id"
+                                           class="form-control form-control-sm mock-input"
+                                           value="@defVal"
+                                           step="any" />
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheme reference -->
+            <div class="card border-0 shadow-sm" style="border-radius:16px;">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 pb-2">
+                    <h5 class="fw-bold m-0" style="color:var(--ink);">
+                        Incentive Slabs Reference
+                    </h5>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    @if (!schemes.Any())
+                    {
+                        <div class="text-center text-muted small py-3">No active schemes found.</div>
+                    }
+                    else
+                    {
+                        <div class="accordion accordion-flush" id="schemesAccordion"
+                             style="max-height:320px;overflow-y:auto;">
+                            @foreach (var s in schemes)
+                            {
+                                <div class="accordion-item border-0">
+                                    <h2 class="accordion-header" id="heading-@s.Id">
+                                        <button class="accordion-button collapsed px-0 py-2 fw-semibold"
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#collapse-@s.Id"
+                                                style="font-size:.85rem;box-shadow:none;">
+                                            @s.Name (@s.SchemeMonth/@s.SchemeYear)
+                                        </button>
+                                    </h2>
+                                    <div id="collapse-@s.Id" class="accordion-collapse collapse"
+                                         data-bs-parent="#schemesAccordion">
+                                        <div class="accordion-body px-0 py-2 small text-muted">
+                                            <table class="table table-sm table-borderless m-0" style="font-size:.78rem;">
+                                                <thead>
+                                                    <tr class="text-muted border-bottom">
+                                                        <th>Slab Range</th><th>Payout</th><th>Rule</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var d in s.Details.OrderBy(x => x.MinAchievementPercent))
+                                                    {
+                                                        <tr>
+                                                            <td>@d.MinAchievementPercent% – @d.MaxAchievementPercent%</td>
+                                                            <td>
+                                                                @if (d.Percentage.HasValue) { <span>@d.Percentage%</span> }
+                                                                @if (d.FixedAmount.HasValue && d.FixedAmount > 0) { <span> + ₹@d.FixedAmount.Value.ToString("N0")</span> }
+                                                            </td>
+                                                            <td>@d.RuleName</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+        </div><!-- /right col -->
+    </div><!-- /row -->
+</div><!-- /container -->
+
+@section Scripts {
+<script>
+(function () {
+    'use strict';
+
+    // â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const KNOWN_VARS = [
+        'SaleValue','AchievementPercent','SlabRate','TdsRate','OnBillDiscount',
+        'GrossIncentive','NetTransferAmount','Sales','Growth','Outstanding',
+        'CollectionPercent','Discount','GrowthPercent','OutstandingPercent',
+        'TargetAchievement','DealerCategory','ProductGroup','Branch','Region','State'
+    ];
+    const KNOWN_FUNCS = ['IF','AND','OR','NOT','ROUND','ABS','MIN','MAX'];
+    const ALL_AC = [...KNOWN_FUNCS.map(f => ({ name: f, type: 'fn' })),
+                    ...KNOWN_VARS.map(v => ({ name: v, type: 'var' }))];
+
+    const textarea = document.getElementById('formulaInput');
+    const dropdown = document.getElementById('autocompleteDropdown');
+    let acIndex = -1, acMatches = [], acPrefix = '', acWordStart = 0;
+
+    // â”€â”€ Insert token at cursor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.insertToken = function(token) {
+        const s = textarea.selectionStart, e = textarea.selectionEnd;
+        const before = textarea.value.slice(0, s);
+        const after  = textarea.value.slice(e);
+        textarea.value = before + token + after;
+        textarea.focus();
+        const paren = token.indexOf('(');
+        const pos   = paren !== -1 ? s + paren + 1 : s + token.length;
+        textarea.selectionStart = textarea.selectionEnd = pos;
+        closeAC();
+    };
+
+    window.clearEditor = function() {
+        textarea.value = '';
+        document.getElementById('feedbackPanel').style.display = 'none';
+        closeAC();
+    };
+
+    // â”€â”€ Autocomplete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    textarea.addEventListener('keyup', (e) => {
+        if (['ArrowUp','ArrowDown','Enter','Escape','Tab'].includes(e.key)) return;
+        const pos  = textarea.selectionStart;
+        const text = textarea.value.slice(0, pos);
+        // Find current word (letters+digits+_)
+        const m = text.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
+        if (!m) { closeAC(); return; }
+        const prefix = m[1];
+        acPrefix    = prefix;
+        acWordStart = pos - prefix.length;
+        if (prefix.length < 1) { closeAC(); return; }
+
+        acMatches = ALL_AC.filter(x => x.name.toLowerCase().startsWith(prefix.toLowerCase()));
+        if (acMatches.length === 0 || (acMatches.length === 1 && acMatches[0].name === prefix)) {
+            closeAC(); return;
+        }
+        renderAC();
+    });
+
+    textarea.addEventListener('keydown', (e) => {
+        if (!dropdown.style.display || dropdown.style.display === 'none') return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); acIndex = Math.min(acIndex + 1, acMatches.length - 1); highlightAC(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); acIndex = Math.max(acIndex - 1, 0); highlightAC(); }
+        else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (acIndex >= 0 && acMatches[acIndex]) { e.preventDefault(); selectAC(acMatches[acIndex]); }
+        }
+        else if (e.key === 'Escape') { closeAC(); }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target !== textarea) closeAC();
+    });
+
+    function renderAC() {
+        acIndex = -1;
+        dropdown.innerHTML = '';
+        acMatches.forEach((item, i) => {
+            const div = document.createElement('div');
+            div.className = 'ac-item';
+            div.dataset.idx = i;
+            div.innerHTML = `<span class="ac-badge">${item.type === 'fn' ? 'fn' : 'var'}</span><span>${highlight(item.name, acPrefix)}</span>`;
+            div.addEventListener('mousedown', (e) => { e.preventDefault(); selectAC(item); });
+            dropdown.appendChild(div);
+        });
+
+        // Position below caret
+        const coords = getCaretCoords(textarea);
+        dropdown.style.top  = (coords.top + 22) + 'px';
+        dropdown.style.left = coords.left + 'px';
+        dropdown.style.display = 'block';
+    }
+
+    function highlightAC() {
+        dropdown.querySelectorAll('.ac-item').forEach((el, i) => {
+            el.classList.toggle('active', i === acIndex);
+        });
+    }
+
+    function selectAC(item) {
+        const suffix  = item.type === 'fn' ? '(' : '';
+        const insert  = item.name + suffix;
+        const before  = textarea.value.slice(0, acWordStart);
+        const after   = textarea.value.slice(textarea.selectionStart);
+        textarea.value = before + insert + after;
+        const newPos = acWordStart + insert.length;
+        textarea.selectionStart = textarea.selectionEnd = newPos;
+        textarea.focus();
+        closeAC();
+    }
+
+    function closeAC() { dropdown.style.display = 'none'; acIndex = -1; acMatches = []; }
+
+    function highlight(name, prefix) {
+        const esc = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return name.replace(new RegExp(`(${esc})`, 'i'), '<strong style="color:#38bdf8">$1</strong>');
+    }
+
+    // Rough caret-coordinate approximation (textarea doesn't have built-in method)
+    function getCaretCoords(el) {
+        const rect = el.getBoundingClientRect();
+        const relTop = el.scrollTop;
+        const lineH  = parseFloat(getComputedStyle(el).lineHeight) || 22;
+        const lines   = el.value.slice(0, el.selectionStart).split('\n').length - 1;
+        return { top: rect.top - el.parentElement.getBoundingClientRect().top + lines * lineH, left: 14 };
+    }
+
+    // â”€â”€ Helpers: read CSRF token â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    function csrfToken() {
+        const el = document.querySelector('input[name="__RequestVerificationToken"]');
+        return el ? el.value : '';
+    }
+
+    async function postJson(url, body) {
+        const resp = await fetch(url, {
+            method:  'POST',
+            headers: {
+                'Content-Type':               'application/json',
+                'RequestVerificationToken':   csrfToken(),
+                'X-Requested-With':           'XMLHttpRequest'
+            },
+            body: JSON.stringify(body)
+        });
+        if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+        return resp.json();
+    }
+
+    function setBtn(id, loading) {
+        const b = document.getElementById(id);
+        if (loading) { b.disabled = true;  b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Workingâ€¦'; }
+        else         { b.disabled = false; }
+    }
+
+    // â”€â”€ Feature 1 — Validate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.doValidate = async function() {
+        const formula  = textarea.value.trim();
+        const panel    = document.getElementById('feedbackPanel');
+        panel.style.display = 'block';
+
+        if (!formula) {
+            panel.innerHTML = warn('Please enter a formula first.');
+            return;
+        }
+
+        setBtn('validateBtn', true);
+        try {
+            const res = await postJson('/ControlTower/ValidateFormula', { formula });
+
+            if (res.isValid) {
+                const tokenHtml = res.parsedTokens.map(t =>
+                    `<span class="token-chip">${escHtml(t)}</span>`).join('');
+                panel.innerHTML = `
+                    <div class="alert border-0 shadow-sm p-3 mb-0"
+                         style="border-radius:12px;background:rgba(34,197,94,.08);border-left:4px solid #22c55e !important;">
+                        <div class="d-flex align-items-start gap-3">
+                            <i class="fa-solid fa-circle-check text-success fs-4 mt-1"></i>
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold text-success mb-1">Formula is Valid âœ“</h6>
+                                <p class="small text-muted mb-2">Syntax is well-formed and all variables are recognised.</p>
+                                ${res.parsedTokens.length > 0 ? `<div class="mt-1"><span class="text-muted small me-2">Identifiers found:</span>${tokenHtml}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>`;
+            } else {
+                const errHtml = res.errors.map(e =>
+                    `<li class="small mb-1">${escHtml(e)}</li>`).join('');
+                panel.innerHTML = `
+                    <div class="alert border-0 shadow-sm p-3 mb-0"
+                         style="border-radius:12px;background:rgba(239,68,68,.08);border-left:4px solid #ef4444 !important;">
+                        <div class="d-flex align-items-start gap-3">
+                            <i class="fa-solid fa-circle-xmark text-danger fs-4 mt-1"></i>
+                            <div>
+                                <h6 class="fw-bold text-danger mb-1">Validation Failed</h6>
+                                <ul class="mb-0 ps-3">${errHtml}</ul>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+        } catch(err) {
+            panel.innerHTML = errBox('Could not reach validation endpoint: ' + err.message);
+        } finally {
+            document.getElementById('validateBtn').disabled = false;
+            document.getElementById('validateBtn').innerHTML = '<i class="fa-solid fa-shield-halved me-2"></i>Validate Syntax';
+        }
+    };
+
+    // â”€â”€ Feature 2 — Test Run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    window.doTestRun = async function() {
+        const formula = textarea.value.trim();
+        const panel   = document.getElementById('feedbackPanel');
+        panel.style.display = 'block';
+
+        if (!formula) {
+            panel.innerHTML = warn('Please enter a formula first.');
+            return;
+        }
+
+        // Collect variable values from mock inputs
+        const variables = {};
+        document.querySelectorAll('.mock-input').forEach(inp => {
+            const name = inp.id.replace('mock_', '');
+            variables[name] = parseFloat(inp.value) || 0;
+        });
+
+        setBtn('testBtn', true);
+        try {
+            const res = await postJson('/ControlTower/TestFormula', { formula, variables });
+
+            if (res.isSuccess) {
+                // Render step trace
+                const stepsHtml = res.steps.map(s => {
+                    if (s.startsWith('â”€â”€')) return `<div class="step-header mt-2">${escHtml(s)}</div>`;
+                    if (s.trim().startsWith('= ')) return `<div class="step-result">${escHtml(s)}</div>`;
+                    return `<div class="step-var">${escHtml(s)}</div>`;
+                }).join('');
+
+                const fmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                panel.innerHTML = `
+                    <div class="border-0 shadow-sm p-0 mb-0"
+                         style="border-radius:14px;overflow:hidden;border:1px solid rgba(74,222,128,.2);">
+                        <div class="d-flex align-items-center justify-content-between px-4 py-3"
+                             style="background:rgba(74,222,128,.06);border-bottom:1px solid rgba(74,222,128,.15);">
+                            <div class="d-flex align-items-center gap-3">
+                                <i class="fa-solid fa-square-poll-vertical text-success fs-4"></i>
+                                <div>
+                                    <h6 class="fw-bold text-success mb-0">Test Run Succeeded</h6>
+                                    <span class="text-muted small">Formula evaluated with your variable inputs</span>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="text-muted small mb-0">Result</div>
+                                <div class="result-badge">₹${fmt.format(res.result)}</div>
+                            </div>
+                        </div>
+                        <div class="px-4 py-3" style="background:var(--canvas);">
+                            <div class="text-muted small fw-semibold mb-2 text-uppercase" style="letter-spacing:.5px;">Step-by-Step Trace</div>
+                            <div class="step-trace">${stepsHtml}</div>
+                        </div>
+                    </div>`;
+            } else {
+                panel.innerHTML = `
+                    <div class="alert border-0 shadow-sm p-3 mb-0"
+                         style="border-radius:12px;background:rgba(239,68,68,.08);border-left:4px solid #ef4444 !important;">
+                        <div class="d-flex align-items-start gap-3">
+                            <i class="fa-solid fa-bug text-danger fs-4 mt-1"></i>
+                            <div>
+                                <h6 class="fw-bold text-danger mb-1">Evaluation Error</h6>
+                                <span class="small">${escHtml(res.errorMessage)}</span>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+        } catch(err) {
+            panel.innerHTML = errBox('Could not reach test endpoint: ' + err.message);
+        } finally {
+            document.getElementById('testBtn').disabled = false;
+            document.getElementById('testBtn').innerHTML = '<i class="fa-solid fa-vial me-2"></i>Run Test';
+        }
+    };
+
+    // â”€â”€ Tiny HTML helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    function warn(msg)   { return `<div class="alert alert-warning border-0" style="border-radius:10px;"><i class="fa-solid fa-circle-exclamation me-2"></i>${escHtml(msg)}</div>`; }
+    function errBox(msg) { return `<div class="alert alert-danger border-0" style="border-radius:10px;"><i class="fa-solid fa-triangle-exclamation me-2"></i>${escHtml(msg)}</div>`; }
+    function escHtml(s)  { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+})();
+</script>
+}
+
+
+

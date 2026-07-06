@@ -1,0 +1,496 @@
+@model IncentivePortal.DTOs.TargetVsAchievementViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Target vs Achievement Registry";
+    
+    // Modern HTML helper method for rendering empty cells as muted hyphens
+    Func<decimal?, string, Microsoft.AspNetCore.Html.IHtmlContent> FormatCell = (val, classes) => {
+        if (val.HasValue && val.Value != 0m) {
+            return new Microsoft.AspNetCore.Html.HtmlString($"<span class='{classes}'>₹{val.Value.ToString("N0")}</span>");
+        }
+        return new Microsoft.AspNetCore.Html.HtmlString("<span style='color:#94a3b8;'>—</span>");
+    };
+
+    Func<decimal?, string, Microsoft.AspNetCore.Html.IHtmlContent> FormatPercent = (val, classes) => {
+        if (val.HasValue && val.Value != 0m) {
+            return new Microsoft.AspNetCore.Html.HtmlString($"<span class='{classes}'>{val.Value.ToString("F1")}%</span>");
+        }
+        return new Microsoft.AspNetCore.Html.HtmlString("<span style='color:#94a3b8;'>—</span>");
+    };
+}
+
+<!-- Google Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+<style>
+    /* ── Page-specific premium overrides ── */
+
+    /* Editable admin target cell */
+    .editable-target-cell {
+        cursor: pointer;
+        transition: background 0.15s ease;
+        border-radius: 4px;
+    }
+    .editable-target-cell:hover {
+        background: rgba(37, 99, 235, 0.04) !important;
+    }
+    .editable-target-cell .edit-hint {
+        font-size: 10px;
+        opacity: 0;
+        margin-left: 4px;
+        transition: opacity 0.15s ease;
+        color: #2563eb;
+    }
+    .editable-target-cell:hover .edit-hint {
+        opacity: 1;
+    }
+
+    /* Achievement status chips */
+    .achievement-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 10.5px;
+        font-weight: 700;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .achievement-chip.success {
+        background: rgba(34, 197, 94, 0.08);
+        color: #15803d;
+        border-color: rgba(34, 197, 94, 0.2);
+    }
+    .achievement-chip.warning {
+        background: rgba(245, 158, 11, 0.08);
+        color: #b45309;
+        border-color: rgba(245, 158, 11, 0.2);
+    }
+    .achievement-chip.danger {
+        background: rgba(239, 68, 68, 0.08);
+        color: #b91c1c;
+        border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    /* Slab placement chip */
+    .slab-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10.5px;
+        font-weight: 600;
+        background: rgba(37, 99, 235, 0.05);
+        color: #2563eb;
+        border: 1px solid rgba(37, 99, 235, 0.12);
+        white-space: nowrap;
+    }
+
+    /* Growth indicator chips */
+    .growth-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 10.5px;
+        font-weight: 700;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .growth-chip.up {
+        background: rgba(34, 197, 94, 0.06);
+        color: #15803d;
+        border-color: rgba(34, 197, 94, 0.15);
+    }
+    .growth-chip.down {
+        background: rgba(239, 68, 68, 0.06);
+        color: #b91c1c;
+        border-color: rgba(239, 68, 68, 0.15);
+    }
+
+    /* Highlighted column cells */
+    #targetGrid td.col-final-target {
+        background: rgba(37, 99, 235, 0.02) !important;
+        font-weight: 700 !important;
+        color: #0b1c30 !important;
+    }
+    #targetGrid td.col-current-sales {
+        background: rgba(34, 197, 94, 0.02) !important;
+        font-weight: 700 !important;
+        color: #065f46 !important;
+    }
+
+    /* Final Target header cell accent */
+    #targetGrid thead th.th-final-target {
+        background: rgba(255,255,255,0.08) !important;
+    }
+    #targetGrid thead th.th-current-sales {
+        background: rgba(34, 197, 94, 0.12) !important;
+    }
+
+    /* Party name styling */
+    .party-name {
+        font-weight: 700 !important;
+        color: #0b1c30 !important;
+        font-size: 11.5px !important;
+    }
+
+    /* Currency values */
+    .currency-val {
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: "tnum";
+    }
+
+    /* Admin target colored */
+    .admin-target-val {
+        color: #2563eb !important;
+        font-weight: 700 !important;
+    }
+
+    /* Next slab target colored */
+    .next-slab-val {
+        color: #2563eb !important;
+        font-weight: 600 !important;
+    }
+</style>
+
+<div class="container-fluid" style="padding: 20px;">
+    
+    <!-- Page Header Card -->
+    <div class="card mb-3" style="border: 1px solid rgba(196,198,207,0.4); border-radius: 12px; box-shadow: 0 4px 10px rgba(11,28,48,0.02); padding: 20px;">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h4 style="font-family: 'Inter', sans-serif; font-weight: 700; font-size: 18px; color: #0b1c30; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                    Target vs Achievement Tracker
+                </h4>
+                <p style="font-size: 12px; color: #74777f; margin-bottom: 0; font-weight: 500;">Track party-wise system suggested targets, admin targets, and real-time sales achievement progress.</p>
+            </div>
+            
+            <!-- Filters Form -->
+            <form method="get" action="@Url.Action("TargetVsAchievement", "Reports")" class="d-flex flex-wrap align-items-end gap-2">
+                <div class="filter-group" style="min-width: auto;">
+                    <label for="monthFilter" class="filter-label">Month</label>
+                    <select id="monthFilter" name="month" class="form-select" style="min-width: 120px;">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" selected="@(Model.SelectedMonth == m)">@System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(m)</option>
+                        }
+                    </select>
+                </div>
+                <div class="filter-group" style="min-width: auto;">
+                    <label for="yearFilter" class="filter-label">Year</label>
+                    <select id="yearFilter" name="year" class="form-select" style="min-width: 90px;">
+                        @for (int y = Model.SelectedYear - 2; y <= Model.SelectedYear + 1; y++)
+                        {
+                            <option value="@y" selected="@(Model.SelectedYear == y)">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="filter-group" style="min-width: auto;">
+                    <label for="branchFilter" class="filter-label">Branch</label>
+                    <select id="branchFilter" name="branchName" class="form-select" style="min-width: 140px;">
+                        <option value="">All Branches</option>
+                        @foreach (var br in Model.AvailableBranches)
+                        {
+                            <option value="@br" selected="@(Model.SelectedBranch == br)">@br</option>
+                        }
+                    </select>
+                </div>
+                <div class="filter-group" style="min-width: auto;">
+                    <label for="partyTypeFilter" class="filter-label">Type</label>
+                    <select id="partyTypeFilter" name="partyType" class="form-select" style="min-width: 120px;">
+                        <option value="">All Types</option>
+                        @foreach (var pt in Model.AvailablePartyTypes)
+                        {
+                            <option value="@pt" selected="@(Model.SelectedPartyType == pt)">@pt</option>
+                        }
+                    </select>
+                </div>
+                <div class="filter-group" style="min-width: auto;">
+                    <label for="partCategoryFilter" class="filter-label">Category</label>
+                    <select id="partCategoryFilter" name="partCategoryCode" class="form-select" style="min-width: 140px;">
+                        <option value="">All Categories</option>
+                        @foreach (var cat in Model.AvailablePartCategories)
+                        {
+                            <option value="@cat" selected="@(Model.SelectedPartCategory == cat)">@cat</option>
+                        }
+                    </select>
+                </div>
+                <div class="d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        Apply Filter
+                    </button>
+                    <a href="@Url.Action("DownloadTargetVsAchievement", "Reports", new { month = Model.SelectedMonth, year = Model.SelectedYear, branchName = Model.SelectedBranch, partyType = Model.SelectedPartyType, partCategoryCode = Model.SelectedPartCategory })" class="btn btn-success">
+                        Export Excel
+                    </a>
+                    @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                    {
+                        <button type="button" onclick="openBulkActionsModal()" class="btn btn-outline-primary">
+                            Bulk Target
+                        </button>
+                    }
+                </div>
+                @Html.AntiForgeryToken()
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Table Card -->
+    <div class="corp-table-wrapper">
+        <table class="table" id="targetGrid">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th>Party Code</th>
+                    <th>Party Name</th>
+                    <th style="text-align: right;">System Target</th>
+                    <th style="text-align: right;">Admin Target</th>
+                    <th class="th-final-target" style="text-align: right;">Final Target</th>
+                    <th class="th-current-sales" style="text-align: right;">Current Sales</th>
+                    <th style="text-align: center;">Achievement %</th>
+                    <th style="text-align: center;">Slab Placement</th>
+                    <th style="text-align: right;">Next Slab Target</th>
+                    <th style="text-align: right;">Last Month Sales</th>
+                    <th style="text-align: right;">YTD Sales</th>
+                    <th style="text-align: right;">LY YTD Sales</th>
+                    <th style="text-align: center;">YoY Growth %</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Rows.Any())
+                {
+                    <tr>
+                        <td colspan="14" style="text-align: center; padding: 48px; color: #74777f;">
+                            <span class="material-symbols-outlined" style="font-size: 36px; display: block; margin-bottom: 8px; color: #cbd5e1;">info</span>
+                            No targets or achievements found for the selected period.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var row in Model.Rows)
+                    {
+                        var chipClass = row.AchievementPercent >= 100m ? "success" :
+                                        row.AchievementPercent >= 70m ? "warning" : "danger";
+
+                        <tr>
+                            <td style="font-weight: 600; white-space: nowrap;">@row.BranchName</td>
+                            <td><span class="party-code-pill">@row.PartyCode</span></td>
+                            <td class="party-name">@row.PartyName</td>
+                            <td style="text-align: right;" class="currency-val">@FormatCell(row.SystemSuggestedTarget, "")</td>
+                            @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                            {
+                                <td style="text-align: right;" class="editable-target-cell" onclick="editSingleTarget('@row.PartyCode', '@row.PartyName', @(row.AdminDefinedTarget ?? 0m))">
+                                    <span class="admin-target-val currency-val">@FormatCell(row.AdminDefinedTarget, "")</span><span class="edit-hint">✏️</span>
+                                </td>
+                            }
+                            else
+                            {
+                                <td style="text-align: right;" class="admin-target-val currency-val">@FormatCell(row.AdminDefinedTarget, "")</td>
+                            }
+                            <td style="text-align: right;" class="col-final-target currency-val">@FormatCell(row.FinalTarget, "")</td>
+                            <td style="text-align: right;" class="col-current-sales currency-val">@FormatCell(row.CurrentAchievementSales, "")</td>
+                            <td style="text-align: center;">
+                                <span class="achievement-chip @chipClass">
+                                    @row.AchievementPercent.ToString("F1")%
+                                </span>
+                            </td>
+                            <td style="text-align: center;">
+                                @if (row.CurrentSlabLabel != "None")
+                                {
+                                    <span class="slab-chip">@row.CurrentSlabLabel</span>
+                                }
+                                else
+                                {
+                                    <span style="color: #94a3b8;">—</span>
+                                }
+                            </td>
+                            <td style="text-align: right;" class="next-slab-val currency-val">@FormatCell(row.NextSlabTarget, "")</td>
+                            <td style="text-align: right;" class="currency-val">@FormatCell(row.LastMonthSales, "")</td>
+                            <td style="text-align: right; font-weight: 600;" class="currency-val">@FormatCell(row.YTDSales, "")</td>
+                            <td style="text-align: right;" class="currency-val">@FormatCell(row.LastYearYTDSales, "")</td>
+                            <td style="text-align: center;">
+                                 @if (row.YoYGrowthPercent >= 0m)
+                                 {
+                                     <span class="growth-chip up">
+                                         <span style="font-size: 8px;">▲</span>
+                                         @row.YoYGrowthPercent.ToString("F1")%
+                                     </span>
+                                 }
+                                 else
+                                 {
+                                     <span class="growth-chip down">
+                                         <span style="font-size: 8px;">▼</span>
+                                         @row.YoYGrowthPercent.ToString("F1")%
+                                     </span>
+                                 }
+                             </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function editSingleTarget(partyCode, partyName, currentVal) {
+        Swal.fire({
+            title: 'Set Target Override',
+            html: `
+                <div style="text-align: left; font-size: 13px;">
+                    <p style="margin-bottom: 10px;"><strong>Dealer:</strong> ${partyName} <span class="party-code-pill">${partyCode}</span></p>
+                    <label class="filter-label" style="margin-bottom: 6px; display: block;">Custom Target Value (₹)</label>
+                    <input type="number" id="singleTargetInput" value="${currentVal > 0 ? currentVal : ''}" placeholder="Enter new target value" class="form-control">
+                    <span style="color: #94a3b8; font-size: 10.5px; display: block; margin-top: 6px;">Leave blank to clear the override and reset back to system default.</span>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Save Target',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#94a3b8',
+            preConfirm: () => {
+                var val = $('#singleTargetInput').val();
+                if (val && isNaN(val)) {
+                    Swal.showValidationMessage('Please enter a valid number');
+                    return false;
+                }
+                return val ? parseFloat(val) : null;
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var targetVal = result.value;
+                $.ajax({
+                    url: '/Reports/SaveSingleTarget',
+                    type: 'POST',
+                    data: {
+                        partyCode: partyCode,
+                        month: $('#monthFilter').val(),
+                        year: $('#yearFilter').val(),
+                        targetValue: targetVal,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function (res) {
+                        if (res.ok) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Saved',
+                                text: 'Target updated successfully.',
+                                showConfirmButton: false,
+                                timer: 1000
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        }
+                    },
+                    error: function () {
+                        Swal.fire('Error', 'Failed to update target.', 'error');
+                    }
+                });
+            }
+        });
+    }
+
+    function openBulkActionsModal() {
+        Swal.fire({
+            title: 'Bulk Adjust Targets',
+            html: `
+                <div style="text-align: left; font-size: 13px;">
+                    <label class="filter-label" style="margin-bottom: 6px; display: block;">Adjustment Type</label>
+                    <select id="bulkType" class="form-select" style="margin-bottom: 14px;">
+                        <option value="percentage">Percentage Shift (Shift All Targets)</option>
+                        <option value="csv">Import CSV Data (PartyCode,TargetValue)</option>
+                    </select>
+
+                    <div id="percentageWrapper">
+                        <label class="filter-label" style="margin-bottom: 6px; display: block;">Percentage Shift (+ / - %)</label>
+                        <input type="number" id="bulkPercentValue" placeholder="e.g. 10 for +10% or -5 for -5%" class="form-control" style="margin-bottom: 10px;">
+                        <span style="color: #94a3b8; font-size: 10.5px; display: block; margin-bottom: 8px;">Note: This will adjust all active dealers' targets based on their current suggested target.</span>
+                    </div>
+
+                    <div id="csvWrapper" style="display: none;">
+                        <label class="filter-label" style="margin-bottom: 6px; display: block;">CSV Data (one per line)</label>
+                        <textarea id="bulkCsvData" placeholder="WRJ0123154,25000&#10;WRJ050318666,120000" rows="6" class="form-control" style="height: auto; font-family: monospace; font-size: 11px;"></textarea>
+                        <span style="color: #94a3b8; font-size: 10.5px; display: block; margin-top: 6px; margin-bottom: 8px;">Format: PartyCode,TargetValue (e.g. WRJ0123154,25000)</span>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Apply Bulk Changes',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#94a3b8',
+            didOpen: () => {
+                $('#bulkType').on('change', function() {
+                    if ($(this).val() === 'percentage') {
+                        $('#percentageWrapper').show();
+                        $('#csvWrapper').hide();
+                    } else {
+                        $('#percentageWrapper').hide();
+                        $('#csvWrapper').show();
+                    }
+                });
+            },
+            preConfirm: () => {
+                var type = $('#bulkType').val();
+                var percent = $('#bulkPercentValue').val();
+                var csv = $('#bulkCsvData').val();
+                if (type === 'percentage' && !percent) {
+                    Swal.showValidationMessage('Please enter a percentage value');
+                    return false;
+                }
+                if (type === 'csv' && !csv) {
+                    Swal.showValidationMessage('Please paste some CSV data');
+                    return false;
+                }
+                return {
+                    type: type,
+                    percent: percent ? parseFloat(percent) : null,
+                    csv: csv
+                };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Applying changes...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: '/Reports/SaveBulkTargets',
+                    type: 'POST',
+                    data: {
+                        month: $('#monthFilter').val(),
+                        year: $('#yearFilter').val(),
+                        adjustmentType: result.value.type,
+                        value: result.value.percent,
+                        csvData: result.value.csv,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function (res) {
+                        if (res.ok) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Success',
+                                text: 'Bulk targets updated successfully.',
+                                timer: 1000
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        }
+                    },
+                    error: function () {
+                        Swal.fire('Error', 'Failed to update bulk targets.', 'error');
+                    }
+                });
+            }
+        });
+    }
+</script>
+

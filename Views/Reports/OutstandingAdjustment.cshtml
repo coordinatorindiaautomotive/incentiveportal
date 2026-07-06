@@ -1,0 +1,41 @@
+﻿@model List<IncentivePortal.DTOs.OutstandingAdjustmentRow>
+@{
+    ViewData["Title"] = "Outstanding Adjustment Report";
+}
+
+<div class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Outstanding Adjustment Report</h2>
+            <p>Summary of outstanding amounts adjusted against dealer incentives</p>
+        </div>
+    </div>
+
+    <div class="table-responsive corp-table-wrapper" style="border: none; border-radius: 8px; overflow: hidden;">
+        <table class="corp-table align-middle w-100">
+            <thead>
+                <tr>
+                    <th>Party</th>
+                    <th class="text-end">Opening Outstanding</th>
+                    <th class="text-end">Adjusted Amount</th>
+                    <th class="text-end">Carry Forward</th>
+                    <th class="text-end">Eligible for Incentive</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in Model)
+            {
+                var adjusted = Math.Max(0m, (row.GrossIncentive - row.TdsAmount) - row.NetTransferAmount);
+                var carryForward = Math.Max(0m, row.Outstanding - adjusted);
+                <tr>
+                    <td><span class="fw-bold text-dark">@row.PartyName</span> <span class="text-muted">(@row.PartyCode)</span></td>
+                    <td class="text-end font-monospace">₹@row.Outstanding.ToString("N2")</td>
+                    <td class="text-end font-monospace text-danger">₹@adjusted.ToString("N2")</td>
+                    <td class="text-end font-monospace text-secondary">₹@carryForward.ToString("N2")</td>
+                    <td class="text-end font-monospace fw-bold text-success">₹@row.NetTransferAmount.ToString("N2")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

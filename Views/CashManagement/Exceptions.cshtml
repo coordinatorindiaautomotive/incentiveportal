@@ -1,0 +1,218 @@
+﻿@model List<IncentivePortal.Models.CashException>
+@using IncentivePortal.Models
+@inject IncentivePortal.Helpers.ICurrentUser Cu
+@{
+    ViewData["Title"] = "Exception Management";
+    bool isHO = Cu.IsInRole(AppRoles.SuperAdmin) || Cu.IsInRole(AppRoles.HOFinance) || Cu.IsInRole(AppRoles.Auditor);
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" style="border-radius:8px;font-size:.875rem;">
+        <i class="fa-solid fa-circle-check me-2"></i>@TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:.5px;">Cash Management</div>
+        <h2 style="font-size:1.5rem;font-weight:700;color:var(--ink);margin:0;">
+            <i class="fa-solid fa-triangle-exclamation me-2" style="color:#f97316;"></i>Exception Management
+        </h2>
+        <p class="text-muted mb-0" style="font-size:.82rem;">Anomaly detection, exception routing and resolution workflow</p>
+    </div>
+    <a href="@Url.Action("Exceptions")" class="btn btn-outline-secondary d-flex align-items-center gap-2" style="height:40px;border-radius:8px;font-size:.88rem;font-weight:600;">
+        <i class="fa-solid fa-arrows-rotate"></i> Refresh
+    </a>
+</div>
+
+<!-- Severity KPIs -->
+<div class="row g-3 mb-4">
+    @{
+        var sevCards = new[] {
+            ("Critical", (int)(ViewBag.Critical ?? 0), "fa-fire", "rgba(239,68,68,.12)", "#ef4444"),
+            ("High", (int)(ViewBag.High ?? 0), "fa-exclamation-triangle", "rgba(249,115,22,.12)", "#f97316"),
+            ("Medium", (int)(ViewBag.Medium ?? 0), "fa-circle-exclamation", "rgba(245,158,11,.12)", "#d97706"),
+            ("Low", (int)(ViewBag.Low ?? 0), "fa-info-circle", "rgba(59,130,246,.12)", "#3b82f6"),
+        };
+    }
+    @foreach (var (label, cnt, icon, bg, color) in sevCards)
+    {
+        <div class="col-md-3 col-sm-6">
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:18px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.03);">
+                <div style="background:@bg;color:@color;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">
+                    <i class="fa-solid @icon"></i>
+                </div>
+                <div>
+                    <div style="font-size:.72rem;color:#94a3b8;font-weight:600;text-transform:uppercase;">@label Severity</div>
+                    <div style="font-size:1.8rem;font-weight:800;color:@color;line-height:1;">@cnt</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Filters -->
+<div class="panel mb-3" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
+    <form method="get" class="d-flex flex-wrap align-items-end gap-3">
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Severity</label>
+            <select name="severity" class="form-select form-select-sm" style="width:140px;border-radius:8px;">
+                <option value="">All</option>
+                <option value="Critical" selected="@(ViewBag.FilterSev=="Critical"?"selected":null)">Critical</option>
+                <option value="High" selected="@(ViewBag.FilterSev=="High"?"selected":null)">High</option>
+                <option value="Medium" selected="@(ViewBag.FilterSev=="Medium"?"selected":null)">Medium</option>
+                <option value="Low" selected="@(ViewBag.FilterSev=="Low"?"selected":null)">Low</option>
+            </select>
+        </div>
+        <div>
+            <label class="form-label mb-1" style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Status</label>
+            <select name="exStatus" class="form-select form-select-sm" style="width:150px;border-radius:8px;">
+                <option value="">All Status</option>
+                <option value="Open" selected="@(ViewBag.FilterStatus=="Open"?"selected":null)">Open</option>
+                <option value="Investigating" selected="@(ViewBag.FilterStatus=="Investigating"?"selected":null)">Investigating</option>
+                <option value="Escalated" selected="@(ViewBag.FilterStatus=="Escalated"?"selected":null)">Escalated</option>
+                <option value="Resolved" selected="@(ViewBag.FilterStatus=="Resolved"?"selected":null)">Resolved</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-secondary" style="height:32px;border-radius:8px;font-weight:600;font-size:.8rem;">
+            <i class="fa-solid fa-filter me-1"></i>Apply
+        </button>
+        <a href="@Url.Action("Exceptions")" class="btn btn-sm btn-ghost text-muted" style="height:32px;font-size:.8rem;">Clear</a>
+    </form>
+</div>
+
+<!-- Exception Table -->
+<div class="panel" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+    <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom">
+        <div style="font-size:.88rem;font-weight:700;color:var(--ink);">
+            <i class="fa-solid fa-list-check me-2 text-muted"></i>Exception Register — @ViewBag.OpenCount Active
+        </div>
+        <input type="text" placeholder="Search..." class="form-control form-control-sm" style="width:220px;border-radius:20px;font-size:.82rem;" oninput="filterTable(this.value,'excTbody')">
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.83rem;">
+            <thead style="background:#f8fafc;">
+                <tr>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;padding:12px 16px;">Exception ID</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Type</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Branch</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Date</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Amount</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Description</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Severity</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Status</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Assigned</th>
+                    <th style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="excTbody">
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="10" class="text-center py-5 text-muted">
+                        <i class="fa-solid fa-shield-check fa-2x mb-2 d-block" style="opacity:.2;color:#22c55e;"></i>
+                        No exceptions found. All clear!
+                    </td></tr>
+                }
+                @foreach (var ex in Model)
+                {
+                    var (sevBg, sevColor) = ex.Severity switch {
+                        "Critical" => ("rgba(239,68,68,.12)", "#ef4444"),
+                        "High"     => ("rgba(249,115,22,.12)", "#f97316"),
+                        "Medium"   => ("rgba(245,158,11,.12)", "#d97706"),
+                        _ => ("rgba(59,130,246,.12)", "#3b82f6")
+                    };
+                    var (stBg, stColor) = ex.Status switch {
+                        "Open"          => ("rgba(239,68,68,.12)", "#ef4444"),
+                        "Investigating" => ("rgba(245,158,11,.12)", "#d97706"),
+                        "Escalated"     => ("rgba(249,115,22,.12)", "#f97316"),
+                        "Resolved"      => ("rgba(34,197,94,.12)", "#16a34a"),
+                        _ => ("#f1f5f9", "#94a3b8")
+                    };
+                    <tr>
+                        <td><code style="font-size:.78rem;color:#f97316;font-weight:700;">@ex.ExceptionRef</code></td>
+                        <td style="font-weight:600;font-size:.82rem;">@ex.ExceptionType</td>
+                        <td>@ex.Branch?.Name</td>
+                        <td>@ex.ExceptionDate.ToString("dd MMM yyyy")</td>
+                        <td style="font-weight:700;font-family:monospace;">₹@ex.Amount.ToString("N0")</td>
+                        <td style="max-width:200px;font-size:.78rem;color:#64748b;white-space:normal;">@ex.Description</td>
+                        <td><span style="background:@sevBg;color:@sevColor;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;">@ex.Severity</span></td>
+                        <td><span style="background:@stBg;color:@stColor;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;">@ex.Status</span></td>
+                        <td style="font-size:.75rem;color:#94a3b8;">@(ex.AssignedTo ?? "—")</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                @if (ex.Status != "Resolved")
+                                {
+                                    <button class="btn btn-sm btn-outline-success" style="border-radius:6px;font-size:.72rem;padding:2px 9px;font-weight:600;"
+                                            onclick="resolveException(@ex.Id, '@ex.ExceptionRef')">
+                                        <i class="fa-solid fa-check me-1"></i>Resolve
+                                    </button>
+                                    @if (isHO && ex.Status != "Escalated")
+                                    {
+                                        <form method="post" action="/CashManagement/EscalateException" style="display:inline;">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@ex.Id">
+                                            <button type="submit" class="btn btn-sm btn-outline-warning" style="border-radius:6px;font-size:.72rem;padding:2px 9px;font-weight:600;">
+                                                <i class="fa-solid fa-arrow-up me-1"></i>Escalate
+                                            </button>
+                                        </form>
+                                    }
+                                }
+                                else
+                                {
+                                    <span style="font-size:.72rem;color:#16a34a;font-weight:600;"><i class="fa-solid fa-circle-check me-1"></i>Resolved</span>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Resolve Modal -->
+<div class="modal fade" id="resolveModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:14px;">
+            <div class="modal-header border-0" style="padding:24px 28px 0;">
+                <h5 class="modal-title fw-bold" style="">
+                    <i class="fa-solid fa-check-circle me-2" style="color:#22c55e;"></i>Resolve Exception
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/CashManagement/ResolveException">
+                @Html.AntiForgeryToken()
+                <div class="modal-body" style="padding:20px 28px;">
+                    <input type="hidden" name="id" id="resolveId">
+                    <p class="text-muted mb-3" style="font-size:.85rem;">Exception: <strong id="resolveRef"></strong></p>
+                    <div class="form-group">
+                        <label class="form-label fw-semibold" style="font-size:.8rem;">Resolution Notes <span class="text-danger">*</span></label>
+                        <textarea name="resolution" class="form-control" rows="3" placeholder="Describe how this exception was resolved..." required style="border-radius:8px;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0" style="padding:0 28px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:8px;">Cancel</button>
+                    <button type="submit" class="btn btn-success" style="border-radius:8px;font-weight:600;">
+                        <i class="fa-solid fa-check me-1"></i>Mark Resolved
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function filterTable(val, id) {
+    document.querySelectorAll('#'+id+' tr').forEach(r => r.style.display = r.textContent.toLowerCase().includes(val.toLowerCase())?'':'none');
+}
+function resolveException(id, ref) {
+    document.getElementById('resolveId').value = id;
+    document.getElementById('resolveRef').textContent = ref;
+    new bootstrap.Modal(document.getElementById('resolveModal')).show();
+}
+</script>
+}
+

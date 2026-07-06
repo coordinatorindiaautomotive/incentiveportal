@@ -1,0 +1,523 @@
+﻿@model IReadOnlyList<IncentivePortal.Models.Branch>
+@{
+    ViewData["Title"] = "Branch Master Registry";
+}
+
+@functions {
+    public string GetBranchTypeBadgeStyle(string branchType)
+    {
+        switch (branchType?.Trim().ToUpper())
+        {
+            case "MW":
+            case "MAIN WAREHOUSE":
+                return "background-color: rgba(220, 53, 69, 0.1); color: #dc3545; border: 1px solid rgba(220, 53, 69, 0.2); font-weight: 600;";
+            case "AW":
+            case "ASSOCIATED WAREHOUSE":
+                return "background-color: rgba(13, 202, 240, 0.15); color: #087990; border: 1px solid rgba(13, 202, 240, 0.3); font-weight: 600;";
+            case "RO":
+            case "REGIONAL OFFICE":
+                return "background-color: rgba(111, 66, 193, 0.1); color: #6f42c1; border: 1px solid rgba(111, 66, 193, 0.2); font-weight: 600;";
+            default:
+                if (string.IsNullOrWhiteSpace(branchType))
+                    return "background-color: rgba(108, 117, 125, 0.1); color: #6c757d; border: 1px solid rgba(108, 117, 125, 0.2); font-weight: 600;";
+                
+                int hash = branchType.GetHashCode();
+                int hue = Math.Abs(hash % 360);
+                return $"background-color: hsla({hue}, 75%, 96%, 1); color: hsl({hue}, 70%, 35%); border: 1px solid hsla({hue}, 70%, 80%, 1); font-weight: 600;";
+        }
+    }
+}
+
+<!-- Branches List Grid Panel -->
+<div class="panel">
+    <div class="panel-header d-flex justify-content-between align-items-center border-0 mb-3">
+        <div>
+            <h2>Operational Locations Master</h2>
+            <p>List of currently active and operational company branch networks</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" onclick="exportTableToCSV('#branchesTable', 'Branch_Master_Registry.csv')" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-download me-1"></i> Export Excel</button>
+            <button type="button" class="btn btn-sm btn-primary" onclick="openBranchModal()"><i class="fa-solid fa-plus me-1"></i> + Register Branch</button>
+        </div>
+    </div>
+
+    <div class="table-responsive corp-table-wrapper">
+        <table class="table table-hover corp-table align-middle" id="branchesTable">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Consignee</th>
+                    <th>Region</th>
+                    <th>Incharge</th>
+                    <th>Contact</th>
+                    <th>Area (Sq Ft)</th>
+                    <th>Coordinates</th>
+                    <th>Allowed Categories</th>
+                    <th>Allowed Party Types</th>
+                    <th>Status</th>
+                    @if (User.IsInRole(IncentivePortal.Data.AppRoles.SuperAdmin))
+                    {
+                        <th class="text-end">Actions</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="branch-row" style="cursor: pointer;"
+                        data-id="@item.Id"
+                        data-code="@item.Code"
+                        data-name="@item.Name"
+                        data-region="@item.Region"
+                        data-type="@item.BranchType"
+                        data-consignee="@item.Consignee"
+                        data-incharge="@item.Incharge"
+                        data-mobile="@item.MobileNo"
+                        data-email="@item.EmailID"
+                        data-address="@item.Address"
+                        data-opening="@item.OpeningYear"
+                        data-area="@item.Area"
+                        data-lng="@item.Longitude"
+                        data-lat="@item.Latitude"
+                        data-status="@item.Status"
+                        data-categories="@item.AllowedCategories"
+                        data-partytypes="@item.AllowedPartyTypes"
+                        data-tallycode="@item.TallyOutletCode">
+                        <td><span style="background: rgba(30, 64, 175, 0.1); color: var(--color-1); padding: 4px 8px; border-radius: 4px; font-weight: 600;">@item.Code</span></td>
+                        <td>
+                            <strong>@item.Name</strong><br />
+                            <small class="text-muted text-truncate d-inline-block" style="max-width: 250px;">@item.Address</small>
+                        </td>
+                        <td>
+                            <span class="badge" style="@GetBranchTypeBadgeStyle(item.BranchType)">
+                                @(string.IsNullOrWhiteSpace(item.BranchType) ? "Unknown" : item.BranchType)
+                            </span>
+                        </td>
+                        <td><code>@item.Consignee</code></td>
+                        <td>@item.Region</td>
+                        <td><strong>@item.Incharge</strong></td>
+                        <td>
+                            <small>📱 @item.MobileNo</small><br />
+                            <small>📧 @item.EmailID</small>
+                        </td>
+                        <td>@(string.IsNullOrWhiteSpace(item.Area) ? "-" : item.Area)</td>
+                        <td>
+                            <small class="text-muted">Lng: @(item.Longitude == "0" ? "-" : item.Longitude)</small><br />
+                            <small class="text-muted">Lat: @(item.Latitude == "0" ? "-" : item.Latitude)</small>
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(item.AllowedCategories))
+                            {
+                                foreach (var cat in item.AllowedCategories.Split(','))
+                                {
+                                    <span class="badge bg-light text-dark border me-1" style="font-size: 0.75rem;">@cat.Trim()</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted small">-</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(item.AllowedPartyTypes))
+                            {
+                                foreach (var pt in item.AllowedPartyTypes.Split(','))
+                                {
+                                    <span class="badge bg-light text-dark border me-1" style="font-size: 0.75rem;">@pt.Trim()</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted small">-</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="status-badge @(item.Status == "Active" ? "success" : "danger")">
+                                @item.Status
+                            </span>
+                        </td>
+                        @if (User.IsInRole(IncentivePortal.Data.AppRoles.SuperAdmin))
+                        {
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger delete-branch-btn" data-id="@item.Id" style="border-color: var(--primary); color: var(--primary); background: rgba(30, 64, 175, 0.05); font-weight: 600; padding: 4px 10px; border-radius: 6px; transition: all 0.2s;"><i class="fa-solid fa-trash-can me-1"></i> Delete</button>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Premium Interactive Branch Modal -->
+<div class="modal fade" id="branchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="branchForm" asp-action="Save" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header" style="background: #f8fbff; border-bottom: 1px solid var(--line);">
+                    <h5 class="modal-title fw-bold text-dark" id="branchModalTitle">&#x26A1; Register Branch Node</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Code</label>
+                            <input name="Code" id="branchCode" class="form-control corp-input" placeholder="e.g., VBZ" required />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Branch Name</label>
+                            <input name="Name" id="branchName" class="form-control corp-input" placeholder="e.g., TRANSPORT NAGAR-SPR" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Region</label>
+                            <input name="Region" id="branchRegion" class="form-control corp-input" placeholder="e.g., Jaipur Region" />
+                        </div>
+                        <div class="col-md-4" id="branchTypeContainer">
+                            <label class="form-label small fw-bold">Type</label>
+                            <select id="branchTypeSelect" class="form-select corp-select" required>
+                                @foreach (var type in (List<string>)ViewBag.BranchTypes)
+                                {
+                                    <option value="@type">@type</option>
+                                }
+                                <option value="__custom__">+ Add Custom Type...</option>
+                            </select>
+                            <input type="text" id="branchTypeCustom" class="form-control corp-input mt-2 d-none" placeholder="Enter custom type" maxlength="20" />
+                            <input type="hidden" name="BranchType" id="branchTypeHidden" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Consignee Code</label>
+                            <input name="Consignee" id="branchConsignee" class="form-control corp-input" placeholder="e.g., RJ06112" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Branch Incharge</label>
+                            <input name="Incharge" id="branchIncharge" class="form-control corp-input" placeholder="Incharge name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Mobile</label>
+                            <input name="MobileNo" id="branchMobile" class="form-control corp-input" placeholder="Mobile no" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Email ID</label>
+                            <input name="EmailID" id="branchEmail" type="email" class="form-control corp-input" placeholder="Incharge email" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">Address</label>
+                            <input name="Address" id="branchAddress" class="form-control corp-input" placeholder="Branch location address" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Opening Year</label>
+                            <input name="OpeningYear" id="branchOpening" class="form-control corp-input" placeholder="e.g., Apr-07" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Area (Sq Ft)</label>
+                            <input name="Area" id="branchArea" class="form-control corp-input" placeholder="e.g., 2,254" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select name="Status" id="branchStatus" class="form-select corp-select">
+                                <option value="Active" selected>Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Longitude</label>
+                            <input name="Longitude" id="branchLng" class="form-control corp-input" placeholder="0.00" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Latitude</label>
+                            <input name="Latitude" id="branchLat" class="form-control corp-input" placeholder="0.00" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Tally Outlet Code</label>
+                            <input name="TallyOutletCode" id="branchTallyCode" class="form-control corp-input" placeholder="e.g., 04" maxlength="20" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Allowed Categories</label>
+                            <div class="tags-input-wrapper p-2 border rounded" style="background:#f8fafc; border-color:#cbd5e1;">
+                                <div id="categoriesTagContainer" class="d-flex flex-wrap gap-1 mb-2"></div>
+                                <input type="text" id="categoryInput" class="form-control border-0 p-0 shadow-none" list="categoriesDatalist" placeholder="Type category and press Enter..." style="background:transparent; font-size:0.88rem; outline:none;" />
+                                <datalist id="categoriesDatalist"></datalist>
+                            </div>
+                            <input type="hidden" name="AllowedCategories" id="branchCategories" value="AA,M" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Allowed Party Types</label>
+                            <div class="tags-input-wrapper p-2 border rounded" style="background:#f8fafc; border-color:#cbd5e1;">
+                                <div id="partyTypesTagContainer" class="d-flex flex-wrap gap-1 mb-2"></div>
+                                <input type="text" id="partyTypeInput" class="form-control border-0 p-0 shadow-none" list="partyTypesDatalist" placeholder="Type party type and press Enter..." style="background:transparent; font-size:0.88rem; outline:none;" />
+                                <datalist id="partyTypesDatalist"></datalist>
+                            </div>
+                            <input type="hidden" name="AllowedPartyTypes" id="branchPartyTypes" value="INDEPENDENT WORKSHOP" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="background: #f8fbff; border-top: 1px solid var(--line); padding: 14px;">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success">âœ“ Save Branch Node</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    let categoriesTags = [];
+    let partyTypesTags = [];
+
+    // Load Autocomplete Metadata
+    $.get('/Branches/GetAutocompleteMetadata')
+        .done(function(res) {
+            if (res.categories) {
+                res.categories.forEach(c => {
+                    $('#categoriesDatalist').append(`<option value="${c}">${c}</option>`);
+                });
+            }
+            if (res.partyTypes) {
+                res.partyTypes.forEach(t => {
+                    $('#partyTypesDatalist').append(`<option value="${t}">${t}</option>`);
+                });
+            }
+        });
+
+    function renderCategories() {
+        const container = $('#categoriesTagContainer');
+        container.empty();
+        categoriesTags.forEach((tag, idx) => {
+            const chip = $(`<span class="badge bg-primary text-white d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size:0.8rem; border-radius:6px; background:var(--brand, var(--primary)) !important; font-weight:600;">
+                ${tag}
+                <i class="fa-solid fa-xmark" style="cursor:pointer; font-size:0.75rem;" onclick="removeTag('categoryInput', ${idx})"></i>
+            </span>`);
+            container.append(chip);
+        });
+        $('#branchCategories').val(categoriesTags.join(','));
+    }
+
+    function renderPartyTypes() {
+        const container = $('#partyTypesTagContainer');
+        container.empty();
+        partyTypesTags.forEach((tag, idx) => {
+            const chip = $(`<span class="badge bg-primary text-white d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size:0.8rem; border-radius:6px; background:var(--brand, var(--primary)) !important; font-weight:600;">
+                ${tag}
+                <i class="fa-solid fa-xmark" style="cursor:pointer; font-size:0.75rem;" onclick="removeTag('partyTypeInput', ${idx})"></i>
+            </span>`);
+            container.append(chip);
+        });
+        $('#branchPartyTypes').val(partyTypesTags.join(','));
+    }
+
+    window.removeTag = function(inputId, idx) {
+        if (inputId === 'categoryInput') {
+            categoriesTags.splice(idx, 1);
+            renderCategories();
+        } else if (inputId === 'partyTypeInput') {
+            partyTypesTags.splice(idx, 1);
+            renderPartyTypes();
+        }
+    };
+
+    function addCategoryTag(val) {
+        const clean = val.trim().toUpperCase();
+        if (clean && !categoriesTags.includes(clean)) {
+            categoriesTags.push(clean);
+            renderCategories();
+        }
+        $('#categoryInput').val('');
+    }
+
+    function addPartyTypeTag(val) {
+        const clean = val.trim().toUpperCase();
+        if (clean && !partyTypesTags.includes(clean)) {
+            partyTypesTags.push(clean);
+            renderPartyTypes();
+        }
+        $('#partyTypeInput').val('');
+    }
+
+    $('#categoryInput').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addCategoryTag($(this).val());
+        }
+    }).on('change', function() {
+        addCategoryTag($(this).val());
+    });
+
+    $('#partyTypeInput').on('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addPartyTypeTag($(this).val());
+        }
+    }).on('change', function() {
+        addPartyTypeTag($(this).val());
+    });
+
+    // Initialize Branch Type Dynamic Synchronizer
+    function syncBranchType() {
+        const selectVal = $('#branchTypeSelect').val();
+        if (selectVal === '__custom__') {
+            $('#branchTypeCustom').removeClass('d-none').prop('required', true);
+            $('#branchTypeHidden').val($('#branchTypeCustom').val());
+        } else {
+            $('#branchTypeCustom').addClass('d-none').prop('required', false);
+            $('#branchTypeHidden').val(selectVal);
+        }
+    }
+    
+    syncBranchType();
+
+    $('#branchTypeSelect').on('change', function() {
+        syncBranchType();
+    });
+
+    $('#branchTypeCustom').on('input', function() {
+        if ($('#branchTypeSelect').val() === '__custom__') {
+            $('#branchTypeHidden').val($(this).val());
+        }
+    });
+
+    // Reset Modal on Close
+    $('#branchModal').on('hidden.bs.modal', function() {
+        $('#branchForm')[0].reset();
+        $('#branchCode').prop('readonly', false);
+        $('#branchModalTitle').text('\u26A1 Register Branch Node');
+        syncBranchType();
+    });
+
+    // Open Modal for Add
+    window.openBranchModal = function() {
+        $('#branchForm')[0].reset();
+        $('#branchCode').prop('readonly', false);
+        $('#branchModalTitle').text('\u26A1 Register Branch Node');
+        syncBranchType();
+        categoriesTags = ['AA', 'M'];
+        renderCategories();
+        partyTypesTags = ['INDEPENDENT WORKSHOP'];
+        renderPartyTypes();
+        $('#branchModal').modal('show');
+    };
+
+    // Open Modal and Populate for Edit
+    $('.branch-row').on('click', function() {
+        const code = $(this).data('code');
+        const name = $(this).data('name');
+        const region = $(this).data('region');
+        const type = $(this).data('type');
+        const consignee = $(this).data('consignee');
+        const incharge = $(this).data('incharge');
+        const mobile = $(this).data('mobile');
+        const email = $(this).data('email');
+        const address = $(this).data('address');
+        const opening = $(this).data('opening');
+        const area = $(this).data('area');
+        const lng = $(this).data('lng');
+        const lat = $(this).data('lat');
+        const status = $(this).data('status');
+        const categories = $(this).data('categories');
+        const partytypes = $(this).data('partytypes');
+        const tallycode = $(this).data('tallycode');
+
+        $('#branchCode').val(code).prop('readonly', true);
+        $('#branchName').val(name);
+        $('#branchRegion').val(region);
+        
+        if (type) {
+            if ($('#branchTypeSelect option[value="' + type + '"]').length > 0) {
+                $('#branchTypeSelect').val(type);
+                $('#branchTypeCustom').addClass('d-none').prop('required', false);
+            } else {
+                $('#branchTypeSelect').val('__custom__');
+                $('#branchTypeCustom').removeClass('d-none').val(type).prop('required', true);
+            }
+            $('#branchTypeHidden').val(type);
+        } else {
+            $('#branchTypeSelect').val('RO');
+            $('#branchTypeCustom').addClass('d-none').prop('required', false);
+            $('#branchTypeHidden').val('RO');
+        }
+
+        $('#branchConsignee').val(consignee);
+        $('#branchIncharge').val(incharge);
+        $('#branchMobile').val(mobile);
+        $('#branchEmail').val(email);
+        $('#branchAddress').val(address);
+        $('#branchOpening').val(opening);
+        $('#branchArea').val(area);
+        $('#branchLng').val(lng);
+        $('#branchLat').val(lat);
+        $('#branchStatus').val(status || 'Active');
+        $('#branchTallyCode').val(tallycode || '');
+
+        categoriesTags = (categories || 'AA,M').split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+        renderCategories();
+        partyTypesTags = (partytypes || 'INDEPENDENT WORKSHOP').split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+        renderPartyTypes();
+
+        $('#branchModalTitle').text('\u26A1 Edit Branch Node: ' + name);
+        $('#branchModal').modal('show');
+    });
+
+    // Form submit AJAX
+    $('#branchForm').on('submit', function(e) {
+        e.preventDefault();
+        const data = $(this).serialize();
+        const button = $(this).find('[type="submit"]')[0];
+        portalSetBusy(button, 'Saving...');
+
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: data
+        })
+        .done(r => {
+            portalToast(r.message || 'Branch saved successfully.');
+            $('#branchModal').modal('hide');
+            setTimeout(() => location.reload(), 800);
+        })
+        .fail(xhr => {
+            portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to save branch.');
+        })
+        .always(() => portalClearBusy(button));
+    });
+
+    // Delete Branch Event Handler
+    $(document).on('click', '.delete-branch-btn', function(e) {
+        e.stopPropagation();
+        const id = $(this).data('id');
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "This will soft-delete the branch and exclude it from active operations!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: 'var(--primary)',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: '/Branches/Delete',
+                    method: 'POST',
+                    data: { 
+                        id: id,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    }
+                })
+                .done(r => {
+                    portalToast(r.message || 'Branch deleted successfully.');
+                    setTimeout(() => location.reload(), 800);
+                })
+                .fail(xhr => {
+                    portalToast(xhr.responseJSON?.message || xhr.responseText || 'Failed to delete branch.');
+                });
+            }
+        });
+    });
+});
+</script>
+}
+
+

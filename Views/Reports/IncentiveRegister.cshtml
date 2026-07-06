@@ -1,0 +1,884 @@
+@model IncentivePortal.DTOs.IncentiveRegisterViewModel
+@{
+    ViewData["Title"] = "Incentive Register";
+    var totalSales = Model.Rows.Sum(r => r.SaleValue);
+    var totalGross = Model.Rows.Sum(r => r.GrossIncentive);
+    var totalTds = Model.Rows.Sum(r => r.TdsAmount);
+    var totalNetTransfers = Model.Rows.Sum(r => r.NetTransferAmount ?? 0);
+    var totalTransferred = Model.Rows.Sum(r => r.TransferredAmount);
+
+    var visibleCols = new List<IncentivePortal.Models.ReportColumnConfig>
+    {
+        new() { ColumnKey = "MonthLabel", DisplayName = "Month", SortOrder = 1 },
+        new() { ColumnKey = "PartyCode", DisplayName = "Party Code", SortOrder = 2 },
+        new() { ColumnKey = "PartyName", DisplayName = "Party Name", SortOrder = 3 },
+        new() { ColumnKey = "BranchCode", DisplayName = "Branch", SortOrder = 4 },
+        new() { ColumnKey = "SalesExecutive", DisplayName = "Sales Executive", SortOrder = 5 },
+        new() { ColumnKey = "SaleValue", DisplayName = "Sale Value", SortOrder = 6 },
+        new() { ColumnKey = "OnBillDiscount", DisplayName = "On Bill Discount", SortOrder = 7 },
+        new() { ColumnKey = "AchievementPercent", DisplayName = "Achievement %", SortOrder = 8 },
+        new() { ColumnKey = "GrossIncentive", DisplayName = "Incentive Value", SortOrder = 9 },
+        new() { ColumnKey = "NetTransferAmount", DisplayName = "Eligible for Incentive", SortOrder = 10 },
+        new() { ColumnKey = "TransferredAmount", DisplayName = "Transferred Amount", SortOrder = 11 },
+        new() { ColumnKey = "PaymentStatus", DisplayName = "Status", SortOrder = 12 },
+        new() { ColumnKey = "UTRNumber", DisplayName = "UTR", SortOrder = 13 },
+        new() { ColumnKey = "PaymentDate", DisplayName = "Date", SortOrder = 14 },
+        new() { ColumnKey = "BeneficiaryName", DisplayName = "Name", SortOrder = 15 },
+        new() { ColumnKey = "BankAccountNumber", DisplayName = "Account", SortOrder = 16 },
+        new() { ColumnKey = "IFSC", DisplayName = "IFSC", SortOrder = 17 }
+    };
+}
+
+<style>
+    /* ── Responsive KPI Stat Cards Grid ──────────────── */
+    .stat-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: var(--space-4, 16px);
+        margin-bottom: var(--space-5, 20px);
+    }
+    @@media (max-width: 1400px) {
+        .stat-cards-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+    @@media (max-width: 992px) {
+        .stat-cards-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @@media (max-width: 576px) {
+        .stat-cards-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Stat Card Redesign ──────────────────────────── */
+    .stat-card {
+        background: #ffffff !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(196, 198, 207, 0.4) !important;
+        padding: 16px 20px !important;
+        box-shadow: 0 4px 10px rgba(11, 28, 48, 0.02) !important;
+        transition: transform 0.25s cubic-bezier(.23,1,.32,1), box-shadow 0.25s, border-color 0.25s !important;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+        min-height: 110px;
+    }
+    .stat-card:hover {
+        transform: translateY(-4px) !important;
+        box-shadow: 0 12px 24px rgba(11, 28, 48, 0.05) !important;
+    }
+    
+    .stat-card.card-1 { border-left: 4px solid #2563eb !important; }
+    .stat-card.card-2 { border-left: 4px solid #1d4ed8 !important; }
+    .stat-card.card-3 { border-left: 4px solid #dc2626 !important; }
+    .stat-card.card-4 { border-left: 4px solid #22c55e !important; }
+    .stat-card.card-5 { border-left: 4px solid #ca8a04 !important; }
+
+    .stat-card .stat-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: rgba(37, 99, 235, 0.04) !important;
+        border: 1px solid rgba(37, 99, 235, 0.08) !important;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        transition: transform 0.2s ease !important;
+    }
+    .stat-card:hover .stat-icon {
+        transform: scale(1.08) rotate(-3deg) !important;
+    }
+    
+    .card-1 .stat-icon { color: #2563eb; }
+    .card-2 .stat-icon { color: #1d4ed8; }
+    .card-3 .stat-icon { color: #dc2626; }
+    .card-4 .stat-icon { color: #22c55e; }
+    .card-5 .stat-icon { color: #ca8a04; }
+
+    .stat-card .stat-detail {
+        font-size: 10px;
+        font-weight: 500;
+        color: #74777f;
+    }
+    .stat-card .stat-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #74777f;
+        margin-top: 10px;
+        margin-bottom: 2px;
+    }
+    .stat-card .stat-value {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #0b1c30;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+    }
+
+    /* ── Responsive Filter Band ──────────────────────── */
+    .corp-filter-band {
+        display: flex;
+        flex-flow: row wrap;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: var(--space-4, 16px);
+        padding: 4px;
+    }
+    .filter-controls {
+        display: flex;
+        flex-flow: row wrap;
+        align-items: flex-end;
+        gap: var(--space-4, 16px);
+        flex-grow: 1;
+    }
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .filter-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #74777f;
+    }
+    .filter-actions {
+        display: flex;
+        flex-flow: row wrap;
+        gap: 8px;
+        align-items: center;
+        margin-top: auto;
+    }
+    @@media (max-width: 768px) {
+        .corp-filter-band {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .filter-controls {
+            flex-direction: column;
+            align-items: stretch;
+            width: 100%;
+        }
+        .filter-group {
+            width: 100%;
+        }
+        .custom-multiselect, .custom-multiselect button {
+            width: 100% !important;
+        }
+        .filter-actions {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+        }
+        .filter-actions > * {
+            width: 100% !important;
+            text-align: center;
+        }
+    }
+
+    /* ── Dropdown & Multiselect Tweaks ───────────────── */
+    .custom-multiselect .dropdown-menu {
+        border-radius: 8px !important;
+        border: 1px solid rgba(196, 198, 207, 0.4) !important;
+        box-shadow: 0 10px 30px rgba(11, 28, 48, 0.08) !important;
+        padding: 12px !important;
+    }
+    .custom-multiselect .dropdown-menu::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-multiselect .dropdown-menu::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-multiselect .dropdown-menu::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    .custom-multiselect .dropdown-menu::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+    .custom-multiselect .option-item {
+        padding: 6px 8px;
+        border-radius: 4px;
+        transition: background 0.15s ease;
+    }
+    .custom-multiselect .option-item:hover {
+        background: rgba(37, 99, 235, 0.04);
+    }
+    .custom-multiselect .option-item label {
+        cursor: pointer;
+        font-size: 12px;
+        color: #44474e;
+        width: 100%;
+        margin-bottom: 0;
+    }
+    .custom-multiselect .option-item input {
+        cursor: pointer;
+    }
+
+    /* ── Table Custom Scrollbar & Styles ─────────────── */
+    .corp-table-wrapper::-webkit-scrollbar {
+        height: 6px;
+        width: 6px;
+    }
+    .corp-table-wrapper::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .corp-table-wrapper::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    .corp-table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+    
+    /* ── Badges ──────────────────────────────────────── */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 8px;
+        font-size: 10px;
+        font-weight: 700;
+        border-radius: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: 1px solid transparent;
+    }
+    .status-badge.success {
+        background-color: rgba(34, 197, 94, 0.08) !important;
+        color: #22c55e !important;
+        border-color: rgba(34, 197, 94, 0.15) !important;
+    }
+    .status-badge.warning {
+        background-color: rgba(239, 68, 68, 0.08) !important;
+        color: #ef4444 !important;
+        border-color: rgba(239, 68, 68, 0.15) !important;
+    }
+    .status-badge.neutral {
+        background-color: rgba(100, 116, 139, 0.08) !important;
+        color: #64748b !important;
+        border-color: rgba(100, 116, 139, 0.15) !important;
+    }
+
+    .party-code-pill {
+        background-color: rgba(37, 99, 235, 0.05) !important;
+        color: #2563eb !important;
+        border: 1px solid rgba(37, 99, 235, 0.12) !important;
+        font-family: monospace;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+</style>
+
+<!-- Summary Cards -->
+<div class="stat-cards-grid">
+    <div class="stat-card card-1">
+        <div class="stat-card-top d-flex align-items-center justify-content-between">
+            <div class="stat-icon">📊</div>
+            <small class="stat-detail">@Model.Rows.Count records</small>
+        </div>
+        <span class="stat-label">Total Sales</span>
+        <strong class="stat-value">₹@totalSales.ToString("N0")</strong>
+    </div>
+    <div class="stat-card card-2">
+        <div class="stat-card-top d-flex align-items-center justify-content-between">
+            <div class="stat-icon">💸</div>
+            <small class="stat-detail">Gross accrued</small>
+        </div>
+        <span class="stat-label">Gross Incentive</span>
+        <strong class="stat-value">₹@totalGross.ToString("N0")</strong>
+    </div>
+    <div class="stat-card card-3">
+        <div class="stat-card-top d-flex align-items-center justify-content-between">
+            <div class="stat-icon">✂️</div>
+            <small class="stat-detail">10% w/ PAN · 20% w/o PAN</small>
+        </div>
+        <span class="stat-label">TDS Deducted</span>
+        <strong class="stat-value text-danger">₹@totalTds.ToString("N0")</strong>
+    </div>
+    <div class="stat-card card-4">
+        <div class="stat-card-top d-flex align-items-center justify-content-between">
+            <div class="stat-icon">💰</div>
+            <small class="stat-detail">Net credit amount</small>
+        </div>
+        <span class="stat-label">Eligible for Incentive</span>
+        <strong class="stat-value text-success">₹@totalNetTransfers.ToString("N0")</strong>
+    </div>
+    <div class="stat-card card-5">
+        <div class="stat-card-top d-flex align-items-center justify-content-between">
+            <div class="stat-icon">⏳</div>
+            <small class="stat-detail">Awaiting HO Finance</small>
+        </div>
+        <span class="stat-label">Pending Entries</span>
+        <strong class="stat-value">@Model.Rows.Count(r => r.GrossIncentive > 0 && (r.PaymentStatus == "Pending" || r.PaymentStatus == "Credit Party"))</strong>
+    </div>
+</div>
+
+<!-- Filter Panel -->
+<div class="panel" style="margin-bottom: 24px;">
+    <form method="get" class="corp-filter-band">
+        <div class="filter-controls">
+            <div class="filter-group">
+                <label class="filter-label">Party Code</label>
+                <div class="custom-multiselect dropdown" id="partyCodeMultiselect">
+                    <button class="form-select corp-select text-start dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="min-width: 210px; height: 38px;">
+                        <span class="selected-label">All Parties</span>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow-lg" style="min-width: 260px; max-height: 350px; overflow-y: auto; border: 1px solid var(--line);">
+                        <input type="text" class="form-control form-control-sm mb-2 search-input" placeholder="🔍 Search party code..." style="font-size: 0.85rem;" />
+                        <div class="options-container">
+                            <div class="form-check mb-1 select-all-wrapper">
+                                <input class="form-check-input select-all-cb" type="checkbox" id="party_all" checked />
+                                <label class="form-check-label fw-bold" for="party_all">Select All / Clear</label>
+                            </div>
+                            <hr class="my-2" />
+                            @foreach (var code in Model.PartyCodes)
+                            {
+                                var isCodesEmpty = Model.Filter.SelectedPartyCodes == null || Model.Filter.SelectedPartyCodes.Count == 0 || Model.Filter.SelectedPartyCodes.All(string.IsNullOrWhiteSpace);
+                                var isChecked = isCodesEmpty || (Model.Filter.SelectedPartyCodes != null && Model.Filter.SelectedPartyCodes.Contains(code));
+                                <div class="form-check mb-1 option-item">
+                                    <input name="SelectedPartyCodes" class="form-check-input option-cb" type="checkbox" value="@code" id="cb_party_@code" checked="@isChecked" />
+                                    <label class="form-check-label" for="cb_party_@code">@code</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">Incentive Month</label>
+                <div class="custom-multiselect dropdown" id="periodsMultiselect">
+                    <button class="form-select corp-select text-start dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="min-width: 240px; height: 38px;">
+                        <span class="selected-label">All Periods</span>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow-lg" style="min-width: 280px; max-height: 350px; overflow-y: auto; border: 1px solid var(--line);">
+                        <input type="text" class="form-control form-control-sm mb-2 search-input" placeholder="🔍 Search period..." style="font-size: 0.85rem;" />
+                        <div class="options-container">
+                            <div class="form-check mb-1 select-all-wrapper">
+                                <input class="form-check-input select-all-cb" type="checkbox" id="period_all" checked />
+                                <label class="form-check-label fw-bold" for="period_all">Select All / Clear</label>
+                            </div>
+                            <hr class="my-2" />
+                            @foreach (var period in Model.Periods)
+                            {
+                                var value = $"{period.Year}-{period.Month}";
+                                var isPeriodsEmpty = Model.Filter.SelectedPeriods == null || Model.Filter.SelectedPeriods.Count == 0 || Model.Filter.SelectedPeriods.All(string.IsNullOrWhiteSpace);
+                                var isChecked = isPeriodsEmpty || (Model.Filter.SelectedPeriods != null && Model.Filter.SelectedPeriods.Contains(value));
+                                <div class="form-check mb-1 option-item">
+                                    <input name="SelectedPeriods" class="form-check-input option-cb" type="checkbox" value="@value" id="cb_period_@value" checked="@isChecked" />
+                                    <label class="form-check-label" for="cb_period_@value">@period.Label</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-actions">
+            <a class="btn btn-sm btn-outline-primary" asp-action="IncentiveRegister">Reset Filters</a>
+            <button type="submit" class="btn btn-sm btn-primary">Apply Filters</button>
+            <button class="btn btn-sm btn-outline-secondary" formaction="@Url.Action("DownloadIncentiveRegister")">📥 Download Excel</button>
+            @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance") || User.IsInRole("Branch Manager"))
+            {
+                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#bankModal">🏦 Update Bank Details</button>
+            }
+        </div>
+    </form>
+</div>
+
+<!-- Data Table -->
+<div class="panel" style="padding: 0; overflow: hidden;">
+    <div class="table-responsive corp-table-wrapper" style="border-radius: 10px; border: none;">
+        <table class="corp-table corp-table-sticky-col align-middle w-100">
+            <thead>
+                <tr>
+                    <th style="width: 44px; text-align: center;">#</th>
+                    @foreach (var col in visibleCols)
+                    {
+                        var sortKey = col.ColumnKey switch
+                        {
+                            "MonthLabel" => "month",
+                            "PartyCode" => "party",
+                            "PartyName" => "partyname",
+                            "BranchCode" => "branch",
+                            "SalesExecutive" => "executive",
+                            "SaleValue" => "sales",
+                            "OnBillDiscount" => "obd",
+                            "AchievementPercent" => "ach",
+                            "GrossIncentive" => "gross",
+                            "TdsAmount" => "tds",
+                            "NetTransferAmount" => "net",
+                            "TransferAmount" => "net",
+                            "TransferredAmount" => "transferred",
+                            "PaymentDate" => "paydate",
+                            "PaymentStatus" => "status",
+                            "UTRNumber" => "utr",
+                            "BankAccountNumber" => "bank",
+                            "IFSC" => "ifsc",
+                            "BeneficiaryName" => "beneficiary",
+                            "BankDetails" => "bank",
+                            _ => "text"
+                        };
+                        var sortType = col.ColumnKey switch
+                        {
+                            "SaleValue" or "OnBillDiscount" or "AchievementPercent" or "GrossIncentive" or "TdsAmount" or "NetTransferAmount" or "TransferAmount" or "AdjustedAmount" or "TransferredAmount" => "num",
+                            "ProcessingDate" or "PaymentDate" => "date",
+                            _ => "text"
+                        };
+                        var alignClass = col.ColumnKey switch
+                        {
+                            "SaleValue" or "OnBillDiscount" or "AchievementPercent" or "GrossIncentive" or "TdsAmount" or "NetTransferAmount" or "TransferAmount" or "AdjustedAmount" or "TransferredAmount" => "text-end",
+                            _ => ""
+                        };
+                        
+                        <th class="@alignClass sortable-th" data-sort="@sortKey" data-type="@sortType">
+                            @col.DisplayName <span class="sort-icon">⇅</span>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+            @if (Model.Rows.Count == 0)
+            {
+                <tr>
+                    <td colspan="@(visibleCols.Count + 1)" class="text-center py-5" style="color: var(--muted);">
+                        <i class="fa-solid fa-inbox fa-2x mb-3 d-block" style="color: #cbd5e1;"></i>
+                        <span style="font-size: 1rem; font-weight: 600;">No records found</span>
+                    </td>
+                </tr>
+            }
+            @for (var i = 0; i < Model.Rows.Count; i++)
+            {
+                var row = Model.Rows[i];
+                var isZeroIncentive = row.GrossIncentive == 0;
+                var statusClass     = !isZeroIncentive && (row.PaymentStatus == "Success" || row.PaymentStatus == "Completed" || row.PaymentStatus == "Reconciled")
+                                          ? "success"
+                                          : !isZeroIncentive && (row.PaymentStatus == "Pending" || row.PaymentStatus == "Credit Party")
+                                              ? "warning"
+                                              : "neutral";
+                var adjustedAmountVal = row.GrossIncentive - row.TdsAmount - (row.NetTransferAmount ?? 0);
+                <tr
+                    data-month="@row.MonthLabel"
+                    data-party="@row.PartyCode"
+                    data-partyname="@row.PartyName"
+                    data-branch="@row.BranchCode"
+                    data-sales="@row.SaleValue"
+                    data-obd="@row.OnBillDiscount"
+                    data-ach="@row.AchievementPercent"
+                    data-gross="@row.GrossIncentive"
+                    data-tds="@row.TdsAmount"
+                    data-net="@(row.NetTransferAmount ?? 0)"
+                    data-transferred="@row.TransferredAmount"
+                    data-paydate="@(row.PaymentDate?.ToString("yyyy-MM-dd") ?? "")"
+                    data-status="@(isZeroIncentive ? "-" : row.PaymentStatus)"
+                    data-utr="@(row.UTRNumber ?? "")"
+                    data-bank="@row.BankAccountNumber"
+                    data-ifsc="@row.IFSC"
+                    data-beneficiary="@row.BeneficiaryName">
+                    <td><strong class="row-serial">@(i + 1)</strong></td>
+                    @foreach (var col in visibleCols)
+                    {
+                        switch (col.ColumnKey)
+                        {
+                            case "MonthLabel":
+                                <td class="fw-semibold" style="white-space: nowrap;">@row.MonthLabel</td>
+                                break;
+                            case "PartyCode":
+                                <td><span class="party-code-pill">@row.PartyCode</span></td>
+                                break;
+                            case "PartyName":
+                                <td style="font-weight: 500; color: #1e293b;">@row.PartyName</td>
+                                break;
+                            case "SalesExecutive":
+                                <td style="color: #475569; font-size: 0.85rem;">@row.SalesExecutive</td>
+                                break;
+                            case "BranchCode":
+                                <td><span class="badge bg-light text-dark border">@row.BranchCode</span></td>
+                                break;
+                            case "SaleValue":
+                                <td class="text-end" style="font-variant-numeric: tabular-nums;">₹@row.SaleValue.ToString("N0")</td>
+                                break;
+                            case "SlabPercent":
+                                <td class="text-end" style="color: #6b7280;">@row.SlabPercent.ToString("N1")%</td>
+                                break;
+                            case "OnBillDiscount":
+                                <td class="text-end" style="color: #dc2626; font-variant-numeric: tabular-nums;">₹@row.OnBillDiscount.ToString("N0")</td>
+                                break;
+                            case "AchievementPercent":
+                                <td class="text-end" style="color: #6b7280;">@row.AchievementPercent.ToString("N1")%</td>
+                                break;
+                            case "GrossIncentive":
+                                <td class="text-end" style="font-weight: 700; color: #1e293b; font-variant-numeric: tabular-nums;">₹@row.GrossIncentive.ToString("N0")</td>
+                                break;
+                            case "TdsAmount":
+                                <td class="text-end" style="color: #94a3b8; font-size: 0.78rem;">@(row.TdsAmount > 0 ? "₹" + row.TdsAmount.ToString("N0") : "-")</td>
+                                break;
+                            case "AdjustedAmount":
+                                <td class="text-end" style="color: #dc2626; font-variant-numeric: tabular-nums;">@(adjustedAmountVal > 0 ? "₹" + adjustedAmountVal.ToString("N0") : "-")</td>
+                                break;
+                            case "TransferAmount":
+                            case "NetTransferAmount":
+                                <td class="text-end col-net-transfer"><span class="net-transfer-val">@(isZeroIncentive ? "-" : "₹" + (row.NetTransferAmount?.ToString("N0") ?? "-"))</span></td>
+                                break;
+                            case "TransferredAmount":
+                                <td class="text-end text-success" style="font-weight: 600; font-variant-numeric: tabular-nums;">@(isZeroIncentive ? "-" : (row.TransferredAmount > 0 ? "₹" + row.TransferredAmount.ToString("N0") : "-"))</td>
+                                break;
+                            case "ProcessingDate":
+                                <td style="white-space: nowrap; color: #475569; font-size: 0.82rem;">@(row.ProcessingDate?.ToString("dd-MMM-yyyy") ?? "-")</td>
+                                break;
+                            case "PaymentDate":
+                                <td style="white-space: nowrap; color: #475569; font-size: 0.82rem;">@(row.PaymentDate?.ToString("dd-MMM-yyyy") ?? "-")</td>
+                                break;
+                            case "PaymentStatus":
+                                <td>
+                                    @if (isZeroIncentive)
+                                    {
+                                        <span style="color: #94a3b8; font-size: 0.9rem;">-</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-badge @statusClass">@row.PaymentStatus</span>
+                                    }
+                                </td>
+                                break;
+                            case "UTRNumber":
+                                <td><span class="utr-code">@(string.IsNullOrEmpty(row.UTRNumber) ? "-" : row.UTRNumber)</span></td>
+                                break;
+                            case "BankAccountNumber":
+                                <td>@row.BankAccountNumber</td>
+                                break;
+                            case "IFSC":
+                                <td>@row.IFSC</td>
+                                break;
+                            case "BeneficiaryName":
+                                <td>@row.BeneficiaryName</td>
+                                break;
+                            case "BankDetails":
+                                <td>
+                                    <span class="bank-cell-name">@row.BeneficiaryName</span>
+                                    <span class="bank-cell-account">@row.BankAccountNumber</span>
+                                    <span class="bank-cell-ifsc">IFSC: @row.IFSC</span>
+                                </td>
+                                break;
+                        }
+                    }
+                </tr>
+            }
+            </tbody>
+            @if (Model.Rows.Count > 0)
+            {
+                <tfoot>
+                    <tr>
+                        <td><span class="tfoot-total-label">Totals</span></td>
+                        @foreach (var col in visibleCols)
+                        {
+                            switch (col.ColumnKey)
+                            {
+                                case "MonthLabel":
+                                    <td><span class="tfoot-total-label">@Model.Rows.Count Records</span></td>
+                                    break;
+                                case "SaleValue":
+                                    <td class="text-end fw-bold">₹@totalSales.ToString("N0")</td>
+                                    break;
+                                case "GrossIncentive":
+                                    <td class="text-end fw-bold" style="color: var(--brand);">₹@totalGross.ToString("N0")</td>
+                                    break;
+                                case "TdsAmount":
+                                    <td class="text-end fw-bold text-danger">₹@totalTds.ToString("N0")</td>
+                                    break;
+                                case "TransferAmount":
+                                case "NetTransferAmount":
+                                    <td class="text-end fw-bold text-success">₹@totalNetTransfers.ToString("N0")</td>
+                                    break;
+                                case "TransferredAmount":
+                                    <td class="text-end fw-bold text-success">₹@totalTransferred.ToString("N0")</td>
+                                    break;
+                                default:
+                                    <td></td>
+                                    break;
+                            }
+                        }
+                    </tr>
+                </tfoot>
+            }
+        </table>
+    </div>
+</div>
+
+@if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance") || User.IsInRole("Branch Manager"))
+{
+    <!-- Bank details Modal -->
+    <div class="modal fade" id="bankModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form asp-controller="BankDetails" asp-action="RequestChange" method="post" data-ajax="true">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-header" style="border-bottom: 1px solid var(--line); background: #f8fbff;">
+                        <h5 class="modal-title">🏦 Update Bank Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" style="padding: 24px;">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Select Party</label>
+                                <input type="text" id="modalPartySearch" class="form-control corp-input mb-2" placeholder="🔍 Search party by code or name..." />
+                                <select name="PartyId" id="modalPartySelect" class="form-select corp-select" required>
+                                    <option value="">Choose a party...</option>
+                                    @foreach (var party in Model.Parties)
+                                    {
+                                        <option value="@party.Id">@party.PartyCode - @party.PartyName</option>
+                                    }
+                                </select>
+                                <div class="form-text text-muted">Only parties without bank details are listed.</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Account Holder Name</label>
+                                <input name="AccountHolder" class="form-control corp-input" placeholder="Enter account holder name" required />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Account Number</label>
+                                <input name="AccountNumber" class="form-control corp-input" placeholder="Enter account number" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">IFSC Code</label>
+                                <input name="IFSC" class="form-control corp-input" placeholder="e.g., HDFC0000001" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Bank Name</label>
+                                <input name="BankName" class="form-control corp-input" placeholder="e.g., HDFC Bank" required />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Branch Name</label>
+                                <input name="BranchName" class="form-control corp-input" placeholder="Enter branch name" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">PAN Card</label>
+                                <input name="PAN" class="form-control corp-input" placeholder="Enter PAN number" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" style="font-weight: 600; margin-bottom: 8px;">Mobile Number</label>
+                                <input name="Mobile" class="form-control corp-input" placeholder="Enter mobile number" required />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid var(--line); background: #f8fbff; padding: 16px;">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-success">✓ Submit for Approval</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+$(document).ready(function() {
+    // ----------------------------------------------------
+    // CUSTOM SEARCHABLE CHECKBOX DROPDOWN LOGIC
+    // ----------------------------------------------------
+    
+    // Prevent dropdown menu from closing when clicking inside
+    $('.custom-multiselect .dropdown-menu').on('click', function(e) {
+        e.stopPropagation();
+    });
+
+    function updateMultiselectLabel(wrapperId, defaultText) {
+        var wrapper = $('#' + wrapperId);
+        var checked = wrapper.find('.option-cb:checked');
+        var total = wrapper.find('.option-cb').length;
+        var labelSpan = wrapper.find('.selected-label');
+        
+        if (checked.length === 0) {
+            labelSpan.text('None Selected');
+            wrapper.find('.select-all-cb').prop('checked', false).prop('indeterminate', false);
+        } else if (checked.length === total) {
+            labelSpan.text(defaultText);
+            wrapper.find('.select-all-cb').prop('checked', true).prop('indeterminate', false);
+        } else {
+            if (checked.length === 1) {
+                labelSpan.text(checked.first().parent().find('label').text());
+            } else {
+                labelSpan.text(checked.length + ' Selected');
+            }
+            wrapper.find('.select-all-cb').prop('checked', false).prop('indeterminate', true);
+        }
+    }
+
+    // Initialize labels
+    updateMultiselectLabel('partyCodeMultiselect', 'All Parties');
+    updateMultiselectLabel('periodsMultiselect', 'All Periods');
+
+    // Handle "Select All / Clear" checkbox changes
+    $('.select-all-cb').on('change', function() {
+        var isChecked = $(this).is(':checked');
+        var wrapper = $(this).closest('.custom-multiselect');
+        
+        wrapper.find('.option-cb').prop('checked', isChecked);
+        
+        var id = wrapper.attr('id');
+        var defaultText = id === 'partyCodeMultiselect' ? 'All Parties' : (id === 'periodsMultiselect' ? 'All Periods' : 'All Payment Months');
+        updateMultiselectLabel(id, defaultText);
+    });
+
+    // Handle individual checkbox changes
+    $('.option-cb').on('change', function() {
+        var wrapper = $(this).closest('.custom-multiselect');
+        var id = wrapper.attr('id');
+        var defaultText = id === 'partyCodeMultiselect' ? 'All Parties' : (id === 'periodsMultiselect' ? 'All Periods' : 'All Payment Months');
+        updateMultiselectLabel(id, defaultText);
+    });
+
+    // Handle inline search filtering
+    $('.search-input').on('input', function() {
+        var query = $(this).val().toLowerCase();
+        var wrapper = $(this).closest('.custom-multiselect');
+        
+        wrapper.find('.option-item').each(function() {
+            var labelText = $(this).find('label').text().toLowerCase();
+            if (labelText.indexOf(query) > -1) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+
+    // Intercept form submission to prevent HTTP 414 (URI Too Long) when all options are checked.
+    // If all checkboxes in a custom multiselect are checked, we temporarily disable them so they
+    // do not get sent in the query string. The server interprets a missing parameter list as "All".
+    $('form.corp-filter-band').on('submit', function() {
+        var disabledInputs = [];
+        $('.custom-multiselect').each(function() {
+            var wrapper = $(this);
+            var total = wrapper.find('.option-cb').length;
+            var checked = wrapper.find('.option-cb:checked').length;
+            
+            if (total > 0 && checked === total) {
+                var inputs = wrapper.find('.option-cb');
+                inputs.each(function() {
+                    var input = $(this);
+                    input.prop('disabled', true);
+                    disabledInputs.push(input);
+                });
+            }
+        });
+        
+        // Re-enable checkboxes shortly after submit to ensure the page remains interactive
+        // (especially for spreadsheet downloads which do not reload the page).
+        setTimeout(function() {
+            $.each(disabledInputs, function(i, input) {
+                input.prop('disabled', false);
+            });
+        }, 300);
+    });
+
+    @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance") || User.IsInRole("Branch Manager"))
+    {
+        <text>
+        // ----------------------------------------------------
+        // SEARCHABLE DROPDOWN LOGIC - UPDATE BANK MODAL
+        // ----------------------------------------------------
+        var allModalParties = $('#modalPartySelect option').clone();
+        $('#modalPartySearch').on('input', function() {
+            var val = $(this).val().toLowerCase();
+            var select = $('#modalPartySelect');
+            select.empty();
+            allModalParties.each(function() {
+                var option = $(this);
+                if (option.text().toLowerCase().indexOf(val) > -1 || option.val() === "") {
+                    select.append(option.clone());
+                }
+            });
+        });
+        </text>
+    }
+
+    // -------------------------------------------------------
+    // CLICK-TO-SORT ENGINE
+    // -------------------------------------------------------
+    var sortState = { col: null, dir: 0 }; // dir: 0=none, 1=asc, -1=desc
+
+    $('.sortable-th').css('cursor', 'pointer');
+
+    $('.sortable-th').on('click', function () {
+        var col  = $(this).data('sort');
+        var type = $(this).data('type'); // text | num | date
+
+        // cycle: none → asc → desc → none
+        if (sortState.col === col) {
+            sortState.dir = sortState.dir === 1 ? -1 : (sortState.dir === -1 ? 0 : 1);
+        } else {
+            sortState.col = col;
+            sortState.dir = 1;
+        }
+
+        // Update all header icons
+        $('.sortable-th .sort-icon').text('⇅');
+        $('.sortable-th').removeClass('sort-asc sort-desc');
+
+        if (sortState.dir !== 0) {
+            var icon = sortState.dir === 1 ? '▲' : '▼';
+            $(this).find('.sort-icon').text(icon);
+            $(this).addClass(sortState.dir === 1 ? 'sort-asc' : 'sort-desc');
+        }
+
+        var tbody = $('table.corp-table tbody');
+        var rows  = tbody.find('tr').toArray();
+
+        if (sortState.dir === 0) {
+            // Reset to original order using data-original-index
+            rows.sort(function (a, b) {
+                return $(a).data('orig-index') - $(b).data('orig-index');
+            });
+        } else {
+            // Store original index the first time
+            rows.forEach(function (r, idx) {
+                if ($(r).data('orig-index') === undefined) {
+                    $(r).data('orig-index', idx);
+                }
+            });
+
+            rows.sort(function (a, b) {
+                var av = $(a).data(col);
+                var bv = $(b).data(col);
+
+                var cmp;
+                if (type === 'num') {
+                    cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0);
+                } else if (type === 'date') {
+                    var ad = av ? new Date(av) : new Date(0);
+                    var bd = bv ? new Date(bv) : new Date(0);
+                    cmp = ad - bd;
+                } else {
+                    cmp = (av || '').toString().localeCompare((bv || '').toString(), undefined, { sensitivity: 'base' });
+                }
+                return cmp * sortState.dir;
+            });
+        }
+
+        // Re-append sorted rows and fix serial numbers
+        $.each(rows, function (i, row) {
+            tbody.append(row);
+            $(row).find('.row-serial').text(i + 1);
+        });
+    });
+});
+</script>
+}
+
+

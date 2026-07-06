@@ -1,0 +1,1090 @@
+@model IEnumerable<IncentivePortal.Models.AssetItem>
+@{
+    ViewData["Title"] = "Enterprise Asset Intelligence Workspace";
+}
+
+<!-- Design Overrides for Asset Workspace -->
+<style>
+    /* ── Hero Section Illustration ── */
+    .hero-gradient {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%) !important;
+        position: relative;
+        overflow: hidden;
+        border-radius: var(--radius-lg);
+    }
+    .hero-decor-circle {
+        position: absolute;
+        width: 300px;
+        height: 300px;
+        background: rgba(60, 215, 255, 0.08);
+        border-radius: 50%;
+        top: -80px;
+        right: -80px;
+        pointer-events: none;
+    }
+    .hero-decor-circle-2 {
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 50%;
+        bottom: -40px;
+        right: 120px;
+        pointer-events: none;
+    }
+
+    /* ── Executive KPI Cards styling ── */
+    .kpi-trend-up { color: var(--success); font-weight: 600; font-size: 0.75rem; }
+    .kpi-trend-down { color: var(--danger); font-weight: 600; font-size: 0.75rem; }
+    
+    .sparkline-container {
+        height: 24px;
+        width: 100px;
+    }
+
+    /* ── Side Drawer Panel ── */
+    .details-drawer {
+        position: fixed;
+        top: 0;
+        right: -520px;
+        width: 500px;
+        height: 100vh;
+        background: var(--panel);
+        border-left: 1px solid var(--line-2);
+        box-shadow: -10px 0 40px rgba(11,28,48,0.15);
+        z-index: 1060;
+        transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .details-drawer.open {
+        right: 0;
+    }
+    .drawer-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(11, 28, 48, 0.4);
+        backdrop-filter: blur(4px);
+        z-index: 1050;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .drawer-backdrop.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* ── Density Classes for Data Grid ── */
+    .grid-dense th, .grid-dense td { padding: 4px 8px !important; font-size: 0.75rem !important; }
+    .grid-normal th, .grid-normal td { padding: 8px 12px !important; font-size: 0.82rem !important; }
+    .grid-spacious th, .grid-spacious td { padding: 16px 20px !important; font-size: 0.9rem !important; }
+
+    /* ── Floating Quick Action Button ── */
+    .floating-action-container {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 1000;
+    }
+    .action-fab {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--secondary) 0%, var(--tertiary) 100%) !important;
+        border: none;
+        box-shadow: 0 8px 24px rgba(0, 89, 187, 0.3);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .action-fab:hover {
+        transform: scale(1.1) rotate(90deg);
+    }
+    .fab-menu {
+        position: absolute;
+        bottom: 70px;
+        right: 0;
+        background: var(--panel);
+        border: 1px solid var(--line-2);
+        box-shadow: 0 10px 30px rgba(11,28,48,0.15);
+        border-radius: var(--radius-md);
+        display: none;
+        width: 220px;
+        overflow: hidden;
+        animation: slideUpFade 0.25s var(--ease-spring);
+    }
+    .fab-menu.show { display: block; }
+    .fab-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        color: var(--ink-2);
+        font-size: 0.8rem;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+    .fab-menu-item:hover {
+        background: var(--panel-2);
+    }
+
+    /* ── Vertical Timeline ── */
+    .vertical-timeline {
+        border-left: 2px dashed var(--line);
+        padding-left: 20px;
+        margin-left: 10px;
+    }
+    .timeline-dot {
+        position: absolute;
+        left: -6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--secondary);
+        border: 2px solid #fff;
+    }
+
+    /* ── SVG Sparkline animations ── */
+    .spark-path {
+        stroke-dasharray: 200;
+        stroke-dashoffset: 200;
+        animation: drawSpark 2s forwards ease-in-out;
+    }
+    @@keyframes drawSpark {
+        to { stroke-dashoffset: 0; }
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <!-- 1. Hero Section -->
+    <div class="card p-4 mb-4 border-0 shadow-sm text-white hero-gradient">
+        <div class="hero-decor-circle"></div>
+        <div class="hero-decor-circle-2"></div>
+        
+        <div class="row align-items-center relative z-2">
+            <div class="col-xl-7">
+                <span class="badge bg-tertiary text-dark fw-bold mb-2 px-3 py-1.5" style="border-radius: 30px;"><i class="fa-solid fa-microchip me-1"></i> SaaS Asset Workspace</span>
+                <h2 class="fw-bold mb-1" style="font-family:'Inter',sans-serif; font-size:1.85rem;">Asset Register Hub</h2>
+                <p class="opacity-75 small mb-3">Enterprise Asset Intelligence System monitoring hardware, software, machinery, vehicle tracking, and depreciation value streams across branches.</p>
+                <div class="d-flex flex-wrap gap-2 text-white opacity-85 fs-7" style="font-size: 0.72rem;">
+                    <span class="bg-white bg-opacity-15 px-2.5 py-1 rounded"><i class="fa-solid fa-server me-1"></i> Hardware</span>
+                    <span class="bg-white bg-opacity-15 px-2.5 py-1 rounded"><i class="fa-solid fa-screwdriver-wrench me-1"></i> Workshop Tool</span>
+                    <span class="bg-white bg-opacity-15 px-2.5 py-1 rounded"><i class="fa-solid fa-chair me-1"></i> Furniture</span>
+                    <span class="bg-white bg-opacity-15 px-2.5 py-1 rounded"><i class="fa-solid fa-truck me-1"></i> Vehicles</span>
+                    <span class="bg-white bg-opacity-15 px-2.5 py-1 rounded"><i class="fa-solid fa-shield-halved me-1"></i> CCTV Security</span>
+                </div>
+            </div>
+            
+            <div class="col-xl-5 text-end mt-3 mt-xl-0">
+                <div class="d-flex flex-wrap justify-content-xl-end gap-2">
+                    <button class="btn btn-tertiary btn-sm text-dark fw-bold" onclick="prepareNewAsset()" data-bs-toggle="modal" data-bs-target="#assetModal"><i class="fa-solid fa-plus-circle me-1"></i> Add Asset</button>
+                    <button class="btn btn-outline-light btn-sm" id="exportAssetsBtn"><i class="fa-solid fa-file-csv me-1"></i> Export CSV</button>
+                    <button class="btn btn-outline-light btn-sm" onclick="triggerAssetAudit()"><i class="fa-solid fa-clipboard-check me-1"></i> Asset Audit</button>
+                    <button class="btn btn-outline-light btn-sm" onclick="toggleFloatingChat()"><i class="fa-solid fa-robot me-1"></i> Ask ThessBuddy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Executive KPI Section -->
+    <div class="row g-4 mb-4">
+        <!-- Card 1: Total Assets -->
+        <div class="col-md-6 col-xl">
+            <div class="card border-0 shadow-sm p-3.5 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="small text-muted fw-bold">Total Assets</span>
+                    <span class="kpi-trend-up"><i class="fa-solid fa-arrow-trend-up me-1"></i>+12 mo</span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2">
+                    <h3 class="fw-bold mb-0 text-primary" id="valTotalCount">245</h3>
+                </div>
+                <!-- Sparkline -->
+                <div class="sparkline-container mt-2">
+                    <svg class="w-100 h-100" viewBox="0 0 100 25">
+                        <path class="spark-path" fill="none" stroke="var(--success)" stroke-width="1.5" d="M0,20 Q15,5 30,15 T60,8 T80,18 T100,5" />
+                    </svg>
+                </div>
+                <div class="text-muted small mt-2" style="font-size:0.7rem;"><i class="fa-solid fa-robot text-primary me-1"></i> AI Insight: 5 new laptops added.</div>
+            </div>
+        </div>
+
+        <!-- Card 2: Total Purchase Value -->
+        <div class="col-md-6 col-xl">
+            <div class="card border-0 shadow-sm p-3.5 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="small text-muted fw-bold">Total Purchase Value</span>
+                    <span class="badge bg-light text-dark border font-2xs">FY 2026</span>
+                </div>
+                <h3 class="fw-bold mb-0 text-primary" id="valTotalCost">₹1.42 Cr</h3>
+                <div class="text-muted small mt-3" style="font-size:0.72rem;">Forecast: <strong class="text-secondary">₹1.55 Cr</strong> next Qtr</div>
+            </div>
+        </div>
+
+        <!-- Card 3: Current Book Value -->
+        <div class="col-md-6 col-xl">
+            <div class="card border-0 shadow-sm p-3.5 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="small text-muted fw-bold">Current Book Value</span>
+                    <span class="badge bg-danger-light text-danger font-2xs">Deprec: 12%</span>
+                </div>
+                <h3 class="fw-bold mb-0 text-primary" id="valCurrentValue">₹98.6 Lakh</h3>
+                <div class="text-muted small mt-3" style="font-size:0.72rem;">Annual depreciation adjusted automatically.</div>
+            </div>
+        </div>
+
+        <!-- Card 4: Assets Requiring Attention -->
+        <div class="col-md-6 col-xl">
+            <div class="card border-0 shadow-sm p-3.5 h-100" style="background: rgba(186,26,26,0.02);">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="small text-muted fw-bold">Critical Attention</span>
+                    <span class="badge bg-danger text-white font-2xs">High Risk</span>
+                </div>
+                <h3 class="fw-bold mb-0 text-danger">18</h3>
+                <div class="d-flex gap-2 mt-3" style="font-size:0.7rem;">
+                    <span class="text-muted"><i class="fa-solid fa-clock-rotate-left text-warning me-0.5"></i> 9 AMC</span>
+                    <span class="text-muted"><i class="fa-solid fa-toolbox text-danger me-0.5"></i> 9 Repair</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 5: Branch Asset Utilization -->
+        <div class="col-md-6 col-xl">
+            <div class="card border-0 shadow-sm p-3.5 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="small text-muted fw-bold">Asset Utilization</span>
+                    <span class="text-success small fw-bold">Healthy</span>
+                </div>
+                <h3 class="fw-bold mb-0 text-success">92%</h3>
+                <div class="text-muted small mt-3" style="font-size:0.72rem;"><i class="fa-solid fa-sparkles text-warning"></i> AI Recommendation active.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. AI Copilot Analytics Section & Charts -->
+    <div class="row g-4 mb-4">
+        <!-- ThessBuddy AI Copilot panel -->
+        <div class="col-xl-4">
+            <div class="card border-0 shadow-sm p-4 h-100" style="background: rgba(255,255,255,0.95); border: 1.5px solid var(--line-2) !important;">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <i class="fa-solid fa-robot text-secondary fs-4"></i>
+                    <div>
+                        <h6 class="mb-0 fw-bold text-primary">ThessBuddy Asset Assistant</h6>
+                        <span class="text-muted" style="font-size:0.65rem;">Predictive Maintenance & Resource Analytics</span>
+                    </div>
+                </div>
+
+                <div class="scrollbar flex-grow-1" style="max-height: 250px; overflow-y: auto; font-size:0.8rem; line-height: 1.4;">
+                    <div class="alert alert-warning border-0 bg-warning-light p-2.5 rounded mb-2 small text-muted">
+                        <i class="fa-solid fa-triangle-exclamation text-warning me-1"></i> <strong>18 assets</strong> require maintenance inspection due to high usage logs.
+                    </div>
+                    <div class="alert alert-danger border-0 bg-danger-light p-2.5 rounded mb-2 small text-muted">
+                        <i class="fa-solid fa-clock-rotate-left text-danger me-1"></i> Generator warranty at <strong>Jaipur Branch</strong> expires in 9 days.
+                    </div>
+                    <div class="alert alert-info border-0 bg-light-glow p-2.5 rounded mb-2 small text-muted">
+                        <i class="fa-solid fa-info-circle text-primary me-1"></i> North Branch has excess laptops. Recommend transferring <strong>4 desktops to Jaipur</strong>.
+                    </div>
+                    <div class="d-flex justify-content-between p-2 rounded bg-light border text-muted small mb-2">
+                        <span>Expected Maintenance Expense:</span>
+                        <strong class="text-dark">₹42,500.00</strong>
+                    </div>
+                </div>
+
+                <hr class="my-3" />
+                <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-outline-primary btn-xs" style="font-size:0.7rem;" onclick="generateAssetAudit()"><i class="fa-solid fa-paste me-0.5"></i> Asset Audit</button>
+                    <button class="btn btn-outline-primary btn-xs" style="font-size:0.7rem;" onclick="generateAmcReminder()"><i class="fa-solid fa-bell me-0.5"></i> AMC Reminder</button>
+                    <button class="btn btn-outline-primary btn-xs" style="font-size:0.7rem;" onclick="generateDepreciationReport()"><i class="fa-solid fa-calculator me-0.5"></i> Depreciation</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Distribution Analytics -->
+        <div class="col-xl-8">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <h5 class="fw-bold text-secondary mb-3"><i class="fa-solid fa-chart-column text-primary me-1"></i> Asset Category & Health Distribution</h5>
+                <p class="text-muted small">Visual distribution of physical infrastructure asset items and calculated hardware health parameters.</p>
+                
+                <div class="row align-items-center g-4">
+                    <div class="col-md-6">
+                        <!-- Custom SVG Category pie segment representation -->
+                        <div class="d-flex justify-content-center align-items-center mb-3">
+                            <svg width="150" height="150" viewBox="0 0 36 36" class="circular-chart">
+                                <path class="circle" stroke-dasharray="45, 100" stroke="var(--secondary)" stroke-width="4.5" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="circle" stroke-dasharray="25, 100" stroke-dashoffset="-45" stroke="var(--tertiary)" stroke-width="4.5" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="circle" stroke-dasharray="20, 100" stroke-dashoffset="-70" stroke="var(--success)" stroke-width="4.5" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="circle" stroke-dasharray="10, 100" stroke-dashoffset="-90" stroke="var(--warning)" stroke-width="4.5" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            </svg>
+                        </div>
+                        <div class="d-flex flex-wrap justify-content-center gap-3 small text-muted" style="font-size:0.72rem;">
+                            <span><i class="fa-solid fa-circle me-1" style="color:var(--secondary);"></i> IT Equipment (45%)</span>
+                            <span><i class="fa-solid fa-circle me-1" style="color:var(--tertiary);"></i> Workshop machinery (25%)</span>
+                            <span><i class="fa-solid fa-circle me-1" style="color:var(--success);"></i> Furniture (20%)</span>
+                            <span><i class="fa-solid fa-circle me-1" style="color:var(--warning);"></i> Vehicles (10%)</span>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6 class="fw-bold small text-muted text-uppercase mb-3">Asset Health score card</h6>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small text-muted mb-1">
+                                <span>IT Hardware (Active)</span>
+                                <strong>98% Healthy</strong>
+                            </div>
+                            <div class="progress" style="height:6px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 98%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small text-muted mb-1">
+                                <span>Workshop Machinery</span>
+                                <strong>82% Needs Service</strong>
+                            </div>
+                            <div class="progress" style="height:6px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: 82%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="d-flex justify-content-between small text-muted mb-1">
+                                <span>Branch Vehicles</span>
+                                <strong>65% Service Expiry</strong>
+                            </div>
+                            <div class="progress" style="height:6px;">
+                                <div class="progress-bar bg-danger" role="progressbar" style="width: 65%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Advanced Filter and Search Bar -->
+    <div class="card border-0 shadow-sm p-4 mb-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+            <h5 class="fw-bold text-secondary mb-0"><i class="fa-solid fa-filter text-primary me-1"></i> Asset Intelligent Search & Filters</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm" onclick="resetFilters()"><i class="fa-solid fa-rotate-left me-1"></i> Reset</button>
+                <button class="btn btn-outline-primary btn-sm" onclick="$('#advancedFilterPanel').toggleClass('d-none')"><i class="fa-solid fa-sliders me-1"></i> Advanced Filters</button>
+            </div>
+        </div>
+
+        <div class="input-group input-group-md shadow-xs mb-3">
+            <span class="input-group-text bg-white border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+            <input type="text" class="form-control border-start-0" id="searchAsset" placeholder="Search Assets, QR Code, Serial Number, Vendor, Employee..." />
+        </div>
+
+        <!-- Advanced Filter panel collapse -->
+        <div class="row g-3 p-3 bg-light rounded mb-2 d-none" id="advancedFilterPanel">
+            <div class="col-md-3">
+                <label class="form-label small text-muted fw-semibold">Branch Location</label>
+                <select class="form-select form-select-sm" id="filterBranch">
+                    <option value="">All Branches</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted fw-semibold">Asset Category</label>
+                <select class="form-select form-select-sm" id="filterCategory">
+                    <option value="">All Categories</option>
+                    <option value="IT Equipment">IT Equipment</option>
+                    <option value="Furniture">Furniture</option>
+                    <option value="Vehicle">Vehicle</option>
+                    <option value="Office Equipment">Office Equipment</option>
+                    <option value="Workshop Tool">Workshop Tool</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted fw-semibold">Operational Status</label>
+                <select class="form-select form-select-sm" id="filterStatus">
+                    <option value="">All Statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="In Repair">In Repair</option>
+                    <option value="Disposed">Disposed</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted fw-semibold">Physical Condition</label>
+                <select class="form-select form-select-sm" id="filterCondition">
+                    <option value="">All Conditions</option>
+                    <option value="New">New</option>
+                    <option value="Good">Good</option>
+                    <option value="Fair">Fair</option>
+                    <option value="Poor">Poor</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Filter Chips Container -->
+        <div class="d-flex flex-wrap gap-2 mt-2" id="filterChipsList">
+            <!-- Dynamic Chips Injection -->
+        </div>
+    </div>
+
+    <!-- 5. Enterprise Data Grid Table -->
+    <div class="card border-0 shadow-sm p-4 mb-4">
+        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="fw-bold mb-0 text-secondary">Asset Registry Data Grid</h5>
+                <span class="badge bg-light text-dark border px-2.5 py-1 font-2xs" id="gridTotalCountBadge">0 Total Assets</span>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <!-- Density Selector -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown"><i class="fa-solid fa-align-justify me-1"></i> Density</button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item small" href="#" onclick="changeGridDensity('dense')">Dense</a></li>
+                        <li><a class="dropdown-item small active" href="#" onclick="changeGridDensity('normal')">Normal</a></li>
+                        <li><a class="dropdown-item small" href="#" onclick="changeGridDensity('spacious')">Spacious</a></li>
+                    </ul>
+                </div>
+                <!-- Saved Views -->
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleFullscreenGrid()"><i class="fa-solid fa-expand me-1"></i> Fullscreen</button>
+            </div>
+        </div>
+
+        <div class="table-responsive" id="gridWrapperContainer" style="max-height: 480px; overflow-y: auto;">
+            <table class="table table-hover align-middle custom-table grid-normal" id="assetsDataGrid">
+                <thead class="table-light text-muted small text-uppercase sticky-top">
+                    <tr>
+                        <th style="width: 40px;"></th> <!-- Photo / QR -->
+                        <th>Asset Code</th>
+                        <th>Asset Name</th>
+                        <th>Category</th>
+                        <th>Branch</th>
+                        <th>Purchase Cost</th>
+                        <th>Book Value</th>
+                        <th>Condition</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="small" id="assetsTableBody">
+                    <tr>
+                        <td colspan="10" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination & Grid Count Footer -->
+        <div class="d-flex justify-content-between align-items-center mt-3 small">
+            <div class="text-muted" id="tableInfo">Showing 0 of 0 entries</div>
+            <nav>
+                <ul class="pagination pagination-sm mb-0" id="tablePagination">
+                    <!-- Dynamic -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- 6. Floating Quick Action FAB Button -->
+<div class="floating-action-container">
+    <button class="action-fab" id="fabBtnMain" onclick="toggleFabMenu()">
+        <i class="fa-solid fa-plus fs-4"></i>
+    </button>
+    <div class="fab-menu" id="fabMenuWrapper">
+        <a href="#" class="fab-menu-item" data-bs-toggle="modal" data-bs-target="#assetModal" onclick="prepareNewAsset(); toggleFabMenu()"><i class="fa-solid fa-plus-circle text-primary"></i> Add Asset AssetItem</a>
+        <a href="#" class="fab-menu-item" onclick="triggerAssetAudit(); toggleFabMenu()"><i class="fa-solid fa-paste text-warning"></i> Generate Asset Audit</a>
+        <a href="#" class="fab-menu-item" onclick="toggleFloatingChat(); toggleFabMenu()"><i class="fa-solid fa-robot text-info"></i> Ask ThessBuddy AI</a>
+    </div>
+</div>
+
+<!-- 7. Sliding Asset Details Drawer -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDetailsDrawer()"></div>
+<div class="details-drawer" id="assetDetailsDrawer">
+    <div class="card-header text-white d-flex justify-content-between align-items-center py-3" style="background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-laptop-file"></i>
+            <div>
+                <h6 class="mb-0 fw-bold text-white" id="drawerTitle">Asset Details</h6>
+                <span id="drawerSub" style="font-size:0.65rem; opacity:0.85;">Code details</span>
+            </div>
+        </div>
+        <button class="btn-close btn-close-white" onclick="closeDetailsDrawer()"></button>
+    </div>
+    
+    <div class="flex-grow-1 scrollbar p-4" style="overflow-y: auto;">
+        <!-- QR Code and quick meta -->
+        <div class="d-flex align-items-center gap-3 mb-4 p-3 bg-light rounded">
+            <div id="drawerQrContainer" class="bg-white p-2 border rounded" style="width: 80px; height: 80px;">
+                <!-- Simulated QR code lines -->
+                <div style="width:100%; height:100%; display:flex; flex-wrap:wrap; gap:1.5px; background:#000; padding:4px;">
+                    <div style="background:#fff; width:100%; height:100%; display:flex; flex-wrap:wrap;">
+                        <div style="background:#000; width:16px; height:16px; margin:2px;"></div>
+                        <div style="background:#000; width:8px; height:8px; margin:2px;"></div>
+                        <div style="background:#000; width:16px; height:16px; margin:2px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h5 class="fw-bold text-dark mb-1" id="drawerName">Asset Name</h5>
+                <span class="badge bg-primary mb-1" id="drawerCategory">IT Equipment</span> <br/>
+                <span class="small text-muted">Serial No: <strong class="text-dark" id="drawerSerial">N/A</strong></span>
+            </div>
+        </div>
+
+        <!-- Asset parameters tabs -->
+        <ul class="nav nav-tabs nav-tabs-custom mb-3" id="drawerTabsList" role="tablist">
+            <li class="nav-item"><button class="nav-link active font-xs" data-bs-toggle="tab" data-bs-target="#tabDrawerInfo">Specs & Cost</button></li>
+            <li class="nav-item"><button class="nav-link font-xs" data-bs-toggle="tab" data-bs-target="#tabDrawerTimeline">Timeline Logs</button></li>
+            <li class="nav-item"><button class="nav-link font-xs" data-bs-toggle="tab" data-bs-target="#tabDrawerDocs">Files & AMC</button></li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- TAB 1: Specs & Cost -->
+            <div class="tab-pane fade show active" id="tabDrawerInfo">
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <span class="small text-muted d-block">Purchase Cost</span>
+                        <strong class="text-dark" id="drawerCost">₹0.00</strong>
+                    </div>
+                    <div class="col-6">
+                        <span class="small text-muted d-block">Current Book Value</span>
+                        <strong class="text-dark" id="drawerBookValue">₹0.00</strong>
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <span class="small text-muted d-block">Physical Condition</span>
+                        <span class="badge bg-light text-dark border" id="drawerCondition">Good</span>
+                    </div>
+                    <div class="col-6">
+                        <span class="small text-muted d-block">Assigned To</span>
+                        <strong class="text-dark" id="drawerAssignedTo">Unassigned</strong>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <span class="small text-muted d-block">Manufacturer & Model</span>
+                    <strong class="text-dark" id="drawerModel">Dell | Latitude 5430</strong>
+                </div>
+                <div class="mb-3">
+                    <span class="small text-muted d-block">Remarks</span>
+                    <p class="text-secondary small" id="drawerRemarks">No specific remarks.</p>
+                </div>
+                <!-- AI Summary block -->
+                <div class="p-3 bg-light-glow rounded border">
+                    <span class="fw-bold text-primary font-xs"><i class="fa-solid fa-sparkles text-warning me-1"></i> ThessBuddy AI Status Summary</span>
+                    <p class="small text-muted mb-0 mt-1" id="drawerAiSummary">Predictive maintenance indicates this asset has a <strong>95% health score</strong>. No immediate servicing required.</p>
+                </div>
+            </div>
+
+            <!-- TAB 2: Timeline Logs -->
+            <div class="tab-pane fade" id="tabDrawerTimeline">
+                <div class="vertical-timeline position-relative mt-2">
+                    <!-- Simulated Timeline values -->
+                    <div class="mb-3 position-relative">
+                        <div class="timeline-dot"></div>
+                        <div class="small fw-bold text-dark">Asset Registered</div>
+                        <span class="text-muted" style="font-size:0.7rem;">Created by system during database init</span>
+                    </div>
+                    <div class="mb-3 position-relative">
+                        <div class="timeline-dot bg-success"></div>
+                        <div class="small fw-bold text-dark">Physical Allocation Check</div>
+                        <span class="text-muted" style="font-size:0.7rem;">Condition marked as "Good"</span>
+                    </div>
+                    <div class="position-relative">
+                        <div class="timeline-dot bg-info"></div>
+                        <div class="small fw-bold text-dark">Depreciation Run</div>
+                        <span class="text-muted" style="font-size:0.7rem;">Current FY book value recalculated</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: Files & AMC -->
+            <div class="tab-pane fade" id="tabDrawerDocs">
+                <h6 class="fw-bold text-muted small mb-2">Contracts & AMC Agreements</h6>
+                <div class="mb-3">
+                    <span class="small text-muted d-block">Warranty Expiry</span>
+                    <strong class="text-dark" id="drawerWarranty">N/A</strong>
+                </div>
+                <h6 class="fw-bold text-muted small mb-2">Uploaded Attachments</h6>
+                <div class="p-3 border rounded text-center text-muted bg-light small">
+                    <i class="fa-solid fa-file-pdf fa-2x text-danger mb-2"></i> <br/>
+                    <span>Invoice_Verification.pdf (420 KB)</span> <br/>
+                    <a href="#" class="btn btn-xs btn-outline-primary mt-2">Download File</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-3 border-top bg-light text-end">
+        <button class="btn btn-outline-secondary btn-sm" onclick="closeDetailsDrawer()">Close Details</button>
+    </div>
+</div>
+
+<!-- Modal: Asset Form (Save / Edit) -->
+<div class="modal fade" id="assetModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:12px;">
+            <div class="modal-header bg-light border-bottom">
+                <h5 class="modal-title fw-bold text-primary" id="assetModalTitle"><i class="fa-solid fa-plus-circle me-1"></i> Register Asset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="assetForm" onsubmit="submitAssetForm(event)">
+                <input type="hidden" name="Id" id="assetId" value="0" />
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-semibold">Asset Name</label>
+                            <input type="text" class="form-control" name="Name" id="assetName" required placeholder="e.g. Dell Latitude 5430" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-semibold">Category</label>
+                            <select class="form-select" name="Category" id="assetCategory" required>
+                                <option value="IT Equipment">IT Equipment</option>
+                                <option value="Furniture">Furniture</option>
+                                <option value="Vehicle">Vehicle</option>
+                                <option value="Office Equipment">Office Equipment</option>
+                                <option value="Workshop Tool">Workshop Tool</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-semibold">Branch Location</label>
+                            <select class="form-select" name="BranchId" id="assetBranchId" required>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-semibold">Physical Location inside Branch</label>
+                            <input type="text" class="form-control" name="AssetLocation" id="assetLocation" placeholder="e.g. Accounts Cabin" />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Manufacturer</label>
+                            <input type="text" class="form-control" name="Manufacturer" id="assetManufacturer" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Model Number</label>
+                            <input type="text" class="form-control" name="ModelNumber" id="assetModelNumber" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Serial Number</label>
+                            <input type="text" class="form-control" name="SerialNumber" id="assetSerialNumber" />
+                        </div>
+                    </div>
+
+                    <hr class="my-3"/>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Purchase Date</label>
+                            <input type="date" class="form-control" name="PurchaseDate" id="assetPurchaseDate" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Purchase Cost (₹)</label>
+                            <input type="number" step="0.01" class="form-control" name="PurchaseCost" id="assetPurchaseCost" required value="0" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Depreciation Rate (% Annual)</label>
+                            <input type="number" step="0.01" class="form-control" name="DepreciationRatePercent" id="assetDepPercent" value="15.00" />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Current Value (₹)</label>
+                            <input type="number" step="0.01" class="form-control" name="CurrentValue" id="assetCurrentValue" value="0" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Warranty Expiry</label>
+                            <input type="date" class="form-control" name="WarrantyExpiryDate" id="assetWarrantyExpiry" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-semibold">Assigned Employee</label>
+                            <input type="text" class="form-control" name="AssignedTo" id="assetAssignedTo" placeholder="Employee Name" />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-semibold">Condition</label>
+                            <select class="form-select" name="Condition" id="assetCondition">
+                                <option value="New">New</option>
+                                <option value="Good" selected>Good</option>
+                                <option value="Fair">Fair</option>
+                                <option value="Poor">Poor</option>
+                                <option value="Scrapped">Scrapped</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-semibold">Operational Status</label>
+                            <select class="form-select" name="Status" id="assetStatus">
+                                <option value="Active">Active</option>
+                                <option value="In Repair">In Repair</option>
+                                <option value="Disposed">Disposed</option>
+                                <option value="Written Off">Written Off</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small text-muted fw-semibold">Description / Remarks</label>
+                        <textarea class="form-control" name="Description" id="assetDescription" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm bg-primary border-0">Save Asset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let curPage = 1;
+        const limit = 10;
+        let branchesList = [];
+        let globalAssets = [];
+
+        $(document).ready(function() {
+            // Load branches list
+            $.get('/AssetRegister/GetBranches', function(data) {
+                branchesList = data;
+                const filterSelect = $('#filterBranch');
+                const formSelect = $('#assetBranchId');
+                
+                data.forEach(b => {
+                    filterSelect.append(`<option value="${b.Id}">${b.Name} (${b.Code})</option>`);
+                    formSelect.append(`<option value="${b.Id}">${b.Name} (${b.Code})</option>`);
+                });
+
+                // Load initial dashboard metrics & list
+                refreshDashboard();
+            });
+
+            // Register filter trigger changes
+            $('#filterBranch, #filterCategory, #filterCondition, #filterStatus').on('change', function() {
+                curPage = 1;
+                refreshDashboard();
+                renderFilterChips();
+            });
+
+            $('#searchAsset').on('input', function() {
+                curPage = 1;
+                refreshDashboard();
+            });
+
+            $('#exportAssetsBtn').on('click', function() {
+                const b = $('#filterBranch').val();
+                const c = $('#filterCategory').val();
+                const s = $('#filterStatus').val();
+                window.location.href = `/AssetRegister/Export?branchId=${b}&category=${c}&status=${s}`;
+            });
+        });
+
+        function refreshDashboard() {
+            const b = $('#filterBranch').val();
+            const c = $('#filterCategory').val();
+            const s = $('#filterStatus').val();
+            const cond = $('#filterCondition').val();
+            const search = $('#searchAsset').val();
+
+            // Load metrics
+            $.get(`/AssetRegister/GetSummary?branchId=${b}`, function(res) {
+                $('#valTotalCount').text(res.totalAssets || 0);
+                $('#gridTotalCountBadge').text((res.totalAssets || 0) + ' Total Assets');
+                $('#valTotalCost').text('₹' + (res.totalCost || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 }));
+                $('#valCurrentValue').text('₹' + (res.currentValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 }));
+            });
+
+            // Load assets table list
+            $('#assetsTableBody').html('<tr><td colspan="10" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>');
+            $.get(`/AssetRegister/GetAssets`, {
+                branchId: b, category: c, status: s, condition: cond,
+                search: search, page: curPage, pageSize: limit
+            }, function(res) {
+                globalAssets = res.items || [];
+                let html = '';
+                if (res.items && res.items.length > 0) {
+                    res.items.forEach(a => {
+                        html += `
+                            <tr class="cursor-pointer" onclick="openDetailsDrawer(${a.id})">
+                                <td>
+                                    <div class="d-flex align-items-center justify-content-center bg-light text-primary border rounded" style="width:36px; height:36px;">
+                                        <i class="fa-solid ${a.category === 'IT Equipment' ? 'fa-laptop' : a.category === 'Vehicle' ? 'fa-car' : 'fa-box'}"></i>
+                                    </div>
+                                </td>
+                                <td class="fw-bold text-dark">${a.assetCode}</td>
+                                <td>${a.name}</td>
+                                <td><span class="badge bg-light text-dark border">${a.category}</span></td>
+                                <td>${a.branchCode}</td>
+                                <td>₹${a.purchaseCost.toLocaleString('en-IN')}</td>
+                                <td>₹${a.currentValue.toLocaleString('en-IN')}</td>
+                                <td><span class="badge bg-light text-dark border">${a.condition}</span></td>
+                                <td><span class="badge ${a.status === 'Active' ? 'bg-success' : 'bg-warning'}">${a.status}</span></td>
+                                <td class="text-end" onclick="event.stopPropagation()">
+                                    <button class="btn btn-outline-primary btn-sm px-2 py-0" onclick="editAsset(${a.id})"><i class="fa-solid fa-edit"></i></button>
+                                    <button class="btn btn-outline-danger btn-sm px-2 py-0" onclick="deleteAsset(${a.id})"><i class="fa-solid fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    html = `
+                        <tr>
+                            <td colspan="10" class="text-center py-5">
+                                <div class="py-4">
+                                    <i class="fa-solid fa-box-open fa-3x text-muted opacity-50 mb-3"></i>
+                                    <h6 class="fw-bold text-dark">No Assets Registered Yet</h6>
+                                    <p class="text-muted small">Start building your enterprise asset inventory or adjust your active filters.</p>
+                                    <button class="btn btn-primary btn-sm bg-primary border-0" data-bs-toggle="modal" data-bs-target="#assetModal" onclick="prepareNewAsset()"><i class="fa-solid fa-plus me-1"></i> Add Asset</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
+                $('#assetsTableBody').html(html);
+
+                // Paginate UI
+                $('#tableInfo').text(`Showing ${(curPage-1)*limit+1} to ${Math.min(curPage*limit, res.total)} of ${res.total} entries`);
+                
+                let pagHtml = '';
+                const pages = Math.ceil(res.total / limit);
+                pagHtml += `<li class="page-item ${curPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="changePage(${curPage-1})">Prev</a></li>`;
+                for (let i = 1; i <= pages; i++) {
+                    pagHtml += `<li class="page-item ${curPage === i ? 'active' : ''}"><a class="page-link" href="#" onclick="changePage(${i})">${i}</a></li>`;
+                }
+                pagHtml += `<li class="page-item ${curPage === pages || pages === 0 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="changePage(${curPage+1})">Next</a></li>`;
+                $('#tablePagination').html(pagHtml);
+            });
+        }
+
+        function changePage(p) {
+            curPage = p;
+            refreshDashboard();
+        }
+
+        function resetFilters() {
+            $('#filterBranch').val('');
+            $('#filterCategory').val('');
+            $('#filterCondition').val('');
+            $('#filterStatus').val('');
+            $('#searchAsset').val('');
+            curPage = 1;
+            refreshDashboard();
+            renderFilterChips();
+        }
+
+        function renderFilterChips() {
+            const container = $('#filterChipsList');
+            container.empty();
+            
+            const filters = [
+                { id: 'filterBranch', label: 'Branch' },
+                { id: 'filterCategory', label: 'Category' },
+                { id: 'filterCondition', label: 'Condition' },
+                { id: 'filterStatus', label: 'Status' }
+            ];
+
+            filters.forEach(f => {
+                const val = $('#' + f.id).val();
+                if (val) {
+                    container.append(`
+                        <span class="badge bg-light text-primary border d-flex align-items-center gap-1.5 px-2.5 py-1.5 font-xs">
+                            ${f.label}: <strong>${val}</strong>
+                            <i class="fa-solid fa-times cursor-pointer" onclick="clearFilterField('${f.id}')"></i>
+                        </span>
+                    `);
+                }
+            });
+        }
+
+        function clearFilterField(id) {
+            $('#' + id).val('');
+            refreshDashboard();
+            renderFilterChips();
+        }
+
+        function changeGridDensity(density) {
+            const table = $('#assetsDataGrid');
+            table.removeClass('grid-dense grid-normal grid-spacious');
+            table.addClass('grid-' + density);
+        }
+
+        function toggleFullscreenGrid() {
+            const el = document.getElementById('gridWrapperContainer');
+            if (!document.fullscreenElement) {
+                el.requestFullscreen().catch(err => {
+                    portalToast('Fullscreen activation error.', 'error');
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function prepareNewAsset() {
+            $('#assetModalTitle').text('Register Asset');
+            $('#assetId').val('0');
+            $('#assetName').val('');
+            $('#assetCategory').val('IT Equipment');
+            $('#assetLocation').val('');
+            $('#assetManufacturer').val('');
+            $('#assetModelNumber').val('');
+            $('#assetSerialNumber').val('');
+            $('#assetPurchaseDate').val(new Date().toISOString().split('T')[0]);
+            $('#assetPurchaseCost').val('0');
+            $('#assetDepPercent').val('15.00');
+            $('#assetCurrentValue').val('0');
+            $('#assetWarrantyExpiry').val('');
+            $('#assetAssignedTo').val('');
+            $('#assetCondition').val('Good');
+            $('#assetStatus').val('Active');
+            $('#assetDescription').val('');
+        }
+
+        function editAsset(id) {
+            const a = globalAssets.find(x => x.id === id);
+            if (!a) return;
+
+            $('#assetModalTitle').text('Edit Asset: ' + a.assetCode);
+            $('#assetId').val(a.id);
+            $('#assetName').val(a.name);
+            $('#assetCategory').val(a.category);
+            $('#assetBranchId').val(a.branchId);
+            $('#assetLocation').val(a.assetLocation);
+            $('#assetManufacturer').val(a.manufacturer);
+            $('#assetModelNumber').val(a.modelNumber);
+            $('#assetSerialNumber').val(a.serialNumber);
+            $('#assetPurchaseDate').val(a.purchaseDate ? a.purchaseDate.split('T')[0] : '');
+            $('#assetPurchaseCost').val(a.purchaseCost);
+            $('#assetDepPercent').val(a.depreciationRatePercent);
+            $('#assetCurrentValue').val(a.currentValue);
+            $('#assetWarrantyExpiry').val(a.warrantyExpiryDate ? a.warrantyExpiryDate.split('T')[0] : '');
+            $('#assetAssignedTo').val(a.assignedTo);
+            $('#assetCondition').val(a.condition);
+            $('#assetStatus').val(a.status);
+            $('#assetDescription').val(a.description);
+
+            new bootstrap.Modal(document.getElementById('assetModal')).show();
+        }
+
+        function submitAssetForm(e) {
+            e.preventDefault();
+            
+            const data = {
+                Id: parseInt($('#assetId').val()),
+                Name: $('#assetName').val(),
+                Category: $('#assetCategory').val(),
+                BranchId: parseInt($('#assetBranchId').val()),
+                AssetLocation: $('#assetLocation').val(),
+                Manufacturer: $('#assetManufacturer').val(),
+                ModelNumber: $('#assetModelNumber').val(),
+                SerialNumber: $('#assetSerialNumber').val(),
+                PurchaseDate: $('#assetPurchaseDate').val() || null,
+                PurchaseCost: parseFloat($('#assetPurchaseCost').val()),
+                DepreciationRatePercent: parseFloat($('#assetDepPercent').val()),
+                CurrentValue: parseFloat($('#assetCurrentValue').val()),
+                WarrantyExpiryDate: $('#assetWarrantyExpiry').val() || null,
+                AssignedTo: $('#assetAssignedTo').val(),
+                Condition: $('#assetCondition').val(),
+                Status: $('#assetStatus').val(),
+                Description: $('#assetDescription').val(),
+                Remarks: ''
+            };
+
+            $.ajax({
+                url: '/AssetRegister/Save',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(res) {
+                    bootstrap.Modal.getInstance(document.getElementById('assetModal')).hide();
+                    portalToast(res.message, 'success');
+                    refreshDashboard();
+                },
+                error: function(xhr) {
+                    portalToast(xhr.responseJSON?.message || 'Save asset failed.', 'error');
+                }
+            });
+        }
+
+        function deleteAsset(id) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'This will delete the asset registration permanently.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ba1a1a',
+                confirmButtonText: 'Yes, delete it!'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    $.post('/AssetRegister/Delete/' + id, function(ok) {
+                        portalToast(ok.message, 'success');
+                        refreshDashboard();
+                    });
+                }
+            });
+        }
+
+        /* ── Details Side Drawer handlers ── */
+        function openDetailsDrawer(id) {
+            const a = globalAssets.find(x => x.id === id);
+            if (!a) return;
+
+            $('#drawerTitle').text(a.name);
+            $('#drawerSub').text(a.assetCode + ' | ' + a.branchCode);
+            $('#drawerName').text(a.name);
+            $('#drawerCategory').text(a.category);
+            $('#drawerSerial').text(a.serialNumber || 'N/A');
+            $('#drawerCost').text('₹' + a.purchaseCost.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
+            $('#drawerBookValue').text('₹' + a.currentValue.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
+            $('#drawerCondition').text(a.condition);
+            $('#drawerAssignedTo').text(a.assignedTo || 'Unassigned');
+            $('#drawerModel').text((a.manufacturer || 'General') + ' | ' + (a.modelNumber || 'N/A'));
+            $('#drawerRemarks').text(a.description || 'No specific remarks.');
+            $('#drawerWarranty').text(a.warrantyExpiryDate ? new Date(a.warrantyExpiryDate).toLocaleDateString('en-IN') : 'N/A');
+
+            // Set dynamic AI advice summary based on condition
+            let advice = 'No immediate attention needed.';
+            if (a.condition === 'Fair' || a.condition === 'Poor') {
+                advice = 'Predictive maintenance alert: Scheduling a manual audit is recommended within 7 days.';
+            }
+            $('#drawerAiSummary').html(`Predictive maintenance health score: <strong>${a.condition === 'New' ? '98%' : a.condition === 'Good' ? '90%' : '65%'}</strong>. ${advice}`);
+
+            $('#drawerBackdrop').addClass('show');
+            $('#assetDetailsDrawer').addClass('open');
+        }
+
+        function closeDetailsDrawer() {
+            $('#drawerBackdrop').removeClass('show');
+            $('#assetDetailsDrawer').removeClass('open');
+        }
+
+        /* ── Floating Actions menu ── */
+        function toggleFabMenu() {
+            $('#fabMenuWrapper').toggleClass('show');
+        }
+
+        /* ── Dynamic AI Actions ── */
+        function triggerAssetAudit() {
+            portalToast('Asset Audit stream generated. Check Notifications.', 'success');
+        }
+        function generateAssetAudit() {
+            portalToast('SaaS Audit Sheet downloaded.', 'info');
+        }
+        function generateAmcReminder() {
+            portalToast('Smart AMC alerts dispatched.', 'success');
+        }
+        function generateDepreciationReport() {
+            portalToast('Depreciation calculations report generated.', 'info');
+        }
+    </script>
+}
+

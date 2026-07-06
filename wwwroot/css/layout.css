@@ -1,0 +1,245 @@
+/* ==========================================================================
+   LAYOUT — v2 Premium Redesign
+   ========================================================================== */
+
+/* App shell uses flexbox (sidebar + main area) */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--canvas);
+  transition: none; /* sidebar handles its own width */
+}
+
+/* Content area */
+.content-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  flex: 1 1 0%;
+  min-width: 0;
+  background: var(--canvas);
+  transition: background var(--transition-normal);
+}
+
+.content-wrapper.embedded { min-height: auto; }
+
+/* Main page content */
+.main-content {
+  padding: var(--space-5) var(--space-5) var(--space-7);
+  flex-grow: 1;
+}
+
+/* ── Section Containers ─────────────────────────────────────── */
+.section-box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+}
+
+.section-box-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--panel);
+}
+
+.section-box-body { padding: var(--space-4) var(--space-5); }
+
+/* ── Two-col layout ─────────────────────────────────────────── */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+/* ── Control Tower Grid ─────────────────────────────────────── */
+.control-tower-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.ct-widget {
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.ct-widget::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--line);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  transition: background var(--transition-normal);
+}
+
+
+
+.ct-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-widget-title {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ct-status-badge {
+  font-size: var(--font-2xs);
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ct-status-badge.online  { background: rgba(16,185,129,0.10); color: var(--success); }
+.ct-status-badge.offline { background: rgba(244,63,94,0.10);  color: var(--danger); }
+.ct-status-badge.warning { background: rgba(245,158,11,0.10); color: var(--warning); }
+
+.ct-widget-value {
+  font-size: 1.40rem;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.4px;
+}
+
+.ct-widget-footer {
+  font-size: var(--font-2xs);
+  color: var(--muted);
+  border-top: 1px solid var(--line-2);
+  padding-top: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ── Log Console ────────────────────────────────────────────── */
+.log-console-box {
+  background: #0d1117;
+  color: #58a6ff;
+  border-radius: var(--radius-md);
+  font-family: 'Fira Code', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: var(--font-xs);
+  padding: 14px 16px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #30363d;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+  line-height: 1.6;
+}
+
+.log-entry {
+  margin-bottom: 3px;
+  display: flex;
+  gap: 8px;
+}
+
+.log-timestamp { color: #6e7681; flex-shrink: 0; }
+.log-info    { color: #58a6ff; }
+.log-success { color: #3fb950; }
+.log-warning { color: #d29922; }
+.log-danger  { color: #f85149; }
+
+/* Premium SaaS Tables */
+.saas-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+}
+
+.saas-table thead th {
+    background-color: #f8fafc;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e2e8f0;
+    border-top: none;
+}
+
+.saas-table tbody td {
+    padding: 1rem 1.25rem;
+    color: #1e293b;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    transition: all 0.2s ease;
+}
+
+.saas-table tbody tr:hover td {
+    background-color: #f8fafc;
+}
+
+.saas-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Glassmorphism Table Wrapper */
+.saas-table-wrapper {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+/* Modern Badges */
+.saas-badge-success {
+    background-color: #dcfce7;
+    color: #166534;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+}
+
+.saas-badge-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+}
+
+.saas-badge-neutral {
+    background-color: #f1f5f9;
+    color: #475569;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+}
+
+.saas-badge-primary {
+    background-color: #dbeafe;
+    color: #1e40af;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+}

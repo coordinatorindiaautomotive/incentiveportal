@@ -1,0 +1,243 @@
+@model IEnumerable<IncentivePortal.Models.DocumentItem>
+@{
+    ViewData["Title"] = "Document Management Manager";
+    var parties = ViewBag.Parties as IEnumerable<dynamic>;
+    var expiringSoon = ViewBag.ExpiringSoon as List<IncentivePortal.Models.DocumentItem>;
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Block -->
+    <div class="card p-3 mb-4 border-0 shadow-sm" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 class="mb-1 text-primary fw-bold" style="font-family:'Inter',sans-serif;"><i class="fa-solid fa-file-pdf me-2"></i> Document Management Center</h4>
+                <p class="text-muted small mb-0">Upload dealer agreements, GST forms, outstanding summaries, and payout vouchers with auto-expiry reminders.</p>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-primary btn-sm bg-primary border-0" data-bs-toggle="modal" data-bs-target="#uploadDocModal"><i class="fa-solid fa-upload me-1"></i> Upload Document</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Documents Registry (Left/Center) -->
+        <div class="col-lg-9">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+                    <h5 class="fw-bold mb-0 text-secondary">Document Repository</h5>
+                    
+                    <form method="get" action="/Documents/Index" class="d-flex gap-2 align-items-center" style="max-width: 450px;">
+                        <select name="category" class="form-select form-select-sm" style="width: 150px;" onchange="this.form.submit()">
+                            <option value="">All Categories</option>
+                            <option value="Agreement" selected="@(ViewBag.CategoryFilter == "Agreement" ? "selected" : null)">Dealer Agreement</option>
+                            <option value="GST" selected="@(ViewBag.CategoryFilter == "GST" ? "selected" : null)">GST Document</option>
+                            <option value="Invoice" selected="@(ViewBag.CategoryFilter == "Invoice" ? "selected" : null)">Invoices</option>
+                            <option value="PAN" selected="@(ViewBag.CategoryFilter == "PAN" ? "selected" : null)">PAN Card</option>
+                            <option value="General" selected="@(ViewBag.CategoryFilter == "General" ? "selected" : null)">General</option>
+                        </select>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" class="form-control" name="search" value="@ViewBag.SearchFilter" placeholder="Search files, dealers..." />
+                            <button type="submit" class="btn btn-primary bg-primary border-0">Find</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle custom-table">
+                        <thead class="table-light text-muted small text-uppercase">
+                            <tr>
+                                <th>File Name</th>
+                                <th>Category</th>
+                                <th>Version</th>
+                                <th>Size</th>
+                                <th>Associated Customer</th>
+                                <th>Expiry Date</th>
+                                <th>Uploaded By</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="small">
+                            @if (Model != null && Model.Any())
+                            {
+                                foreach (var d in Model)
+                                {
+                                    <tr>
+                                        <td class="fw-bold text-dark"><i class="fa-solid fa-file-invoice text-primary me-2 fs-5"></i> @d.FileName</td>
+                                        <td><span class="badge bg-light text-dark border">@d.Category</span></td>
+                                        <td><span class="badge bg-secondary">v@d.Version</span></td>
+                                        <td>@((d.SizeBytes / 1024.0).ToString("N1")) KB</td>
+                                        <td>@d.AssociatedPartyCode</td>
+                                        <td>@(d.ExpiryDate?.ToString("dd MMM yyyy") ?? "Never")</td>
+                                        <td>@d.Owner</td>
+                                        <td class="text-end">
+                                            <a href="/Documents/Download/@d.Id" class="btn btn-sm btn-outline-primary px-2 py-0" title="Download"><i class="fa-solid fa-download"></i></a>
+                                            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="deleteDoc(@d.Id)" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="8" class="text-center py-5 text-muted">No document uploads found matching criteria.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expiry Alerts Sidebar (Right) -->
+        <div class="col-lg-3">
+            <div class="card border-0 shadow-sm p-4 h-100" style="background: rgba(255,255,255,0.9);">
+                <h6 class="fw-bold text-primary mb-3"><i class="fa-solid fa-bell text-warning me-1"></i> Document Expiry Alerts</h6>
+                <p class="text-muted small mb-3">Distributor agreements and GST certificates expiring within 30 days that require renewals.</p>
+
+                <div class="expiry-alerts scrollbar" style="max-height: 420px; overflow-y: auto;">
+                    @if (expiringSoon != null && expiringSoon.Any())
+                    {
+                        foreach (var d in expiringSoon)
+                        {
+                            <div class="p-3 mb-2 rounded border border-danger bg-danger-light" style="font-size: 0.8rem;">
+                                <div class="fw-bold text-danger mb-1 text-truncate">@d.FileName</div>
+                                <div class="text-muted small mb-2">Dealer: @d.AssociatedPartyCode</div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="text-danger fw-bold"><i class="fa-regular fa-calendar-times me-1"></i> @d.ExpiryDate?.ToString("dd MMM yyyy")</span>
+                                    <a href="/Documents/Download/@d.Id" class="btn btn-xs btn-outline-danger px-2 py-0 fs-7" style="font-size:0.7rem;"><i class="fa-solid fa-download"></i></a>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-5 small border rounded bg-light">
+                            <i class="fa-regular fa-check-circle fa-2x text-success mb-2"></i>
+                            <p class="mb-0">All files are up to date. No upcoming expiries.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Upload Document -->
+<div class="modal fade" id="uploadDocModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <div class="modal-header border-bottom bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-upload me-1"></i> Upload Document</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="uploadDocForm" enctype="multipart/form-data" onsubmit="submitUploadForm(event)">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Select File</label>
+                        <input type="file" class="form-control" name="file" required accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.csv" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Category</label>
+                        <select class="form-select" name="category" required>
+                            <option value="Agreement">Dealer Agreement</option>
+                            <option value="GST">GST Document</option>
+                            <option value="Invoice">Invoice Copy</option>
+                            <option value="PAN">PAN Card Scan</option>
+                            <option value="General" selected>General</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Associated Customer</label>
+                        <select class="form-select" name="associatedPartyCode">
+                            <option value="">None (Global)</option>
+                            @if (parties != null)
+                            {
+                                foreach (var p in parties)
+                                {
+                                    <option value="@p.PartyCode">@p.PartyName (@p.PartyCode)</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Expiry Date (Optional)</label>
+                        <input type="date" class="form-control" name="expiryDate" />
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm bg-primary border-0">Upload File</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function submitUploadForm(e) {
+            e.preventDefault();
+            const form = $('#uploadDocForm')[0];
+            const data = new FormData(form);
+
+            Swal.fire({
+                title: 'Uploading...',
+                text: 'Storing file securely in document archive, please wait...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            $.ajax({
+                url: '/Documents/Upload',
+                type: 'POST',
+                data: data,
+                processData: false,
+                contentType: false,
+                success: function(res) {
+                    Swal.close();
+                    if (res.ok) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Uploaded!',
+                            text: res.message,
+                            timer: 1000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    portalToast(xhr.responseJSON?.message || 'File upload failed.', 'error');
+                }
+            });
+        }
+
+        function deleteDoc(id) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'This will delete the document registration.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                confirmButtonText: 'Yes, delete it!'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    $.ajax({
+                        url: '/Documents/Delete/' + id,
+                        type: 'POST',
+                        success: function(ok) {
+                            portalToast(ok.message, 'success');
+                            location.reload();
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+}
+
+

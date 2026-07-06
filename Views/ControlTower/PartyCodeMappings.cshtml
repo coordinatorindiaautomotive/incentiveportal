@@ -1,0 +1,299 @@
+﻿@model List<IncentivePortal.Models.PartyCodeMapping>
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Party Code Mappings";
+    var search = ViewBag.Search as string;
+    var currentPage = (int)ViewBag.CurrentPage;
+    var pageSize = (int)ViewBag.PageSize;
+    var totalPages = (int)ViewBag.TotalPages;
+    var totalItems = (int)ViewBag.TotalItems;
+}
+
+<div class="container-fluid py-4" style="">
+    
+    <!-- Flash Messages -->
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert" style="border-radius: 12px; background-color: #ecfdf5; color: #065f46;">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-circle-check fa-lg"></i>
+                <div>@TempData["Success"]</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-4" role="alert" style="border-radius: 12px; background-color: #fef2f2; color: #991b1b;">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation fa-lg"></i>
+                <div>@TempData["Error"]</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm p-4" style="border-radius: 16px; background: linear-gradient(135deg, var(--panel, #ffffff) 0%, rgba(255, 255, 255, 0.95) 100%);">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div style="background: linear-gradient(135deg, var(--brand, var(--primary)) 0%, #a855f7 100%); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; box-shadow: 0 4px 15px rgba(30, 64, 175, 0.25);">
+                            <i class="fa-solid fa-code-merge text-white fa-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="h4 fw-bold mb-1" style="color: var(--ink, #1e293b); letter-spacing: -0.5px;">Party Code Mappings</h2>
+                            <p class="text-secondary small mb-0">Map alternative/alias client codes to canonical master codes for accurate incentive processing.</p>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary px-3 py-2" style="border-radius: 8px;" onclick="showImportModal()">
+                            <i class="fa-solid fa-file-import me-1"></i> Import Mappings
+                        </button>
+                        <button class="btn btn-sm btn-primary px-3 py-2 border-0" style="background: var(--brand, var(--primary)); border-radius: 8px;" onclick="showAddModal()">
+                            <i class="fa-solid fa-plus me-1"></i> Add Mapping
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter and Search -->
+    <div class="card border-0 shadow-sm p-3 mb-4" style="border-radius: 16px; background: var(--panel, #ffffff);">
+        <form method="get" action="@Url.Action("PartyCodeMappings")" class="row g-2 align-items-center">
+            @if (Context.Request.Query["embed"].ToString() == "true")
+            {
+                <input type="hidden" name="embed" value="true" />
+            }
+            <div class="col-md-9 position-relative">
+                <input type="text" name="search" value="@search" class="form-control" placeholder="Search by alternative code, original code or notes..." style="border-radius: 10px; padding-left: 40px; height: 44px;" id="searchInput" />
+                <i class="fa-solid fa-magnifying-glass text-muted position-absolute" style="left: 15px; top: 14px;"></i>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-secondary w-100 fw-semibold" style="border-radius: 10px; height: 44px; background: var(--brand, var(--primary)); border: 0;">Search</button>
+                @if (!string.IsNullOrEmpty(search))
+                {
+                    <a href="?@(Context.Request.Query["embed"].ToString() == "true" ? "embed=true" : "")" class="btn btn-light border" style="border-radius: 10px; height: 44px; display: flex; align-items: center; justify-content: center; width: 60px;">Clear</a>
+                }
+            </div>
+        </form>
+    </div>
+
+    <!-- Mappings Table -->
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; background: var(--panel, #ffffff); overflow: hidden;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                <thead style="background: #f8fafc; border-bottom: 1px solid var(--line, #e2e8f0);">
+                    <tr class="text-secondary fw-semibold">
+                        <th class="ps-4 py-3">Alternative Code</th>
+                        <th class="py-3">Resolved Original Code</th>
+                        <th class="py-3">Notes / Source System</th>
+                        <th class="py-3">Status</th>
+                        <th class="py-3">Audit Details</th>
+                        <th class="pe-4 py-3 text-end" style="width: 120px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in Model)
+                    {
+                        <tr style="transition: background-color 0.2s;">
+                            <td class="ps-4 py-3">
+                                <span class="badge bg-light text-dark border p-2" style="font-family: monospace; font-size: 0.82rem; border-radius: 6px;">@m.AlternativeCode</span>
+                            </td>
+                            <td class="py-3">
+                                <span class="badge bg-primary-subtle text-primary border p-2" style="font-family: monospace; font-size: 0.82rem; border-radius: 6px; background-color: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;">@m.OriginalCode</span>
+                            </td>
+                            <td class="py-3 text-secondary">
+                                @(string.IsNullOrEmpty(m.Notes) ? "-" : m.Notes)
+                            </td>
+                            <td class="py-3">
+                                <span class="badge @(m.IsActive ? "bg-success" : "bg-secondary")" style="border-radius: 8px; padding: 5px 10px;">
+                                    @(m.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td class="py-3 small text-secondary">
+                                <div><i class="fa-solid fa-user me-1" style="font-size: 0.75rem;"></i> @m.CreatedBy</div>
+                                <div style="font-size: 0.75rem;"><i class="fa-solid fa-calendar me-1"></i> @m.CreatedAt.ToString("g")</div>
+                            </td>
+                            <td class="pe-4 py-3 text-end">
+                                <button class="btn btn-sm btn-light border-0 me-1" onclick="showEditModal(@JsonSerializer.Serialize(m))" title="Edit Mapping" style="border-radius: 6px;"><i class="fa-solid fa-edit text-secondary"></i></button>
+                                <button class="btn btn-sm btn-light border-0" onclick="confirmDelete(@m.Id, '@m.AlternativeCode')" title="Delete Mapping" style="border-radius: 6px;"><i class="fa-solid fa-trash text-danger"></i></button>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-5">
+                                <i class="fa-solid fa-code-merge fa-3x mb-3 text-secondary" style="opacity: 0.3;"></i>
+                                <div>No mappings found. Click "Add Mapping" to create a new alternate code rule.</div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <div class="card-footer border-0 bg-white d-flex align-items-center justify-content-between p-3" style="border-top: 1px solid var(--line, #e2e8f0);">
+                <div class="text-secondary small">
+                    Showing page <strong>@currentPage</strong> of <strong>@totalPages</strong> (@totalItems total mappings)
+                </div>
+                <nav aria-label="Page navigation">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                            <a class="page-link" href="?search=@search&page=@(currentPage - 1)&@(Context.Request.Query["embed"].ToString() == "true" ? "embed=true" : "")" style="border-radius: 6px;"><i class="fa-solid fa-chevron-left"></i></a>
+                        </li>
+                        @for (int p = 1; p <= totalPages; p++)
+                        {
+                            <li class="page-item @(p == currentPage ? "active" : "")">
+                                <a class="page-link" href="?search=@search&page=@p&@(Context.Request.Query["embed"].ToString() == "true" ? "embed=true" : "")">@p</a>
+                            </li>
+                        }
+                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                            <a class="page-link" href="?search=@search&page=@(currentPage + 1)&@(Context.Request.Query["embed"].ToString() == "true" ? "embed=true" : "")" style="border-radius: 6px;"><i class="fa-solid fa-chevron-right"></i></a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Save/Add Mapping Modal -->
+<div class="modal fade" id="saveMappingModal" tabindex="-1" aria-labelledby="saveMappingModalLabel" aria-hidden="true" style="">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-bottom-0 p-4 pb-0">
+                <h5 class="modal-title fw-bold" id="saveMappingModalLabel" style="color: var(--ink, #1e293b);">Add Alternate Mapping</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="saveMappingForm" method="post" action="@Url.Action("SavePartyCodeMapping")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="mappingId" value="0" />
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Alternative Code (Alias from Upload)</label>
+                        <input type="text" class="form-control" name="alternativeCode" id="mappingAlternativeCode" placeholder="e.g. ALT-1001" required style="border-radius: 8px; padding-left: 12px; height: 40px;" />
+                        <div class="form-text small text-secondary">The code as it appears in the Excel file being uploaded.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Original Code (Canonical Master Code)</label>
+                        <input type="text" class="form-control" name="originalCode" id="mappingOriginalCode" placeholder="e.g. ABC001" required style="border-radius: 8px; padding-left: 12px; height: 40px;" />
+                        <div class="form-text small text-secondary">The master party code registered in the Parties master registry.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Notes / Remarks</label>
+                        <textarea class="form-control" name="notes" id="mappingNotes" placeholder="e.g. ERP code override for subsidiary mapping" rows="3" style="border-radius: 8px; padding-left: 12px;"></textarea>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="isActive" id="mappingIsActive" value="true" checked />
+                        <label class="form-check-label small fw-bold" for="mappingIsActive">Active mapping (used in resolution)</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 p-4 pt-0">
+                    <button type="button" class="btn btn-light px-3 py-2 fw-semibold" data-bs-dismiss="modal" style="border-radius: 8px;">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold border-0" style="background: var(--brand, var(--primary)); border-radius: 8px;">Save Mapping</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Import Modal -->
+<div class="modal fade" id="importMappingsModal" tabindex="-1" aria-labelledby="importMappingsModalLabel" aria-hidden="true" style="">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-bottom-0 p-4 pb-0">
+                <h5 class="modal-title fw-bold" id="importMappingsModalLabel" style="color: var(--ink, #1e293b);">Bulk Import Mappings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="importMappingsForm" method="post" action="@Url.Action("ImportPartyCodeMappings")" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Select Excel file (.xls, .xlsx)</label>
+                        <input type="file" class="form-control" name="file" accept=".xls,.xlsx" required style="border-radius: 8px;" />
+                    </div>
+                    <div class="p-3 bg-light border text-secondary small mb-2" style="border-radius: 10px;">
+                        <div class="fw-bold mb-1"><i class="fa-solid fa-circle-info me-1"></i> Excel Column Requirements:</div>
+                        <ul>
+                            <li><strong>AlternativeCode</strong> (or "Alternative Code" / "Alias Code")</li>
+                            <li><strong>OriginalCode</strong> (or "Original Code" / "Canonical Code")</li>
+                            <li><strong>Notes</strong> (Optional - mapping remarks)</li>
+                        </ul>
+                        <div class="text-secondary" style="font-size:0.75rem;">Duplicate alias codes will automatically overwrite existing definitions.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 p-4 pt-0">
+                    <button type="button" class="btn btn-light px-3 py-2 fw-semibold" data-bs-dismiss="modal" style="border-radius: 8px;">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold border-0" style="background: var(--brand, var(--primary)); border-radius: 8px;">Upload & Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showAddModal() {
+        $('#mappingId').val(0);
+        $('#mappingAlternativeCode').val('');
+        $('#mappingOriginalCode').val('');
+        $('#mappingNotes').val('');
+        $('#mappingIsActive').prop('checked', true);
+        $('#saveMappingModalLabel').text('Add Alternate Mapping');
+        $('#saveMappingModal').modal('show');
+    }
+
+    function showEditModal(mapping) {
+        $('#mappingId').val(mapping.Id);
+        $('#mappingAlternativeCode').val(mapping.AlternativeCode);
+        $('#mappingOriginalCode').val(mapping.OriginalCode);
+        $('#mappingNotes').val(mapping.Notes || '');
+        $('#mappingIsActive').prop('checked', mapping.IsActive);
+        $('#saveMappingModalLabel').text('Edit Alternate Mapping');
+        $('#saveMappingModal').modal('show');
+    }
+
+    function showImportModal() {
+        $('#importMappingsModal').modal('show');
+    }
+
+    function confirmDelete(id, code) {
+        Swal.fire({
+            title: 'Delete Mapping?',
+            text: `Are you sure you want to remove the alternate code mapping for '${code}'?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Delete'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var form = $('<form>', {
+                    method: 'post',
+                    action: '@Url.Action("DeletePartyCodeMapping")'
+                });
+                form.append($('<input>', {
+                    type: 'hidden',
+                    name: 'id',
+                    value: id
+                }));
+                form.append($('<input>', {
+                    type: 'hidden',
+                    name: '__RequestVerificationToken',
+                    value: $('input[name="__RequestVerificationToken"]').val()
+                }));
+                $('body').append(form);
+                form.submit();
+            }
+        });
+    }
+</script>
+
+
+

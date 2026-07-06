@@ -1,0 +1,264 @@
+@model IEnumerable<IncentivePortal.Models.WorkflowDefinition>
+@{
+    ViewData["Title"] = "Approval Engine Manager";
+    var pending = ViewBag.PendingAssignments as List<IncentivePortal.Models.WorkflowAssignment>;
+    var rolesList = (ViewBag.RolesList as IEnumerable<string>) ?? Enumerable.Empty<string>();
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Block -->
+    <div class="card p-3 mb-4 border-0 shadow-sm" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 class="mb-1 text-primary fw-bold" style="font-family:'Inter',sans-serif;"><i class="fa-solid fa-circle-check me-2"></i> Approval Engine Dashboard</h4>
+                <p class="text-muted small mb-0">Review pending sequential approvals, SLA timelines, amount rules, and audit history logs.</p>
+            </div>
+            <div class="col-md-6 text-end">
+                @if (User.IsInRole("Super Admin"))
+                {
+                    <button class="btn btn-primary btn-sm bg-primary border-0" data-bs-toggle="modal" data-bs-target="#createWorkflowModal"><i class="fa-solid fa-plus-circle me-1"></i> Add Approval Workflow</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Tasks Tab -->
+    <div class="row g-4">
+        <!-- Workflows definition matrix (Left) -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm p-4 mb-4">
+                <h5 class="fw-bold text-secondary mb-3">Configured Workflows</h5>
+                
+                @foreach (var wf in Model)
+                {
+                    <div class="p-3 border rounded mb-3" style="background:rgba(248, 249, 255, 0.6); border-color:rgba(196,198,207,0.3) !important;">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-1">@wf.Name <span class="badge bg-secondary ms-2 small" style="font-size:0.7rem;">@wf.Code</span></h6>
+                                <p class="text-muted small mb-0">@wf.Description</p>
+                            </div>
+                            <span class="badge @(wf.IsActive ? "bg-success" : "bg-secondary")">@(wf.IsActive ? "Active" : "Inactive")</span>
+                        </div>
+                        
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-3 text-muted small">
+                            <span class="fw-bold text-secondary small text-uppercase">Workflow Steps:</span>
+                            @foreach (var step in wf.Steps.OrderBy(s => s.StepNumber))
+                            {
+                                <span class="badge bg-light text-dark border px-3 py-2">
+                                    Step @step.StepNumber: @step.StepName <br/>
+                                    <span class="text-primary small" style="font-size:0.7rem;"><i class="fa-solid fa-user-shield me-1"></i> @step.RoleAllowed (SLA: @step.SlaHours hrs)</span>
+                                </span>
+                                @if (step.StepNumber < wf.Steps.Count)
+                                {
+                                    <i class="fa-solid fa-chevron-right text-muted"></i>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Pending Workflow Action Items (Right) -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm p-4 h-100">
+                <h5 class="fw-bold text-secondary mb-3">Pending Decisions</h5>
+                <p class="text-muted small mb-3">Verify details and record approvals or rejections for active system workflows.</p>
+
+                <div class="pending-decisions scrollbar" style="max-height: 480px; overflow-y: auto;">
+                    @if (pending != null && pending.Any())
+                    {
+                        foreach (var assignment in pending)
+                        {
+                            <div class="p-3 mb-3 border rounded border-primary bg-light-glow" style="font-size: 0.82rem;">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold text-primary">@assignment.WorkflowDefinition?.Name</span>
+                                    <span class="badge bg-warning text-dark">Step @assignment.CurrentStepNumber</span>
+                                </div>
+                                <div class="text-dark small mb-3">
+                                    Entity ID: <strong>@assignment.TargetEntityId</strong> | Type: <strong>@assignment.TargetEntityType</strong> <br/>
+                                    Submitted by: <strong>@assignment.CreatedBy</strong> on @assignment.CreatedAt.ToString("dd MMM yyyy")
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-info w-50" onclick="showWorkflowTimeline(@assignment.Id)"><i class="fa-solid fa-clock-rotate-left"></i> Timeline</button>
+                                    <button class="btn btn-sm btn-primary bg-primary border-0 w-50" onclick="showApproveModal(@assignment.Id)"><i class="fa-solid fa-check"></i> Act Now</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-5 small border rounded bg-light">
+                            <i class="fa-regular fa-check-circle fa-2x text-success mb-2"></i>
+                            <p class="mb-0">No pending workflows in your decision queue.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Create Workflow Definition -->
+<div class="modal fade" id="createWorkflowModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
+            <div class="modal-header border-bottom bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-plus-circle me-1"></i> Add Approval Workflow</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/ApprovalEngine/Save" method="post" data-ajax="true">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Workflow Unique Code</label>
+                        <input type="text" class="form-control" name="Code" required placeholder="e.g. EXTRA_INCENTIVE_PAYOUT" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Workflow Name</label>
+                        <input type="text" class="form-control" name="Name" required placeholder="e.g. Extra Incentive Payout approval" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Description</label>
+                        <textarea class="form-control" name="Description" rows="2" placeholder="Describe the workflow purpose..."></textarea>
+                    </div>
+                    
+                    <h6 class="fw-bold text-primary mb-3">Define Level 1 Step</h6>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small text-muted">Step Name</label>
+                            <input type="text" class="form-control form-control-sm" name="steps[0].StepName" required value="Level 1 Review" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-muted">Allowed Role</label>
+                            <select class="form-select form-select-sm" name="steps[0].RoleAllowed">
+                                @foreach (var r in rolesList)
+                                {
+                                    <option value="@r">@r</option>
+                                }
+                            </select>
+                        </div>
+                        <input type="hidden" name="steps[0].RequiredApprovalsCount" value="1" />
+                        <input type="hidden" name="steps[0].SlaHours" value="24" />
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm bg-primary border-0">Save Workflow</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Workflow Timeline Viewer -->
+<div class="modal fade" id="timelineModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content border-0 shadow-lg p-4">
+            <h5 class="fw-bold text-primary mb-3"><i class="fa-solid fa-clock-rotate-left me-1"></i> Workflow Audit Timeline</h5>
+            <div id="timelineContainer" class="scrollbar" style="max-height: 380px; overflow-y: auto;">
+                <!-- Timeline items loaded via AJAX -->
+            </div>
+            <button class="btn btn-secondary btn-sm w-100 mt-3" data-bs-dismiss="modal">Dismiss</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Approve / Reject Decision Sheet -->
+<div class="modal fade" id="decisionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content border-0 shadow-lg p-4">
+            <h5 class="fw-bold text-primary mb-3">Record Workflow Decision</h5>
+            <form id="decisionForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="assignmentId" id="decisionAssignmentId" />
+                <div class="mb-3">
+                    <label class="form-label small text-muted">Remarks / Comments</label>
+                    <textarea class="form-control" name="remarks" id="decisionRemarks" rows="3" required placeholder="Reason for approval or rejection..."></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-danger w-50" onclick="submitDecision('/ApprovalEngine/Reject')"><i class="fa-solid fa-times"></i> Reject</button>
+                    <button type="button" class="btn btn-primary bg-primary border-0 w-50" onclick="submitDecision('/ApprovalEngine/Approve')"><i class="fa-solid fa-check"></i> Approve</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showWorkflowTimeline(id) {
+            $('#timelineContainer').html('<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>');
+            new bootstrap.Modal(document.getElementById('timelineModal')).show();
+
+            $.get('/ApprovalEngine/GetAssignmentHistory/' + id, function(res) {
+                let html = `
+                    <div class="fw-bold text-dark small mb-3">Workflow: ${res.workflowName}</div>
+                    <h6 class="fw-bold small text-uppercase text-secondary mb-2">Sequential Level Steps:</h6>
+                    <div class="d-flex flex-column mb-4 gap-2 border-start ps-3 ms-2">
+                `;
+                res.steps.forEach(s => {
+                    html += `
+                        <div class="small mb-1">
+                            <span class="${s.isCompleted ? 'text-success fw-bold' : s.isCurrent ? 'text-warning fw-bold' : 'text-muted'}">
+                                &bull; Step ${s.StepNumber}: ${s.StepName} (${s.RoleAllowed}) 
+                                ${s.isCompleted ? ' [Completed]' : s.isCurrent ? ' [CURRENT STEP]' : ''}
+                            </span>
+                        </div>
+                    `;
+                });
+                html += `</div><h6 class="fw-bold small text-uppercase text-secondary mb-2">Audit Action Trail:</h6><div class="border-start ps-3 ms-2">`;
+                
+                res.history.forEach(h => {
+                    html += `
+                        <div class="small mb-3">
+                            <div class="fw-bold text-dark">${h.action} at Level ${h.StepNumber}</div>
+                            <div class="text-muted" style="font-size:0.75rem;">By <strong>${h.performedBy}</strong> on ${h.performedAt}</div>
+                            <div class="text-secondary mt-1 italic">Remarks: "${h.remarks || 'None'}"</div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+                $('#timelineContainer').html(html);
+            });
+        }
+
+        function showApproveModal(id) {
+            $('#decisionAssignmentId').val(id);
+            $('#decisionRemarks').val('');
+            new bootstrap.Modal(document.getElementById('decisionModal')).show();
+        }
+
+        function submitDecision(url) {
+            const form = $('#decisionForm');
+            if (!$('#decisionRemarks').val()) {
+                portalToast('Remarks are required to complete decisions.', 'warning');
+                return;
+            }
+
+            Swal.fire({
+                title: 'Processing Decision...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            $.ajax({
+                url: url,
+                type: 'POST',
+                data: form.serialize(),
+                success: function(res) {
+                    Swal.close();
+                    bootstrap.Modal.getInstance(document.getElementById('decisionModal')).hide();
+                    portalToast(res.message, 'success');
+                    setTimeout(() => { location.reload(); }, 800);
+                },
+                error: function(err) {
+                    Swal.close();
+                    portalToast(err.responseJSON?.message || 'Action failed.', 'error');
+                }
+            });
+        }
+    </script>
+}
+
