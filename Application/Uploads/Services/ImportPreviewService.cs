@@ -819,6 +819,40 @@ public sealed class ImportPreviewService(
 
         var rawRows = rawRowsList;
 
+        if (resolvedMode == "PreCalculated")
+        {
+            var activePeriodLocks = await db.IncentivePeriodLocks
+                .Where(x => x.Year == period.Year && x.Month == period.Month && x.LockStatus == "Locked" && !x.IsDeleted)
+                .ToListAsync(cancellationToken);
+
+            if (activePeriodLocks.Count > 0)
+            {
+                var processedPeriods = rawRows
+                    .Select(r => new { Loc = r.Location ?? "", Category = r.PartCategoryCode ?? "Other" })
+                    .Distinct()
+                    .ToList();
+
+                foreach (var item in processedPeriods)
+                {
+                    var lockRecord = activePeriodLocks.FirstOrDefault(x => 
+                        x.BranchCode.Equals(item.Loc, StringComparison.OrdinalIgnoreCase) && 
+                        x.PartCategoryCode.Equals(item.Category, StringComparison.OrdinalIgnoreCase));
+
+                    if (lockRecord != null)
+                    {
+                        if (lockRecord.IncentiveSource == "Calculator")
+                        {
+                            throw new InvalidOperationException("This period has already been processed through the Incentive Calculator and is locked. Manual upload cannot proceed unless an authorized user unlocks the period.");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"This period has already been processed through Manual Upload and is locked for Branch {item.Loc} and Category {item.Category}. Manual upload cannot proceed unless an authorized user unlocks the period.");
+                        }
+                    }
+                }
+            }
+        }
+
         if (resolvedMode == "Dynamic")
         {
             var targetYears = rawRows.Select(x => x.Year).Distinct().ToList();

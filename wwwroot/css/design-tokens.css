@@ -1,81 +1,81 @@
 /* ==========================================================================
-   DESIGN TOKENS — Enterprise SaaS Design System
+   DESIGN TOKENS — Enterprise Fortune 500 Premium SaaS Design System
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   /* ---- Colors System ---- */
   --bg-page: #F8FAFC;
   --bg-card: #FFFFFF;
-  --border-subtle: #E5E7EB;
-  --border-strong: #D1D5DB;
+  --border-subtle: #F1F5F9;
+  --border-strong: #E2E8F0;
 
-  /* ---- Brand / Sidebar ---- */
-  --sidebar-bg: #1A1592;
-  --sidebar-hover: #8A2EFF;
-  --sidebar-grad-start: #EC4899;
-  --sidebar-grad-end: #8B2CF5;
-  --sidebar-text: #FFFFFF;
-  --sidebar-text-muted: rgba(255, 255, 255, 0.7);
+  /* ---- Brand / Sidebar (Sophisticated Deep Slate & Navy) ---- */
+  --sidebar-bg: #0B1220;
+  --sidebar-hover: #1E293B;
+  --sidebar-grad-start: #3B82F6;
+  --sidebar-grad-end: #1D4ED8;
+  --sidebar-text: #F8FAFC;
+  --sidebar-text-muted: #94A3B8;
 
-  /* ---- Brand Accent / Primary Selection ---- */
-  --accent-primary: #6D28FF;
-  --accent-primary-hover: #5B21F6;
+  /* ---- Brand Accent / Primary Selection (Enterprise Tech Royal Blue) ---- */
+  --accent-primary: #1D4ED8;
+  --accent-primary-hover: #1E40AF;
   
   /* ---- Text System ---- */
-  --text-primary: #111827;
-  --text-secondary: #374151;
-  --text-muted: #6B7280;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
   --text-inverse: #FFFFFF;
 
-  /* ---- KPI card gradients ---- */
-  --grad-sales-start: #8B2CF5;
-  --grad-sales-end: #5B21F6;
+  /* ---- Premium Fortune 500 Card Gradients ---- */
+  --grad-sales-start: #4F46E5;
+  --grad-sales-end: #312E81;
 
   --grad-incentive-start: #10B981;
-  --grad-incentive-end: #059669;
+  --grad-incentive-end: #064E3B;
 
-  --grad-cashin-start: #3B82F6;
-  --grad-cashin-end: #2563EB;
+  --grad-cashin-start: #2563EB;
+  --grad-cashin-end: #1E3A8A;
 
-  --grad-cashout-start: #FB923C;
-  --grad-cashout-end: #F97316;
+  --grad-cashout-start: #D97706;
+  --grad-cashout-end: #78350F;
 
-  --grad-netbalance-start: #EC4899;
-  --grad-netbalance-end: #DB2777;
+  --grad-netbalance-start: #475569;
+  --grad-netbalance-end: #0F172A;
   
-  --grad-support-start: #6D28FF;
-  --grad-support-end: #9333EA;
+  --grad-support-start: #7C3AED;
+  --grad-support-end: #4C1D95;
 
-  /* ---- Status colors ---- */
+  /* ---- High-End Status Colors ---- */
   --status-success-bg: #F0FDF4;
-  --status-success-text: #16A34A;
-  --status-pending-bg: #FFF7ED;
-  --status-pending-text: #F97316;
+  --status-success-text: #15803D;
+  --status-pending-bg: #FFFBEB;
+  --status-pending-text: #B45309;
   --status-failed-bg: #FEF2F2;
-  --status-failed-text: #DC2626;
+  --status-failed-text: #B91C1C;
 
-  /* ---- Elevation System ---- */
-  --shadow-card: 0 10px 30px rgba(109, 40, 255, 0.10);
-  --shadow-floating: 0 15px 40px rgba(0, 0, 0, 0.08);
-  --shadow-btn: 0 8px 25px rgba(109, 40, 255, 0.25);
+  /* ---- Soft Premium Elevation System (Anti-glare, Soft Blend) ---- */
+  --shadow-card: 0 4px 20px 0 rgba(15, 23, 42, 0.04), 0 1px 2px 0 rgba(15, 23, 42, 0.02);
+  --shadow-floating: 0 12px 40px 0 rgba(15, 23, 42, 0.08), 0 1px 3px 0 rgba(15, 23, 42, 0.03);
+  --shadow-btn: 0 4px 12px 0 rgba(29, 78, 216, 0.15);
 
-  /* ---- Radii ---- */
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-sidebar: 24px;
+  /* ---- Rounded Radii Scale ---- */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-sidebar: 0px; /* Flush layout for elite finish */
   --radius-full: 9999px;
 
   /* Core UI System mapping */
   --primary:             var(--accent-primary);
   --primary-hover:       var(--accent-primary-hover);
-  --primary-light:       #f5f3ff;
-  --primary-glow:        rgba(109, 40, 255, 0.15);
+  --primary-light:       #F0FDF4;
+  --primary-glow:        rgba(29, 78, 216, 0.10);
 
-  --secondary:           var(--accent-primary);
+  --secondary:           #2563EB;
   
   --success:             var(--status-success-text);
   --danger:              var(--status-failed-text);
@@ -84,7 +84,7 @@
   --shadow:              var(--shadow-card);
 
   --ink:                 var(--text-primary);
-  --ink-2:               #111827;
+  --ink-2:               #0F172A;
   --muted:               var(--text-secondary);
   --muted-2:             var(--text-muted);
   --line:                var(--border-subtle);
@@ -95,11 +95,11 @@
 
   /* Navigation Sidebar specific overrides */
   --nav:                 var(--sidebar-bg);
-  --nav-2:               var(--sidebar-bg);
+  --nav-2:               #0E1726;
   --nav-accent:          var(--sidebar-hover);
   --nav-text:            var(--sidebar-text-muted);
   --nav-active:          var(--sidebar-text);
-  --nav-border:          rgba(255, 255, 255, 0.1);
+  --nav-border:          rgba(255, 255, 255, 0.04);
 
   --border-glow:         var(--primary-glow);
 
@@ -115,16 +115,16 @@
   /* Typography Scale */
   --font-xs:   12px;
   --font-sm:   14px; /* body */
-  --font-md:   15px; /* subheading */
+  --font-md:   16px; /* subheading */
   --font-lg:   18px;
   --font-xl:   24px;
   --font-2xl:  32px; /* heading */
   --font-3xl:  38px; /* card value */
 
   /* Layout Dimensions */
-  --sidebar-w:           270px;
-  --sidebar-collapsed-w: 80px;
-  --topbar-h:            80px;
+  --sidebar-w:           280px;
+  --sidebar-collapsed-w: 72px;
+  --topbar-h:            72px;
 
   /* Transitions */
   --ease-out-quart:   cubic-bezier(0.16, 1, 0.3, 1);

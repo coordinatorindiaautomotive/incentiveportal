@@ -150,4 +150,135 @@ public sealed class UploadManagementController(
             message = $"{rawCount:N0} raw record(s) for {monthName} deleted successfully by {user}."
         });
     }
+
+    // ── Granular Incentive Period Locks ─────────────────────────────────────
+
+    [HttpGet]
+    public async Task<IActionResult> GetIncentivePeriodLocks(CancellationToken cancellationToken)
+    {
+        var locks = await db.IncentivePeriodLocks
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.Year)
+            .ThenByDescending(x => x.Month)
+            .Select(x => new
+            {
+                x.Id,
+                x.Year,
+                x.Month,
+                monthLabel = new DateTime(x.Year, x.Month, 1).ToString("MMMM yyyy"),
+                financialYear = (x.Month >= 4) ? $"FY {x.Year}-{((x.Year + 1) % 100):D2}" : $"FY {x.Year - 1}-{(x.Year % 100):D2}",
+                x.BranchCode,
+                x.PartCategoryCode,
+                x.IncentiveSource,
+                x.LockStatus,
+                lockedDate = x.LockedDate.HasValue ? x.LockedDate.Value.ToString("yyyy-MM-dd HH:mm") : "-",
+                x.LockedBy,
+                postedDate = x.PostedDate.HasValue ? x.PostedDate.Value.ToString("yyyy-MM-dd HH:mm") : "-",
+                x.PostedBy,
+                x.UnlockReason,
+                x.UnlockRemarks
+            })
+            .ToListAsync(cancellationToken);
+
+        return Json(locks);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> LockIncentivePeriod(
+        int year,
+        int month,
+        string branchCode,
+        string partCategoryCode,
+        string incentiveSource,
+        string? reason,
+        CancellationToken cancellationToken)
+    {
+        if (year < 2000 || year > 2100)
+            return BadRequest(new { message = "Invalid year specified." });
+        if (month < 1 || month > 12)
+            return BadRequest(new { message = "Invalid month specified." });
+        if (string.IsNullOrWhiteSpace(branchCode))
+            return BadRequest(new { message = "Branch code is required." });
+        if (string.IsNullOrWhiteSpace(partCategoryCode))
+            return BadRequest(new { message = "Part category code is required." });
+        if (string.IsNullOrWhiteSpace(incentiveSource))
+            return BadRequest(new { message = "Incentive source is required." });
+
+        var exists = await db.IncentivePeriodLocks
+            .FirstOrDefaultAsync(x => x.Year == year && x.Month == month 
+                && x.BranchCode == branchCode && x.PartCategoryCode == partCategoryCode && !x.IsDeleted, cancellationToken);
+
+        if (exists != null)
+        {
+            if (exists.LockStatus == "Locked")
+            {
+                return BadRequest(new { message = "This period lock already exists and is active." });
+            }
+            else
+            {
+                exists.LockStatus = "Locked";
+                exists.IncentiveSource = incentiveSource;
+                exists.LockedBy = currentUser.UserName ?? "system";
+                exists.LockedDate = DateTime.UtcNow;
+                exists.UnlockReason = null;
+                exists.UnlockRemarks = null;
+                exists.UpdatedAt = DateTime.UtcNow;
+                exists.UpdatedBy = currentUser.UserName ?? "system";
+                db.Entry(exists).State = EntityState.Modified;
+            }
+        }
+        else
+        {
+            var newLock = new IncentivePeriodLock
+            {
+                Year = year,
+                Month = month,
+                BranchCode = branchCode,
+                PartCategoryCode = partCategoryCode,
+                IncentiveSource = incentiveSource,
+                LockStatus = "Locked",
+                LockedBy = currentUser.UserName ?? "system",
+                LockedDate = DateTime.UtcNow,
+                CreatedBy = currentUser.UserName ?? "system",
+                CreatedAt = DateTime.UtcNow
+            };
+            db.IncentivePeriodLocks.Add(newLock);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return Json(new { ok = true, message = "Granular period lock applied successfully." });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UnlockIncentivePeriod(
+        int id,
+        string reason,
+        string remarks,
+        CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(AppRoles.SuperAdmin))
+        {
+            return StatusCode(403, new { message = "Access Denied: Only Super Admins can unlock period locks." });
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+            return BadRequest(new { message = "Unlock reason is required." });
+        if (string.IsNullOrWhiteSpace(remarks))
+            return BadRequest(new { message = "Unlock remarks/details are required." });
+
+        var lockRecord = await db.IncentivePeriodLocks.FindAsync(new object[] { id }, cancellationToken);
+        if (lockRecord == null || lockRecord.IsDeleted)
+            return NotFound(new { message = "Lock record not found." });
+
+        lockRecord.LockStatus = "Unlocked";
+        lockRecord.UnlockReason = reason;
+        lockRecord.UnlockRemarks = remarks;
+        lockRecord.UpdatedAt = DateTime.UtcNow;
+        lockRecord.UpdatedBy = currentUser.UserName ?? "system";
+
+        db.Entry(lockRecord).State = EntityState.Modified;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Json(new { ok = true, message = "Granular period unlocked successfully." });
+    }
 }

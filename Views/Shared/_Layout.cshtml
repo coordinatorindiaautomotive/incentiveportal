@@ -180,7 +180,7 @@
 
                         <!-- Incentive Engine -->
                         <div class="nav-dropdown-wrapper">
-                            <a class="nav-link nav-dropdown-trigger @IsActive("Schemes") @IsActive("AiCenter")" data-bs-toggle="collapse" data-bs-target="#menuIncentive" href="javascript:void(0);" role="button" aria-expanded="false">
+                            <a class="nav-link nav-dropdown-trigger @IsActive("Schemes") @IsActive("AiCenter") @IsActive("Incentives", "Verification")" data-bs-toggle="collapse" data-bs-target="#menuIncentive" href="javascript:void(0);" role="button" aria-expanded="false">
                                 <span class="nav-icon"><i data-lucide="award" class="icon-incentive"></i></span>
                                 <span class="nav-label">Incentive Engine</span>
                                 <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
@@ -188,6 +188,7 @@
                             <div class="collapse" id="menuIncentive">
                                 <div class="nav-dropdown-content">
                                     <a class="nav-link" href="/Schemes">Incentive Schemes</a>
+                                    <a class="nav-link @IsActive("Incentives", "Verification")" href="/Incentives/Verification">Verification Workspace</a>
                                     <a class="nav-link" href="/AiCenter/Index">AI Command Center</a>
                                 </div>
                             </div>

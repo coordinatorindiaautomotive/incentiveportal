@@ -271,6 +271,23 @@ public sealed class MonthLock : AuditableEntity
     [MaxLength(500)] public string? UnlockReason { get; set; }
 }
 
+[Table("IncentivePeriodLocks")]
+public sealed class IncentivePeriodLock : AuditableEntity
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    [Required, MaxLength(40)] public string BranchCode { get; set; } = string.Empty;
+    [Required, MaxLength(20)] public string PartCategoryCode { get; set; } = string.Empty;
+    [Required, MaxLength(50)] public string IncentiveSource { get; set; } = string.Empty; // "Calculator" or "Manual Upload"
+    [Required, MaxLength(50)] public string LockStatus { get; set; } = "Locked"; // "Locked", "Unlocked"
+    [MaxLength(100)] public string? LockedBy { get; set; }
+    public DateTime? LockedDate { get; set; }
+    [MaxLength(100)] public string? PostedBy { get; set; }
+    public DateTime? PostedDate { get; set; }
+    [MaxLength(500)] public string? UnlockReason { get; set; }
+    [MaxLength(500)] public string? UnlockRemarks { get; set; }
+}
+
 
 public sealed class PartyExecutiveMapping : AuditableEntity
 {

@@ -1,0 +1,848 @@
+@{
+    ViewData["Title"] = "Verification Workspace";
+}
+
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                "colors": {
+                    "primary": "#0f172a",
+                    "secondary": "#2563eb",
+                    "success": "#16a34a",
+                    "error": "#dc2626",
+                    "warning": "#d97706",
+                    "surface": "#f8fafc",
+                    "border": "#e2e8f0"
+                }
+            }
+        }
+    }
+</script>
+
+<style>
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    .shadow-premium {
+        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03), 0 2px 8px -2px rgba(0, 0, 0, 0.02);
+    }
+    .pulse-animation {
+        animation: sf-pulse 1.8s infinite ease-in-out;
+    }
+    @@keyframes sf-pulse {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+    }
+    .slide-down {
+        animation: sf-slide-down 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @@keyframes sf-slide-down {
+        from { opacity: 0; transform: translateY(-12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+<div class="w-full text-slate-800 font-body-md flex flex-col space-y-6">
+    <!-- Header Section -->
+    <section class="flex flex-col md:flex-row md:items-center justify-between gap-6 p-8 rounded-2xl shadow-xl relative overflow-hidden" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+        <div class="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-white/5 blur-3xl"></div>
+        <div class="absolute right-40 -bottom-20 w-48 h-48 rounded-full bg-blue-400/10 blur-3xl"></div>
+        
+        <div class="space-y-2 relative z-10">
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-lg flex items-center justify-center text-white">
+                    <span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">rule</span>
+                </div>
+                <div class="space-y-1">
+                    <h2 class="font-headline-xl text-3xl font-extrabold text-white tracking-tight">Verification Workspace</h2>
+                    <p class="text-slate-300/80 font-medium max-w-xl text-sm font-sans">Verify calculated incentives, apply overrides, process approvals, and freeze periods.</p>
+                </div>
+            </div>
+        </div>
+        <div class="flex gap-4 relative z-10">
+            <button onclick="refreshData()" class="flex items-center gap-2 px-6 py-3.5 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-bold rounded-xl transition-all shadow-sm active:scale-95">
+                <span class="material-symbols-outlined">refresh</span>
+                Refresh
+            </button>
+            <button onclick="openPostModal()" class="flex items-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(37,99,236,0.3)] transition-all active:scale-95">
+                <span class="material-symbols-outlined">send</span>
+                Post to Register
+            </button>
+        </div>
+    </section>
+
+    <!-- KPI Metrics Dashboard -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white p-6 rounded-2xl shadow-premium border border-slate-100 flex items-center justify-between transition-transform hover:-translate-y-1 duration-300">
+            <div>
+                <span class="text-slate-400 text-xs font-semibold block uppercase tracking-wider">Total Sales Verified</span>
+                <h3 class="font-bold text-2xl text-slate-800 mt-1" id="kpi-sales">₹ 0.00</h3>
+            </div>
+            <span class="material-symbols-outlined text-4xl text-blue-500 bg-blue-50 p-3 rounded-xl">payments</span>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-premium border border-slate-100 flex items-center justify-between transition-transform hover:-translate-y-1 duration-300">
+            <div>
+                <span class="text-slate-400 text-xs font-semibold block uppercase tracking-wider">Gross Incentive</span>
+                <h3 class="font-bold text-2xl text-slate-800 mt-1" id="kpi-gross">₹ 0.00</h3>
+            </div>
+            <span class="material-symbols-outlined text-4xl text-emerald-500 bg-emerald-50 p-3 rounded-xl">account_balance_wallet</span>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-premium border border-slate-100 flex items-center justify-between transition-transform hover:-translate-y-1 duration-300">
+            <div>
+                <span class="text-slate-400 text-xs font-semibold block uppercase tracking-wider">Net Transfer</span>
+                <h3 class="font-bold text-2xl text-slate-800 mt-1" id="kpi-net">₹ 0.00</h3>
+            </div>
+            <span class="material-symbols-outlined text-4xl text-indigo-500 bg-indigo-50 p-3 rounded-xl">credit_card</span>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-premium border border-slate-100 flex items-center justify-between transition-transform hover:-translate-y-1 duration-300">
+            <div>
+                <span class="text-slate-400 text-xs font-semibold block uppercase tracking-wider">Distributor Records</span>
+                <h3 class="font-bold text-2xl text-slate-800 mt-1" id="kpi-count">0</h3>
+            </div>
+            <span class="material-symbols-outlined text-4xl text-slate-500 bg-slate-50 p-3 rounded-xl">group</span>
+        </div>
+    </div>
+
+    <!-- Filters Panel -->
+    <div class="bg-white p-6 rounded-2xl shadow-premium border border-slate-100 space-y-4">
+        <h3 class="font-headline-md text-lg font-bold flex items-center gap-2">
+            <span class="material-symbols-outlined text-slate-400">filter_alt</span> Filter Workspace
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Year</label>
+                <select id="filter-year" onchange="refreshData()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
+                    <option value="2026" selected>2026</option>
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Month</label>
+                <select id="filter-month" onchange="refreshData()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
+                    <option value="5" selected>May</option>
+                    <option value="6">June</option>
+                    <option value="4">April</option>
+                    <option value="3">March</option>
+                    <option value="2">February</option>
+                    <option value="1">January</option>
+                    <option value="7">July</option>
+                    <option value="8">August</option>
+                    <option value="9">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Branch</label>
+                <input type="text" id="filter-branch" oninput="refreshData()" placeholder="e.g. DEL" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Part Category</label>
+                <input type="text" id="filter-category" oninput="refreshData()" placeholder="e.g. Parts" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Status</label>
+                <select id="filter-status" onchange="refreshData()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
+                    <option value="">All Statuses</option>
+                    <option value="Draft" selected>Draft</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Posted">Posted</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Search</label>
+                <input type="text" id="filter-search" oninput="refreshData()" placeholder="Code or Name..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Grid Workspace -->
+    <div class="bg-white rounded-2xl shadow-premium border border-slate-100 overflow-hidden flex flex-col">
+        <!-- Action Toolbar -->
+        <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="check-all" onchange="toggleSelectAll(this)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500/20" />
+                <span class="text-xs font-semibold text-slate-500" id="selection-summary">0 records selected</span>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="bulkApprove()" id="btn-bulk-approve" disabled class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-500 transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none active:scale-95">
+                    <span class="material-symbols-outlined text-sm">verified</span>
+                    Approve Selected
+                </button>
+                <button onclick="openRejectModal()" id="btn-bulk-reject" disabled class="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold shadow-sm hover:bg-red-500 transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:pointer-events-none active:scale-95">
+                    <span class="material-symbols-outlined text-sm">cancel</span>
+                    Reject Selected
+                </button>
+            </div>
+        </div>
+
+        <!-- Table View -->
+        <div class="overflow-x-auto shadow-inner min-h-[380px]">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead class="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 tracking-widest border-b border-slate-100">
+                    <tr>
+                        <th class="px-4 py-3.5 w-10"></th>
+                        <th class="px-4 py-3.5">Distributor</th>
+                        <th class="px-4 py-3.5">Branch</th>
+                        <th class="px-4 py-3.5">Category</th>
+                        <th class="px-4 py-3.5 text-right font-bold">Sale Value</th>
+                        <th class="px-4 py-3.5 text-center">Slab</th>
+                        <th class="px-4 py-3.5 text-right">Discount</th>
+                        <th class="px-4 py-3.5 text-right">Gross Inc.</th>
+                        <th class="px-4 py-3.5 text-right">TDS</th>
+                        <th class="px-4 py-3.5 text-right font-bold text-blue-600">Net Transfer</th>
+                        <th class="px-4 py-3.5 text-center">Status</th>
+                        <th class="px-6 py-3.5 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="data-table-body" class="divide-y divide-slate-100 text-slate-600 font-medium">
+                    <tr>
+                        <td colspan="12" class="text-center py-12 text-slate-400 font-bold">
+                            <span class="spinner-border spinner-border-sm text-blue-600 animate-spin mr-2"></span> Loading incentives workspace...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <span class="text-xs text-slate-400 font-semibold" id="pagination-summary">Showing 0 to 0 of 0 entries</span>
+            <div class="flex gap-2">
+                <button onclick="prevPage()" id="btn-prev" disabled class="px-3.5 py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none">Prev</button>
+                <button onclick="nextPage()" id="btn-next" disabled class="px-3.5 py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rejection Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-2xl rounded-2xl overflow-hidden">
+            <div class="modal-header border-b-0 pb-0 pt-6 px-6 flex items-center justify-between">
+                <h5 class="modal-title font-bold text-lg text-slate-800">Reject Records</h5>
+                <button type="button" class="btn-close text-slate-400 hover:text-slate-800" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-6 py-4 space-y-4">
+                <p class="text-xs text-slate-500">Provide rejection comments for the selected records. These remarks are mandatory.</p>
+                <div>
+                    <label for="reject-remarks" class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Remarks / Reason</label>
+                    <textarea id="reject-remarks" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 resize-none" placeholder="Provide complete justification for rejection..." rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-body px-6 pb-6 pt-0 flex justify-end gap-3 border-t-0">
+                <button type="button" class="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold hover:bg-slate-100" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="px-5 py-2 bg-red-600 text-white font-bold text-xs rounded-xl hover:bg-red-500" onclick="submitRejection()">Reject Records</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Override Modal -->
+<div class="modal fade" id="overrideModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-2xl rounded-2xl overflow-hidden">
+            <div class="modal-header border-b-0 pb-0 pt-6 px-6 flex items-center justify-between bg-slate-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                        <span class="material-symbols-outlined">edit_square</span>
+                    </div>
+                    <h5 class="modal-title font-bold text-lg text-slate-800">Manual Override Adjustment</h5>
+                </div>
+                <button type="button" class="btn-close text-slate-400 hover:text-slate-800" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Record details -->
+                <div class="space-y-4 border-r border-slate-100 pr-6">
+                    <h6 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Distributor Details</h6>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between py-1 border-b border-slate-50"><span class="text-slate-400">Code</span><strong id="over-code" class="font-bold text-slate-800">DEL01</strong></div>
+                        <div class="flex justify-between py-1 border-b border-slate-50"><span class="text-slate-400">Name</span><strong id="over-name" class="font-bold text-slate-800">Super Distributor</strong></div>
+                        <div class="flex justify-between py-1 border-b border-slate-50"><span class="text-slate-400">Branch</span><strong id="over-branch" class="font-bold text-slate-800">DEL</strong></div>
+                        <div class="flex justify-between py-1 border-b border-slate-50"><span class="text-slate-400">Category</span><strong id="over-category" class="font-bold text-slate-800">Parts</strong></div>
+                        <div class="flex justify-between py-1 border-b border-slate-50"><span class="text-slate-400">Original Slab</span><strong id="over-slab" class="font-bold text-slate-800">3%</strong></div>
+                    </div>
+                </div>
+
+                <!-- Fields to override -->
+                <div class="space-y-4">
+                    <h6 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Adjustment Values</h6>
+                    <form class="space-y-3" onsubmit="return false;">
+                        <input type="hidden" id="over-id" />
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Sale Value</label>
+                                <input type="number" id="over-sale" oninput="calculateOverrideIncentive()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20" />
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Discount Amount</label>
+                                <input type="number" id="over-discount" oninput="calculateOverrideIncentive()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20" />
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Slab %</label>
+                                <input type="number" step="0.01" id="over-slab-percent" oninput="calculateOverrideIncentive()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20" />
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Gross Incentive</label>
+                                <input type="number" id="over-gross" readonly class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none text-slate-500 font-bold" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Remarks / Reason (Required)</label>
+                            <textarea id="over-remarks" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 resize-none" placeholder="Provide reason for this override..." rows="2"></textarea>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-body px-6 pb-6 pt-0 flex justify-end gap-3 border-t-0">
+                <button type="button" class="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold hover:bg-slate-100" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="px-5 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-500" onclick="submitOverride()">Apply Override</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Source Transactions Modal -->
+<div class="modal fade" id="sourceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-2xl rounded-2xl overflow-hidden">
+            <div class="modal-header border-b-0 pb-0 pt-6 px-6 flex items-center justify-between bg-slate-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center">
+                        <span class="material-symbols-outlined">analytics</span>
+                    </div>
+                    <h5 class="modal-title font-bold text-lg text-slate-800">Source Sales Transactions</h5>
+                </div>
+                <button type="button" class="btn-close text-slate-400 hover:text-slate-800" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-6 py-4 space-y-4">
+                <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-inner max-h-[360px]">
+                    <table class="w-full text-left border-collapse text-[11px]">
+                        <thead class="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                            <tr>
+                                <th class="px-4 py-2">Row #</th>
+                                <th class="px-4 py-2">Document #</th>
+                                <th class="px-4 py-2">Part Number</th>
+                                <th class="px-4 py-2 text-right">Qty</th>
+                                <th class="px-4 py-2 text-right">Sale Value</th>
+                                <th class="px-4 py-2 text-right">Discount</th>
+                                <th class="px-4 py-2">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="source-table-body" class="divide-y divide-slate-100 text-slate-500 font-semibold">
+                            <!-- Loaded dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-body px-6 pb-6 pt-0 flex justify-end border-t-0">
+                <button type="button" class="px-5 py-2.5 bg-slate-800 text-white font-bold text-xs rounded-xl hover:bg-slate-700" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audit History Modal -->
+<div class="modal fade" id="auditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-2xl rounded-2xl overflow-hidden">
+            <div class="modal-header border-b-0 pb-0 pt-6 px-6 flex items-center justify-between bg-slate-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center">
+                        <span class="material-symbols-outlined">history</span>
+                    </div>
+                    <h5 class="modal-title font-bold text-lg text-slate-800">Adjustment & Verification Audit Trail</h5>
+                </div>
+                <button type="button" class="btn-close text-slate-400 hover:text-slate-800" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-6 py-4 space-y-4">
+                <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-inner max-h-[360px]">
+                    <table class="w-full text-left border-collapse text-[11px]">
+                        <thead class="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                            <tr>
+                                <th class="px-4 py-2">Action</th>
+                                <th class="px-4 py-2">Modified By</th>
+                                <th class="px-4 py-2">Timestamp</th>
+                                <th class="px-4 py-2">Modifications Details</th>
+                                <th class="px-4 py-2">IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-table-body" class="divide-y divide-slate-100 text-slate-500 font-semibold">
+                            <!-- Loaded dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-body px-6 pb-6 pt-0 flex justify-end border-t-0">
+                <button type="button" class="px-5 py-2.5 bg-slate-800 text-white font-bold text-xs rounded-xl hover:bg-slate-700" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeItems = [];
+    let selectedIds = new Set();
+    let currentPage = 1;
+    let pageSize = 20;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        refreshData();
+    });
+
+    function refreshData() {
+        const year = document.getElementById('filter-year').value;
+        const month = document.getElementById('filter-month').value;
+        const branch = document.getElementById('filter-branch').value;
+        const category = document.getElementById('filter-category').value;
+        const status = document.getElementById('filter-status').value;
+        const search = document.getElementById('filter-search').value;
+
+        const tbody = document.getElementById('data-table-body');
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-12 text-slate-400 font-bold"><span class="spinner-border spinner-border-sm text-blue-600 animate-spin mr-2"></span> Filtering workspace...</td></tr>`;
+
+        fetch(`/Incentives/GetVerificationData?year=${year}&month=${month}&branch=${encodeURIComponent(branch)}&category=${encodeURIComponent(category)}&status=${status}&search=${encodeURIComponent(search)}&page=${currentPage}&pageSize=${pageSize}`)
+        .then(res => res.json())
+        .then(data => {
+            activeItems = data.items;
+            selectedIds.clear();
+            document.getElementById('check-all').checked = false;
+            updateSelectionSummary();
+
+            // Populate KPIs
+            document.getElementById('kpi-sales').innerText = '₹ ' + data.totalSaleValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('kpi-gross').innerText = '₹ ' + data.totalGrossIncentive.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('kpi-net').innerText = '₹ ' + data.totalNetTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('kpi-count').innerText = data.totalCount.toLocaleString();
+
+            if (activeItems.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="12" class="text-center py-8 text-slate-400 font-bold">No calculated records matched current filter criteria.</td></tr>`;
+                document.getElementById('pagination-summary').innerText = "Showing 0 entries";
+                document.getElementById('btn-prev').disabled = true;
+                document.getElementById('btn-next').disabled = true;
+                return;
+            }
+
+            let html = "";
+            activeItems.forEach(x => {
+                const saleStr = x.saleValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const grossStr = x.grossIncentive.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const tdsStr = x.tdsAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const netStr = x.netTransferAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const discStr = x.onBillDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                
+                let statusClass = "text-slate-600 bg-slate-50 border-slate-100";
+                if (x.status === "Approved") statusClass = "text-emerald-700 bg-emerald-50 border-emerald-100";
+                if (x.status === "Rejected") statusClass = "text-red-700 bg-red-50 border-red-100";
+                if (x.status === "Posted") statusClass = "text-indigo-700 bg-indigo-50 border-indigo-100";
+
+                const isPosted = x.status === "Posted";
+                const checkboxHtml = isPosted 
+                    ? `<span class="material-symbols-outlined text-slate-300">lock</span>`
+                    : `<input type="checkbox" value="${x.id}" onchange="toggleRowSelect(this, ${x.id})" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500/20" />`;
+
+                const rowOverrideBtn = isPosted
+                    ? `<button disabled class="text-slate-300 cursor-not-allowed" title="Posted records are locked"><span class="material-symbols-outlined text-[16px]">edit_off</span></button>`
+                    : `<button onclick="openOverrideModal(${x.id})" class="text-blue-600 hover:text-blue-500" title="Manual override"><span class="material-symbols-outlined text-[16px]">edit_square</span></button>`;
+
+                const rowRecalcBtn = isPosted || x.mode === 'PreCalculated'
+                    ? `<button disabled class="text-slate-300 cursor-not-allowed" title="Recalculate not available"><span class="material-symbols-outlined text-[16px]">autorenew</span></button>`
+                    : `<button onclick="recalculateRow(${x.id})" class="text-indigo-600 hover:text-indigo-500" title="Recalculate"><span class="material-symbols-outlined text-[16px]">autorenew</span></button>`;
+
+                const editedBadge = x.isEdited ? `<span class="px-1.5 py-0.5 ml-1 bg-amber-100 text-amber-800 rounded font-extrabold text-[9px] uppercase tracking-tighter" title="Values were manually adjusted">Adj</span>` : "";
+
+                html += `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-4 py-3 text-center">${checkboxHtml}</td>
+                        <td class="px-4 py-3">
+                            <strong class="text-slate-800 text-xs font-bold block">${x.partyCode}</strong>
+                            <span class="text-slate-400 text-[10px] block truncate max-w-[200px] font-sans" title="${x.partyName}">${x.partyName}</span>
+                        </td>
+                        <td class="px-4 py-3"><span class="px-2 py-0.5 text-[10px] bg-slate-100 text-slate-700 border border-slate-200/50 rounded">${x.sourceLocation}</span></td>
+                        <td class="px-4 py-3 font-semibold text-slate-700">${x.partCategoryCode}</td>
+                        <td class="px-4 py-3 text-end font-semibold text-slate-700">₹ ${saleStr}</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 rounded">${x.slabPercent}%</span><br/>
+                            <span class="text-[9px] text-slate-400 font-sans block mt-0.5">${x.applicableSlab || ''}</span>
+                        </td>
+                        <td class="px-4 py-3 text-end text-slate-400">₹ ${discStr}</td>
+                        <td class="px-4 py-3 text-end text-slate-500">₹ ${grossStr}</td>
+                        <td class="px-4 py-3 text-end text-slate-400">₹ ${tdsStr}</td>
+                        <td class="px-4 py-3 text-end font-bold text-slate-800">₹ ${netStr}</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center px-2.5 py-0.5 border text-[10px] font-bold rounded-full uppercase tracking-wider ${statusClass}">
+                                ${x.status}${editedBadge}
+                            </span>
+                        </td>
+                        <td class="px-6 py-3 text-center">
+                            <div class="flex items-center justify-center gap-3">
+                                <button onclick="viewTransactions(${x.id})" class="text-slate-600 hover:text-slate-800" title="Source Transactions"><span class="material-symbols-outlined text-[16px]">analytics</span></button>
+                                ${rowOverrideBtn}
+                                ${rowRecalcBtn}
+                                <button onclick="viewAuditTrail(${x.id})" class="text-slate-600 hover:text-slate-800" title="Audit Trail"><span class="material-symbols-outlined text-[16px]">history</span></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+
+            // Render Pagination summary
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(start + pageSize - 1, data.totalCount);
+            document.getElementById('pagination-summary').innerText = `Showing ${start} to ${end} of ${data.totalCount.toLocaleString()} entries`;
+
+            // Enable/disable page buttons
+            document.getElementById('btn-prev').disabled = currentPage === 1;
+            document.getElementById('btn-next').disabled = end >= data.totalCount;
+        })
+        .catch(err => {
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center py-8 text-red-600 font-bold">Failed to load workspace data: ${err.message}</td></tr>`;
+        });
+    }
+
+    function toggleRowSelect(chk, id) {
+        if (chk.checked) {
+            selectedIds.add(id);
+        } else {
+            selectedIds.delete(id);
+        }
+        updateSelectionSummary();
+    }
+
+    function toggleSelectAll(chk) {
+        const checkboxes = document.querySelectorAll('#data-table-body input[type="checkbox"]');
+        checkboxes.forEach(c => {
+            c.checked = chk.checked;
+            const id = parseInt(c.value);
+            if (chk.checked) {
+                selectedIds.add(id);
+            } else {
+                selectedIds.delete(id);
+            }
+        });
+        updateSelectionSummary();
+    }
+
+    function updateSelectionSummary() {
+        const count = selectedIds.size;
+        document.getElementById('selection-summary').innerText = `${count} record(s) selected`;
+        document.getElementById('btn-bulk-approve').disabled = count === 0;
+        document.getElementById('btn-bulk-reject').disabled = count === 0;
+    }
+
+    function prevPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            refreshData();
+        }
+    }
+
+    function nextPage() {
+        currentPage++;
+        refreshData();
+    }
+
+    function bulkApprove() {
+        if (selectedIds.size === 0) return;
+
+        if (!confirm(`Are you sure you want to approve ${selectedIds.size} selected record(s)?`)) return;
+
+        fetch('/Incentives/ApproveRecords', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify(Array.from(selectedIds))
+        })
+        .then(async res => {
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || "Failed to approve records.");
+            alert(json.message);
+            refreshData();
+        })
+        .catch(err => alert("Approve failed: " + err.message));
+    }
+
+    function openRejectModal() {
+        if (selectedIds.size === 0) return;
+        document.getElementById('reject-remarks').value = "";
+        const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+        modal.show();
+    }
+
+    function submitRejection() {
+        const remarks = document.getElementById('reject-remarks').value.trim();
+        if (!remarks) {
+            alert("Rejection remarks/comments are mandatory.");
+            return;
+        }
+
+        fetch('/Incentives/RejectRecords', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                ids: Array.from(selectedIds),
+                remarks: remarks
+            })
+        })
+        .then(async res => {
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || "Rejection failed.");
+            bootstrap.Modal.getInstance(document.getElementById('rejectModal')).hide();
+            alert(json.message);
+            refreshData();
+        })
+        .catch(err => alert("Reject failed: " + err.message));
+    }
+
+    function openOverrideModal(id) {
+        const rec = activeItems.find(x => x.id === id);
+        if (!rec) return;
+
+        document.getElementById('over-id').value = rec.id;
+        document.getElementById('over-code').innerText = rec.partyCode;
+        document.getElementById('over-name').innerText = rec.partyName;
+        document.getElementById('over-branch').innerText = rec.sourceLocation;
+        document.getElementById('over-category').innerText = rec.partCategoryCode;
+        document.getElementById('over-slab').innerText = rec.slabPercent + "% (" + rec.applicableSlab + ")";
+
+        document.getElementById('over-sale').value = rec.saleValue;
+        document.getElementById('over-discount').value = rec.onBillDiscount;
+        document.getElementById('over-slab-percent').value = rec.slabPercent;
+        document.getElementById('over-gross').value = rec.grossIncentive;
+        document.getElementById('over-remarks').value = rec.remarks || "";
+
+        const modal = new bootstrap.Modal(document.getElementById('overrideModal'));
+        modal.show();
+    }
+
+    function calculateOverrideIncentive() {
+        const sale = parseFloat(document.getElementById('over-sale').value) || 0;
+        const discount = parseFloat(document.getElementById('over-discount').value) || 0;
+        const slab = parseFloat(document.getElementById('over-slab-percent').value) || 0;
+
+        const gross = Math.round(sale * (slab / 100) * 100) / 100;
+        document.getElementById('over-gross').value = gross;
+    }
+
+    function submitOverride() {
+        const id = parseInt(document.getElementById('over-id').value);
+        const sale = parseFloat(document.getElementById('over-sale').value) || 0;
+        const discount = parseFloat(document.getElementById('over-discount').value) || 0;
+        const slab = parseFloat(document.getElementById('over-slab-percent').value) || 0;
+        const gross = parseFloat(document.getElementById('over-gross').value) || 0;
+        const remarks = document.getElementById('over-remarks').value.trim();
+
+        if (!remarks) {
+            alert("Mandatory override justification/remarks are required.");
+            return;
+        }
+
+        fetch('/Incentives/OverrideRecord', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                id: id,
+                saleValue: sale,
+                discount: discount,
+                slabPercent: slab,
+                grossIncentive: gross,
+                remarks: remarks
+            })
+        })
+        .then(async res => {
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || "Override failed.");
+            bootstrap.Modal.getInstance(document.getElementById('overrideModal')).hide();
+            alert(json.message);
+            refreshData();
+        })
+        .catch(err => alert("Override failed: " + err.message));
+    }
+
+    function recalculateRow(id) {
+        if (!confirm("Are you sure you want to recalculate dynamic incentives for this distributor based on current raw transactions?")) return;
+
+        fetch('/Incentives/RecalculateRecord', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify(id)
+        })
+        .then(async res => {
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || "Recalculation failed.");
+            alert(json.message);
+            refreshData();
+        })
+        .catch(err => alert("Recalculation failed: " + err.message));
+    }
+
+    function viewTransactions(id) {
+        const tbody = document.getElementById('source-table-body');
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400 font-bold"><span class="spinner-border spinner-border-sm text-blue-600 animate-spin mr-2"></span> Loading transactions...</td></tr>`;
+
+        const modal = new bootstrap.Modal(document.getElementById('sourceModal'));
+        modal.show();
+
+        fetch(`/Incentives/GetSourceTransactions?id=${id}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-slate-400 font-bold">No raw sales records found matching this settlement.</td></tr>`;
+                return;
+            }
+
+            let html = "";
+            data.forEach(t => {
+                html += `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-4 py-2.5 font-bold text-slate-400">#${t.rowNumber}</td>
+                        <td class="px-4 py-2.5">${t.documentNum}</td>
+                        <td class="px-4 py-2.5">${t.partNum}</td>
+                        <td class="px-4 py-2.5 text-end">${t.netRetailQty}</td>
+                        <td class="px-4 py-2.5 text-end font-bold text-slate-700">₹ ${t.netRetailSelling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td class="px-4 py-2.5 text-end text-slate-400">₹ ${t.discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td class="px-4 py-2.5 text-slate-400 truncate" style="max-width:180px;" title="${t.remarks}">${t.remarks}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        })
+        .catch(err => {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-600 font-bold">Failed to load transactions: ${err.message}</td></tr>`;
+        });
+    }
+
+    function viewAuditTrail(id) {
+        const tbody = document.getElementById('audit-table-body');
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-400 font-bold"><span class="spinner-border spinner-border-sm text-blue-600 animate-spin mr-2"></span> Loading audit logs...</td></tr>`;
+
+        const modal = new bootstrap.Modal(document.getElementById('auditModal'));
+        modal.show();
+
+        fetch(`/Incentives/GetAuditHistory?id=${id}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-slate-400 font-bold">No modification logs recorded for this incentive entry.</td></tr>`;
+                return;
+            }
+
+            let html = "";
+            data.forEach(l => {
+                let diffHtml = "";
+                try {
+                    const oldObj = JSON.parse(l.oldValue);
+                    const newObj = JSON.parse(l.newValue);
+                    for (let key in newObj) {
+                        const ov = typeof oldObj[key] === 'object' ? JSON.stringify(oldObj[key]) : oldObj[key];
+                        const nv = typeof newObj[key] === 'object' ? JSON.stringify(newObj[key]) : newObj[key];
+                        if (ov !== nv) {
+                            diffHtml += `<div><span class="text-slate-400 font-medium">${key}:</span> <span class="line-through text-red-600">${ov}</span> &rarr; <span class="text-emerald-700">${nv}</span></div>`;
+                        }
+                    }
+                } catch(e) {
+                    diffHtml = `<span class="text-[10px] text-slate-400">${l.newValue}</span>`;
+                }
+
+                html += `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-4 py-2.5 font-bold text-slate-700 uppercase">${l.action}</td>
+                        <td class="px-4 py-2.5 font-semibold">${l.changedBy}</td>
+                        <td class="px-4 py-2.5 text-slate-400">${l.changedAt}</td>
+                        <td class="px-4 py-2.5 text-xs text-slate-600">${diffHtml || 'No changes recorded'}</td>
+                        <td class="px-4 py-2.5 text-slate-400 font-sans">${l.ipAddress || '-'}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        })
+        .catch(err => {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-red-600 font-bold">Failed to load audit logs: ${err.message}</td></tr>`;
+        });
+    }
+
+    function openPostModal() {
+        const year = document.getElementById('filter-year').value;
+        const month = document.getElementById('filter-month').value;
+        const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+
+        if (!confirm(`Are you sure you want to freeze and post ALL verified (Approved) incentives for the period ${monthNames[month]} ${year} to the final Register? This will apply period locks and prevent recalculations.`)) {
+            return;
+        }
+
+        // Fetch all verified records for the filtered month/year and post them
+        const tbody = document.getElementById('data-table-body');
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-12 text-slate-400 font-bold"><span class="spinner-border spinner-border-sm text-blue-600 animate-spin mr-2"></span> Posting approved records...</td></tr>`;
+
+        // First find approved record IDs from the current query and post
+        fetch(`/Incentives/GetVerificationData?year=${year}&month=${month}&status=Approved&pageSize=10000`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.items.length === 0) {
+                alert("No verified (Approved) records found for this period to post.");
+                refreshData();
+                return;
+            }
+
+            const ids = data.items.map(x => x.id);
+            fetch('/Incentives/PostRecords', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify(ids)
+            })
+            .then(async postRes => {
+                const postJson = await postRes.json();
+                if (!postRes.ok) throw new Error(postJson.message || "Failed to post records.");
+                alert(postJson.message);
+                refreshData();
+            })
+            .catch(err => {
+                alert("Post failed: " + err.message);
+                refreshData();
+            });
+        })
+        .catch(err => {
+            alert("Failed to fetch records for posting: " + err.message);
+            refreshData();
+        });
+    }
+</script>

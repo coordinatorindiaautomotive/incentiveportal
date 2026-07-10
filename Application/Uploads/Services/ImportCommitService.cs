@@ -135,6 +135,37 @@ public sealed class ImportCommitService(
 
             if (uploadMode == "PreCalculated")
             {
+                var activePeriodLocks = await db.IncentivePeriodLocks
+                    .Where(x => x.Year == firstRow.Year && x.Month == firstRow.Month && x.LockStatus == "Locked" && !x.IsDeleted)
+                    .ToListAsync(cancellationToken);
+
+                if (activePeriodLocks.Count > 0)
+                {
+                    var processedPeriods = rows
+                        .Select(r => new { Loc = r.Location ?? "", Category = r.PartCategoryCode ?? "Other" })
+                        .Distinct()
+                        .ToList();
+
+                    foreach (var item in processedPeriods)
+                    {
+                        var lockRecord = activePeriodLocks.FirstOrDefault(x => 
+                            x.BranchCode.Equals(item.Loc, StringComparison.OrdinalIgnoreCase) && 
+                            x.PartCategoryCode.Equals(item.Category, StringComparison.OrdinalIgnoreCase));
+
+                        if (lockRecord != null)
+                        {
+                            if (lockRecord.IncentiveSource == "Calculator")
+                            {
+                                throw new InvalidOperationException("This period has already been processed through the Incentive Calculator and is locked. Manual upload cannot proceed unless an authorized user unlocks the period.");
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException($"This period has already been processed through Manual Upload and is locked for Branch {item.Loc} and Category {item.Category}. Manual upload cannot proceed unless an authorized user unlocks the period.");
+                            }
+                        }
+                    }
+                }
+
                 // Delete existing non-finalized incentives for this period
                 var toDelete = await db.SsIncentives
                     .Where(x => x.Month == firstRow.Month && x.Year == firstRow.Year && !x.IsDeleted && x.PaymentStatus != "Paid" && x.PaymentStatus != "Approved")
@@ -250,6 +281,51 @@ public sealed class ImportCommitService(
                     db.SsIncentives.Add(ssIncentive);
                 }
 
+                await db.SaveChangesAsync(cancellationToken);
+
+                // Create or update granular period locks
+                var distinctBranchCategories = groups
+                    .Select(g => new { Location = g.Location, PartCategoryCode = g.PartCategoryCode })
+                    .Distinct()
+                    .ToList();
+
+                foreach (var bc in distinctBranchCategories)
+                {
+                    var existingLock = await db.IncentivePeriodLocks
+                        .FirstOrDefaultAsync(x => x.Year == firstRow.Year && x.Month == firstRow.Month 
+                            && x.BranchCode == bc.Location && x.PartCategoryCode == bc.PartCategoryCode && !x.IsDeleted, cancellationToken);
+                    if (existingLock != null)
+                    {
+                        existingLock.LockStatus = "Locked";
+                        existingLock.IncentiveSource = "Manual Upload";
+                        existingLock.PostedBy = currentUser;
+                        existingLock.PostedDate = DateTime.UtcNow;
+                        existingLock.LockedBy = currentUser;
+                        existingLock.LockedDate = DateTime.UtcNow;
+                        existingLock.UpdatedAt = DateTime.UtcNow;
+                        existingLock.UpdatedBy = currentUser;
+                        db.Entry(existingLock).State = EntityState.Modified;
+                    }
+                    else
+                    {
+                        var newLock = new IncentivePeriodLock
+                        {
+                            Year = firstRow.Year,
+                            Month = firstRow.Month,
+                            BranchCode = bc.Location,
+                            PartCategoryCode = bc.PartCategoryCode,
+                            IncentiveSource = "Manual Upload",
+                            LockStatus = "Locked",
+                            PostedBy = currentUser,
+                            PostedDate = DateTime.UtcNow,
+                            LockedBy = currentUser,
+                            LockedDate = DateTime.UtcNow,
+                            CreatedBy = currentUser,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        db.IncentivePeriodLocks.Add(newLock);
+                    }
+                }
                 await db.SaveChangesAsync(cancellationToken);
 
                 // Initialize / save incentive period

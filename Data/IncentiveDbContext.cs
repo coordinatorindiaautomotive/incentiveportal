@@ -30,6 +30,7 @@ public sealed class IncentiveDbContext : DbContext
     public DbSet<DealerSlabProgress> DealerSlabProgresses => Set<DealerSlabProgress>();
     public DbSet<DealerGrowthAnalytics> DealerGrowthAnalytics => Set<DealerGrowthAnalytics>();
     public DbSet<MonthLock> MonthLocks => Set<MonthLock>();
+    public DbSet<IncentivePeriodLock> IncentivePeriodLocks => Set<IncentivePeriodLock>();
     public DbSet<PartyExecutiveMapping> PartyExecutiveMappings => Set<PartyExecutiveMapping>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<PortalSetting> PortalSettings => Set<PortalSetting>();

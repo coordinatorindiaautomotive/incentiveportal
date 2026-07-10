@@ -468,15 +468,46 @@
                     </div>
                     <h3 class="font-headline-md text-lg font-bold">Data Integrity Locks</h3>
                 </div>
+                <!-- Tab headers -->
+                <div class="flex bg-surface-container rounded-lg p-0.5 border border-outline-variant/20">
+                    <button class="px-4 py-1.5 text-xs font-bold rounded-md transition-all bg-white text-secondary shadow-sm" id="btn-tab-granular" onclick="switchLockTab('granular')">Granular Period Locks</button>
+                    <button class="px-4 py-1.5 text-xs font-bold rounded-md transition-all text-on-surface-variant hover:text-on-surface" id="btn-tab-global" onclick="switchLockTab('global')">Global Month Locks</button>
+                </div>
             </div>
             <div class="p-md space-y-6">
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter items-start">
                     
                     <!-- Active Period Locks List -->
                     <div class="xl:col-span-8 space-y-4">
-                        <p class="text-body-sm text-on-surface-variant/70">Controlled periods prevent accidental modification or recalculation of historical distributor settlements.</p>
+                        <p class="text-body-sm text-on-surface-variant/70" id="lock-tab-desc">Granular locks enforce rules per Branch and Part Category to prevent conflicts between the Calculator and Manual Uploads.</p>
                         
-                        <div class="overflow-x-auto rounded-xl border border-outline-variant/30 shadow-inner">
+                        <!-- Granular Locks Table View -->
+                        <div id="granular-locks-view" class="overflow-x-auto rounded-xl border border-outline-variant/30 shadow-inner">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead class="bg-surface-container-low text-[10px] font-bold uppercase text-outline tracking-widest border-b border-outline-variant/30">
+                                    <tr>
+                                        <th class="px-4 py-3">Period</th>
+                                        <th class="px-4 py-3">Branch</th>
+                                        <th class="px-4 py-3">Category</th>
+                                        <th class="px-4 py-3">Source</th>
+                                        <th class="px-4 py-3">Status</th>
+                                        <th class="px-4 py-3">Locked By</th>
+                                        <th class="px-4 py-3">Locked Date</th>
+                                        <th class="px-4 py-3 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="granular-locks-table-body" class="divide-y divide-outline-variant/20">
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted py-8 font-bold">
+                                            <span class="spinner-border spinner-border-sm text-primary me-2"></span> Loading granular locks...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Global Locks Table View -->
+                        <div id="global-locks-view" class="overflow-x-auto rounded-xl border border-outline-variant/30 shadow-inner d-none">
                             <table class="w-full text-left border-collapse text-xs">
                                 <thead class="bg-surface-container-low text-[10px] font-bold uppercase text-outline tracking-widest border-b border-outline-variant/30">
                                     <tr>
@@ -491,7 +522,7 @@
                                 <tbody id="locks-table-body" class="divide-y divide-outline-variant/20">
                                     <tr>
                                         <td colspan="6" class="text-center text-muted py-8 font-bold">
-                                            <span class="spinner-border spinner-border-sm text-primary me-2"></span> Loading lock table records...
+                                            <span class="spinner-border spinner-border-sm text-primary me-2"></span> Loading global locks...
                                         </td>
                                     </tr>
                                 </tbody>
@@ -501,17 +532,24 @@
 
                     <!-- Configure Lock Form -->
                     <div class="xl:col-span-4 bg-surface-container-low/40 p-md rounded-2xl border border-outline-variant/20 flex flex-col">
-                        <div class="flex items-center gap-3 mb-6">
-                            <div class="p-2 rounded-lg bg-secondary/10 text-secondary">
-                                <span class="material-symbols-outlined">task_alt</span>
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 rounded-lg bg-secondary/10 text-secondary">
+                                    <span class="material-symbols-outlined">task_alt</span>
+                                </div>
+                                <h3 class="font-headline-md text-lg font-bold">Configure Lock</h3>
                             </div>
-                            <h3 class="font-headline-md text-lg font-bold">Configure Lock</h3>
+                            <!-- Lock type selector -->
+                            <div class="flex items-center gap-1.5">
+                                <input type="checkbox" id="lock-is-granular" checked class="rounded border-outline-variant text-secondary focus:ring-secondary/20" onchange="toggleFormLockType()" />
+                                <label for="lock-is-granular" class="text-xs font-bold text-on-surface-variant cursor-pointer select-none">Granular</label>
+                            </div>
                         </div>
-                        <form class="space-y-5 flex-1" onsubmit="return false;">
+                        <form class="space-y-4 flex-1" onsubmit="return false;">
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label for="lock-year" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Target Year</label>
-                                    <select id="lock-year" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 text-body-sm focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all outline-none appearance-none cursor-pointer">
+                                    <select id="lock-year" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-body-sm focus:ring-2 focus:ring-secondary/20 transition-all outline-none appearance-none cursor-pointer">
                                         <option value="2024">2024</option>
                                         <option value="2025">2025</option>
                                         <option value="2026" selected>2026</option>
@@ -520,28 +558,49 @@
                                 </div>
                                 <div>
                                     <label for="lock-month" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Target Month</label>
-                                    <select id="lock-month" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 text-body-sm focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all outline-none appearance-none cursor-pointer">
-                                        <option value="0">0 - Full Year</option>
-                                        <option value="1">1 - January</option>
-                                        <option value="2">2 - February</option>
-                                        <option value="3">3 - March</option>
-                                        <option value="4">4 - April</option>
-                                        <option value="5">5 - May</option>
-                                        <option value="6">6 - June</option>
-                                        <option value="7">7 - July</option>
-                                        <option value="8">8 - August</option>
-                                        <option value="9">9 - September</option>
-                                        <option value="10">10 - October</option>
-                                        <option value="11">11 - November</option>
-                                        <option value="12">12 - December</option>
+                                    <select id="lock-month" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-body-sm focus:ring-2 focus:ring-secondary/20 transition-all outline-none appearance-none cursor-pointer">
+                                        <option value="1">1 - Jan</option>
+                                        <option value="2">2 - Feb</option>
+                                        <option value="3">3 - Mar</option>
+                                        <option value="4">4 - Apr</option>
+                                        <option value="5" selected>5 - May</option>
+                                        <option value="6">6 - Jun</option>
+                                        <option value="7">7 - Jul</option>
+                                        <option value="8">8 - Aug</option>
+                                        <option value="9">9 - Sep</option>
+                                        <option value="10">10 - Oct</option>
+                                        <option value="11">11 - Nov</option>
+                                        <option value="12">12 - Dec</option>
                                     </select>
                                 </div>
                             </div>
+                            
+                            <!-- Granular specific fields -->
+                            <div id="granular-lock-fields" class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="lock-branch" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Branch Code</label>
+                                        <input type="text" id="lock-branch" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-secondary/20 transition-all" placeholder="e.g. DEL" />
+                                    </div>
+                                    <div>
+                                        <label for="lock-category" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Part Category</label>
+                                        <input type="text" id="lock-category" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-secondary/20 transition-all" placeholder="e.g. Parts" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="lock-source" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Incentive Source</label>
+                                    <select id="lock-source" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-body-sm focus:ring-2 focus:ring-secondary/20 transition-all outline-none appearance-none cursor-pointer">
+                                        <option value="Calculator" selected>Calculator (Dynamic Engine)</option>
+                                        <option value="Manual Upload">Manual Upload (Spreadsheet)</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div>
                                 <label for="lock-reason" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Administrative Note</label>
-                                <textarea id="lock-reason" class="w-full bg-surface-container-low border border-outline-variant/50 rounded-xl px-4 py-3 text-body-sm focus:ring-2 focus:ring-secondary/20 focus:bg-white transition-all outline-none resize-none" placeholder="Enter reason for freeze..." rows="4"></textarea>
+                                <textarea id="lock-reason" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-body-sm focus:ring-2 focus:ring-secondary/20 transition-all outline-none resize-none" placeholder="Enter reason for freeze..." rows="3"></textarea>
                             </div>
-                            <button class="w-full mt-auto py-4 bg-primary text-white font-bold rounded-xl flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:bg-on-background transition-all" type="button" id="btn-submit-lock" onclick="lockPeriod()">
+                            <button class="w-full mt-auto py-3.5 bg-primary text-white font-bold rounded-xl flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:bg-on-background transition-all" type="button" id="btn-submit-lock" onclick="submitConfigureLock()">
                                 <span class="material-symbols-outlined text-xl">lock</span> Apply Period Lock
                             </button>
                         </form>
@@ -660,6 +719,48 @@
     </div>
 </div>
 
+<!-- Granular Lock Unlock Confirmation Modal (Super Admin only) -->
+<div class="modal fade" id="unlockGranularLockModal" tabindex="-1" aria-labelledby="unlockGranularLockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-2xl overflow-hidden">
+            <div class="modal-header border-b-0 pb-0 pt-6 px-6 flex items-center justify-between bg-surface-container-low/30">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-secondary/15 text-secondary rounded-full flex items-center justify-center">
+                        <span class="material-symbols-outlined">lock_open</span>
+                    </div>
+                    <h5 class="modal-title font-headline-md text-base font-bold text-on-background" id="unlockGranularLockModalLabel">Authorized Unlock Request</h5>
+                </div>
+                <button type="button" class="btn-close text-outline hover:text-black" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-6 py-4 space-y-4">
+                <div class="p-3.5 bg-secondary-container/10 text-on-secondary-container rounded-xl border border-outline-variant/30 text-xs" id="unlock-modal-summary">
+                    <!-- Loaded dynamically -->
+                </div>
+                <div>
+                    <label for="unlock-reason-select" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Unlock Reason (Required)</label>
+                    <select id="unlock-reason-select" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-secondary/20 transition-all outline-none">
+                        <option value="">-- Select Reason --</option>
+                        <option value="Data Correction">Data Correction / Re-upload required</option>
+                        <option value="Audit Adjustment">Audit adjustments / HO approval correction</option>
+                        <option value="Operational Override">Operational override due to system lock conflict</option>
+                        <option value="Other">Other (specify below)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="unlock-remarks" class="block text-[10px] font-bold text-on-surface-variant mb-1.5 uppercase tracking-wider">Detailed Remarks (Required)</label>
+                    <textarea id="unlock-remarks" class="w-full bg-white border border-outline-variant/30 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-secondary/20 transition-all outline-none resize-none" placeholder="Provide complete justification for unlocking this period..." rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-body px-6 pb-6 pt-0 flex justify-end gap-3 border-t-0">
+                <button type="button" class="px-4 py-2 border border-outline-variant rounded-xl text-xs font-semibold hover:bg-surface" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="px-5 py-2 bg-secondary text-white font-bold text-xs rounded-xl hover:bg-secondary-container" id="btn-modal-confirm-unlock" onclick="confirmUnlockGranularPeriod()">
+                    <span class="material-symbols-outlined text-sm mr-1">check</span> Unlock Period
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     // Module states
     let currentFile = null;
@@ -730,6 +831,7 @@
 
         // Load month locks list
         loadLocks();
+        toggleFormLockType();
     });
 
     // Reset view
@@ -1096,16 +1198,58 @@
         }, 1000);
     }
 
-    // Fetch and render active month locks
-    function loadLocks() {
-        const tbody = document.getElementById('locks-table-body');
-        if (!tbody) return;
+    let currentLockTab = 'granular';
+    let selectedGranularLockId = null;
 
+    function switchLockTab(tabName) {
+        currentLockTab = tabName;
+        const btnGranular = document.getElementById('btn-tab-granular');
+        const btnGlobal = document.getElementById('btn-tab-global');
+        const viewGranular = document.getElementById('granular-locks-view');
+        const viewGlobal = document.getElementById('global-locks-view');
+        const tabDesc = document.getElementById('lock-tab-desc');
+
+        if (tabName === 'granular') {
+            btnGranular.classList.add('bg-white', 'text-secondary', 'shadow-sm');
+            btnGranular.classList.remove('text-on-surface-variant');
+            btnGlobal.classList.remove('bg-white', 'text-secondary', 'shadow-sm');
+            btnGlobal.classList.add('text-on-surface-variant');
+            viewGranular.classList.remove('d-none');
+            viewGlobal.classList.add('d-none');
+            tabDesc.innerText = "Granular locks enforce rules per Branch and Part Category to prevent conflicts between the Calculator and Manual Uploads.";
+        } else {
+            btnGlobal.classList.add('bg-white', 'text-secondary', 'shadow-sm');
+            btnGlobal.classList.remove('text-on-surface-variant');
+            btnGranular.classList.remove('bg-white', 'text-secondary', 'shadow-sm');
+            btnGranular.classList.add('text-on-surface-variant');
+            viewGlobal.classList.remove('d-none');
+            viewGranular.classList.add('d-none');
+            tabDesc.innerText = "Controlled periods prevent accidental modification or recalculation of historical distributor settlements.";
+        }
+    }
+
+    function toggleFormLockType() {
+        const isGranular = document.getElementById('lock-is-granular').checked;
+        const fields = document.getElementById('granular-lock-fields');
+        if (isGranular) {
+            fields.classList.remove('d-none');
+        } else {
+            fields.classList.add('d-none');
+        }
+    }
+
+    // Fetch and render active locks (both global and granular)
+    function loadLocks() {
+        const globalTbody = document.getElementById('locks-table-body');
+        const granularTbody = document.getElementById('granular-locks-table-body');
+        if (!globalTbody || !granularTbody) return;
+
+        // Fetch global locks
         fetch('/UploadManagement/GetLocks')
         .then(res => res.json())
         .then(data => {
             if (data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No active month/period locks found.</td></tr>`;
+                globalTbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No active global locks found.</td></tr>`;
                 return;
             }
 
@@ -1119,61 +1263,156 @@
                         <td class="px-4 py-3 text-outline text-[11px]">${x.lockedAt}</td>
                         <td class="px-4 py-3 text-on-surface-variant text-truncate" style="max-width:200px;" title="${x.unlockReason || ''}">${x.unlockReason || '-'}</td>
                         <td class="px-4 py-3 text-center">
-                            <button class="px-2.5 py-1 border border-red-200 text-error bg-red-50 hover:bg-red-100 rounded-lg text-xs font-semibold flex items-center gap-1 mx-auto" onclick="unlockPeriod(${x.id})">
+                            <button class="px-2.5 py-1 border border-red-200 text-error bg-red-50 hover:bg-red-100 rounded-lg text-xs font-semibold flex items-center gap-1 mx-auto" onclick="unlockGlobalPeriod(${x.id})">
                                 <span class="material-symbols-outlined text-[14px]">lock_open</span> Unlock
                             </button>
                         </td>
                     </tr>
                 `;
             });
-            tbody.innerHTML = html;
+            globalTbody.innerHTML = html;
         })
         .catch(err => {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger p-4">Failed to load locks: ${err.message}</td></tr>`;
+            globalTbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger p-4">Failed to load global locks: ${err.message}</td></tr>`;
+        });
+
+        // Fetch granular locks
+        fetch('/UploadManagement/GetIncentivePeriodLocks')
+        .then(res => res.json())
+        .then(data => {
+            if (data.length === 0) {
+                granularTbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted p-4">No granular locks found.</td></tr>`;
+                return;
+            }
+
+            let html = "";
+            data.forEach(x => {
+                const statusBadge = x.lockStatus === 'Locked' 
+                    ? `<span class="px-2 py-0.5 text-[10px] font-bold text-error bg-red-50 border border-red-100 rounded-full">LOCKED</span>` 
+                    : `<span class="px-2 py-0.5 text-[10px] font-bold text-success bg-green-50 border border-green-100 rounded-full">UNLOCKED</span>`;
+
+                const actionButton = x.lockStatus === 'Locked'
+                    ? `<button class="px-2.5 py-1 border border-red-200 text-error bg-red-50 hover:bg-red-100 rounded-lg text-xs font-semibold flex items-center gap-1 mx-auto" onclick="openUnlockGranularModal(${x.id}, '${x.monthLabel} (${x.financialYear}) - Branch: ${x.branchCode}, Category: ${x.partCategoryCode}')">
+                           <span class="material-symbols-outlined text-[14px]">lock_open</span> Unlock
+                       </button>`
+                    : `<span class="text-xs text-outline italic">Unlocked</span>`;
+
+                html += `
+                    <tr class="hover:bg-surface-container-low transition-colors text-on-surface-variant font-medium">
+                        <td class="px-4 py-3 font-bold text-on-surface">${x.monthLabel}<br/><span class="text-[9px] font-bold text-outline">${x.financialYear}</span></td>
+                        <td class="px-4 py-3"><span class="px-2 py-0.5 text-xs bg-surface-container text-on-surface border border-outline-variant/30 rounded-lg">${x.branchCode}</span></td>
+                        <td class="px-4 py-3">${x.partCategoryCode}</td>
+                        <td class="px-4 py-3 text-outline">${x.incentiveSource}</td>
+                        <td class="px-4 py-3">${statusBadge}</td>
+                        <td class="px-4 py-3">${x.lockedBy || '-'}</td>
+                        <td class="px-4 py-3 text-outline text-[11px]">${x.lockedDate || '-'}</td>
+                        <td class="px-4 py-3 text-center">
+                            ${actionButton}
+                        </td>
+                    </tr>
+                `;
+            });
+            granularTbody.innerHTML = html;
+        })
+        .catch(err => {
+            granularTbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger p-4">Failed to load granular locks: ${err.message}</td></tr>`;
         });
     }
 
-    // Submit lock request
-    function lockPeriod() {
+    // Submit lock configuration request (Global or Granular)
+    function submitConfigureLock() {
+        const isGranular = document.getElementById('lock-is-granular').checked;
         const year = document.getElementById('lock-year').value;
         const month = document.getElementById('lock-month').value;
         const reason = document.getElementById('lock-reason').value;
 
-        const formData = new FormData();
-        formData.append("year", year);
-        formData.append("month", month);
-        formData.append("reason", reason || "Manually locked via Lock Manager");
+        if (isGranular) {
+            const branchCode = document.getElementById('lock-branch').value.trim();
+            const partCategoryCode = document.getElementById('lock-category').value.trim();
+            const incentiveSource = document.getElementById('lock-source').value;
 
-        fetch('/UploadManagement/LockPeriod', {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            if (!branchCode) {
+                alert("Branch Code is required for granular lock.");
+                return;
             }
-        })
-        .then(async res => {
-            const text = await res.text();
-            let json = null;
-            try { json = text ? JSON.parse(text) : null; } catch(e) {}
+            if (!partCategoryCode) {
+                alert("Part Category is required for granular lock.");
+                return;
+            }
 
-            if (!res.ok) {
-                throw new Error((json && json.message) || text || "Failed to lock period.");
-            }
-            return json;
-        })
-        .then(data => {
-            document.getElementById('lock-reason').value = "";
-            loadLocks();
-            alert("Period locked successfully.");
-        })
-        .catch(err => {
-            alert(err.message);
-        });
+            const formData = new FormData();
+            formData.append("year", year);
+            formData.append("month", month);
+            formData.append("branchCode", branchCode);
+            formData.append("partCategoryCode", partCategoryCode);
+            formData.append("incentiveSource", incentiveSource);
+            formData.append("reason", reason || "Manually locked via Lock Manager");
+
+            fetch('/UploadManagement/LockIncentivePeriod', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                }
+            })
+            .then(async res => {
+                const text = await res.text();
+                let json = null;
+                try { json = text ? JSON.parse(text) : null; } catch(e) {}
+
+                if (!res.ok) {
+                    throw new Error((json && json.message) || text || "Failed to lock granular period.");
+                }
+                return json;
+            })
+            .then(data => {
+                document.getElementById('lock-branch').value = "";
+                document.getElementById('lock-category').value = "";
+                document.getElementById('lock-reason').value = "";
+                loadLocks();
+                alert("Granular period lock applied successfully.");
+            })
+            .catch(err => {
+                alert(err.message);
+            });
+        } else {
+            // Global lock
+            const formData = new FormData();
+            formData.append("year", year);
+            formData.append("month", month);
+            formData.append("reason", reason || "Manually locked via Lock Manager");
+
+            fetch('/UploadManagement/LockPeriod', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                }
+            })
+            .then(async res => {
+                const text = await res.text();
+                let json = null;
+                try { json = text ? JSON.parse(text) : null; } catch(e) {}
+
+                if (!res.ok) {
+                    throw new Error((json && json.message) || text || "Failed to lock global period.");
+                }
+                return json;
+            })
+            .then(data => {
+                document.getElementById('lock-reason').value = "";
+                loadLocks();
+                alert("Global month locked successfully.");
+            })
+            .catch(err => {
+                alert(err.message);
+            });
+        }
     }
 
-    // Submit unlock request
-    function unlockPeriod(id) {
-        if (!confirm("Are you sure you want to unlock this period? This will allow uploads and modifications.")) {
+    // Submit global unlock request
+    function unlockGlobalPeriod(id) {
+        if (!confirm("Are you sure you want to unlock this global period? This will allow uploads and modifications.")) {
             return;
         }
 
@@ -1202,6 +1441,71 @@
         })
         .catch(err => {
             alert(err.message);
+        });
+    }
+
+    // Modal triggers for granular unlock
+    function openUnlockGranularModal(id, summaryText) {
+        selectedGranularLockId = id;
+        document.getElementById('unlock-modal-summary').innerText = summaryText;
+        document.getElementById('unlock-reason-select').value = "";
+        document.getElementById('unlock-remarks').value = "";
+        
+        const modal = new bootstrap.Modal(document.getElementById('unlockGranularLockModal'));
+        modal.show();
+    }
+
+    function confirmUnlockGranularPeriod() {
+        const id = selectedGranularLockId;
+        const reason = document.getElementById('unlock-reason-select').value;
+        const remarks = document.getElementById('unlock-remarks').value;
+
+        if (!reason) {
+            alert("Please select an unlock reason.");
+            return;
+        }
+        if (!remarks.trim()) {
+            alert("Please provide detailed remarks/justification.");
+            return;
+        }
+
+        const btn = document.getElementById('btn-modal-confirm-unlock');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1 w-3 h-3 border-2 border-t-transparent"></span> Unlocking...';
+
+        const formData = new FormData();
+        formData.append("id", id);
+        formData.append("reason", reason);
+        formData.append("remarks", remarks);
+
+        fetch('/UploadManagement/UnlockIncentivePeriod', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            }
+        })
+        .then(async res => {
+            const text = await res.text();
+            let json = null;
+            try { json = text ? JSON.parse(text) : null; } catch(e) {}
+
+            if (!res.ok) {
+                throw new Error((json && json.message) || text || "Failed to unlock granular period lock.");
+            }
+            return json;
+        })
+        .then(data => {
+            bootstrap.Modal.getInstance(document.getElementById('unlockGranularLockModal')).hide();
+            loadLocks();
+            alert("Granular period unlocked successfully.");
+        })
+        .catch(err => {
+            alert("Unlock failed: " + err.message);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined text-sm mr-1">check</span> Unlock Period';
         });
     }
 

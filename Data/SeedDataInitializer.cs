@@ -492,6 +492,31 @@ public sealed class SeedDataInitializer(IncentiveDbContext db, IPasswordHasher h
                 CREATE UNIQUE INDEX UX_MonthLocks_Period ON MonthLocks(LockYear, LockMonth) WHERE IsDeleted = 0;
             END
 
+            IF OBJECT_ID('IncentivePeriodLocks', 'U') IS NULL
+            BEGIN
+                CREATE TABLE IncentivePeriodLocks (
+                    Id INT IDENTITY PRIMARY KEY,
+                    Year INT NOT NULL,
+                    Month INT NOT NULL,
+                    BranchCode NVARCHAR(40) NOT NULL,
+                    PartCategoryCode NVARCHAR(20) NOT NULL,
+                    IncentiveSource NVARCHAR(50) NOT NULL,
+                    LockStatus NVARCHAR(50) NOT NULL DEFAULT 'Locked',
+                    LockedBy NVARCHAR(100) NULL,
+                    LockedDate DATETIME2 NULL,
+                    PostedBy NVARCHAR(100) NULL,
+                    PostedDate DATETIME2 NULL,
+                    UnlockReason NVARCHAR(500) NULL,
+                    UnlockRemarks NVARCHAR(500) NULL,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+                CREATE UNIQUE INDEX UX_IncentivePeriodLocks_Key ON IncentivePeriodLocks(Year, Month, BranchCode, PartCategoryCode) WHERE IsDeleted = 0;
+            END
+
 
 
             IF OBJECT_ID('PartyExecutiveMappings', 'U') IS NULL

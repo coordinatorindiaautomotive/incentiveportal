@@ -136,6 +136,37 @@ public sealed class IncentiveCalculationService(
                 return Array.Empty<CalculationResult>();
             }
 
+            var activePeriodLocks = await db.IncentivePeriodLocks
+                .Where(x => x.Year == year && x.Month == month && x.LockStatus == "Locked" && !x.IsDeleted)
+                .ToListAsync(cancellationToken);
+
+            if (activePeriodLocks.Count > 0)
+            {
+                var processedPeriods = rawRecords
+                    .Select(r => new { Loc = r.Loc ?? "", Category = r.PartCategoryCode ?? "Other" })
+                    .Distinct()
+                    .ToList();
+
+                foreach (var item in processedPeriods)
+                {
+                    var lockRecord = activePeriodLocks.FirstOrDefault(x => 
+                        x.BranchCode.Equals(item.Loc, StringComparison.OrdinalIgnoreCase) && 
+                        x.PartCategoryCode.Equals(item.Category, StringComparison.OrdinalIgnoreCase));
+
+                    if (lockRecord != null)
+                    {
+                        if (lockRecord.IncentiveSource == "Manual Upload")
+                        {
+                            throw new InvalidOperationException("This period has already been processed through Manual Upload and is locked. Incentive calculation cannot proceed unless an authorized user unlocks the period.");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"This period has already been processed through the Incentive Calculator and is locked for Branch {item.Loc} and Category {item.Category}. Incentive calculation cannot proceed unless an authorized user unlocks the period.");
+                        }
+                    }
+                }
+            }
+
             // Load Parties and Mappings
             var parties = await db.Parties.IgnoreQueryFilters().Include(x => x.Branch).ToListAsync(cancellationToken);
             var partiesDict = parties.GroupBy(x => x.PartyCode, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -183,6 +214,13 @@ public sealed class IncentiveCalculationService(
                 })
                 .ToList();
 
+            var activeScheme = await db.IncentiveSchemes.Include(x => x.Details)
+                .Where(x => !x.IsDeleted)
+                .OrderByDescending(x => x.SchemeYear == year && x.SchemeMonth == month)
+                .ThenByDescending(x => x.SchemeYear)
+                .ThenByDescending(x => x.SchemeMonth)
+                .FirstOrDefaultAsync(cancellationToken);
+
             var activeTdsRules = await db.TdsRules
                 .Where(x => !x.IsDeleted && x.EffectiveFrom <= new DateTime(year, month, 1) && x.EffectiveTo >= new DateTime(year, month, 1))
                 .OrderByDescending(x => x.AnnualThreshold)
@@ -227,25 +265,37 @@ public sealed class IncentiveCalculationService(
                 {
                     incentiveType = "Slab";
                     var val = group.TotalNetRetailSelling;
-                    if (val < 30000m)
+                    var matchedSlab = activeScheme?.Details
+                        .Where(d => val >= d.MinAchievementPercent && val <= d.MaxAchievementPercent)
+                        .FirstOrDefault();
+
+                    if (matchedSlab != null)
                     {
-                        incentivePercent = 0m;
-                        applicableSlab = "₹0–29,999";
-                    }
-                    else if (val < 50000m)
-                    {
-                        incentivePercent = 3m;
-                        applicableSlab = "₹30,000–49,999";
-                    }
-                    else if (val < 100000m)
-                    {
-                        incentivePercent = 5m;
-                        applicableSlab = "₹50,000–99,999";
+                        incentivePercent = matchedSlab.Percentage ?? 0m;
+                        applicableSlab = $"₹{matchedSlab.MinAchievementPercent:N0}–{matchedSlab.MaxAchievementPercent:N0}";
                     }
                     else
                     {
-                        incentivePercent = 8m;
-                        applicableSlab = "₹100,000+";
+                        if (val < 30000m)
+                        {
+                            incentivePercent = 0m;
+                            applicableSlab = "₹0–29,999";
+                        }
+                        else if (val < 50000m)
+                        {
+                            incentivePercent = 3m;
+                            applicableSlab = "₹30,000–49,999";
+                        }
+                        else if (val < 100000m)
+                        {
+                            incentivePercent = 5m;
+                            applicableSlab = "₹50,000–99,999";
+                        }
+                        else
+                        {
+                            incentivePercent = 8m;
+                            applicableSlab = "₹100,000+";
+                        }
                     }
                 }
 
