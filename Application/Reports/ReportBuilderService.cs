@@ -44,7 +44,7 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
 {
     public async Task<IncentiveRegisterViewModel> BuildIncentiveRegisterAsync(IncentiveRegisterFilter filter, CancellationToken cancellationToken)
     {
-        var query = db.SsIncentives.AsNoTracking().Where(x => !x.IsDeleted).AsQueryable();
+        var query = db.SsIncentives.AsNoTracking().Where(x => !x.IsDeleted && x.Status == "Posted").AsQueryable();
 
         // Enforce branch-level and salesman-level user restrictions
         if (currentUser.IsInRole(AppRoles.SalesExecutive))
@@ -197,6 +197,12 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
             .Where(m => resolvedOriginalCodes.Contains(m.PartyCode) || partyCodes.Contains(m.PartyCode))
             .ToDictionaryAsync(m => m.PartyCode, m => m, StringComparer.OrdinalIgnoreCase, cancellationToken);
 
+        // Load primary branch cache for display (actual business codes from Raw)
+        var primaryBranchMap = await db.PartyPrimaryBranches
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .ToDictionaryAsync(x => x.PartyCode, x => x.PrimaryBranchCode, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
         var rows = dbRows.Select(x => {
             bankDetailsMap.TryGetValue(x.PartyCode, out var bank);
             
@@ -220,6 +226,12 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
             var branchCode = origParty?.Branch?.Code ?? "-";
             var partyNameResolved = origParty != null ? origParty.PartyName : x.PartyName;
             var execName = execMapping != null ? execMapping.ExecutiveName : "-";
+
+            // Use primary branch from analytics cache (real business code like VBZ, UTD)
+            // if not found, fall back to Party master branch code
+            if (!primaryBranchMap.TryGetValue(resolvedCode, out var displayBranchCode) || string.IsNullOrEmpty(displayBranchCode))
+                primaryBranchMap.TryGetValue(x.PartyCode, out displayBranchCode);
+            branchCode = !string.IsNullOrEmpty(displayBranchCode) ? displayBranchCode : branchCode;
 
             return new IncentiveRegisterRow(
                 new DateTime(x.Year, x.Month, 1).ToString("MMMM yyyy"),
@@ -417,7 +429,7 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
         int? year,
         CancellationToken cancellationToken)
     {
-        var query = db.SsIncentives.Where(x => !x.IsDeleted && x.ImportLogId > 0);
+        var query = db.SsIncentives.Where(x => !x.IsDeleted && x.ImportLogId > 0 && x.Status == "Posted");
 
         // Enforce branch-level isolation if branch manager
         if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
@@ -591,8 +603,8 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
             .ToListAsync(cancellationToken);
 
         // Fetch lookup options dynamically
-        var dbDealerTypes = await db.Parties.Where(p => !p.IsDeleted && p.DealerType != null && p.DealerType != "").Select(p => p.DealerType).Distinct().ToListAsync(cancellationToken);
-        var dbAggTypes = await db.Raws.Where(x => !x.IsDeleted && x.ImportLogId > 0 && x.PartyType != null && x.PartyType != "").Select(x => x.PartyType).Distinct().ToListAsync(cancellationToken);
+        var dbDealerTypes = await db.Parties.Where(p => !p.IsDeleted && p.DealerType != null && p.DealerType != "" && p.DealerType != "IMPORTED").Select(p => p.DealerType).Distinct().ToListAsync(cancellationToken);
+        var dbAggTypes = await db.Raws.Where(x => !x.IsDeleted && x.ImportLogId > 0 && x.PartyType != null && x.PartyType != "" && x.PartyType != "IMPORTED").Select(x => x.PartyType).Distinct().ToListAsync(cancellationToken);
         var dealerTypes = dbDealerTypes.Concat(dbAggTypes).Select(t => NormalizePartyType(t, null)).Distinct().Where(t => !string.IsNullOrEmpty(t)).OrderBy(t => t).ToList();
         var branches = await db.Branches.Where(b => !b.IsDeleted).Select(b => new BranchLookupItem(b.Id, b.Code, b.Name, b.Consignee)).ToListAsync(cancellationToken);
         
@@ -918,6 +930,14 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
             return dbDealerType.Trim().ToUpperInvariant();
         }
 
+        // Standard dealer codes (e.g. WRJ... or TRJ...) should never be classified as walk-in customers
+        if (!string.IsNullOrEmpty(partyNameOrCode) && 
+            (partyNameOrCode.StartsWith("WRJ", StringComparison.OrdinalIgnoreCase) || 
+             partyNameOrCode.StartsWith("TRJ", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "INDEPENDENT WORKSHOP";
+        }
+
         if (!string.IsNullOrEmpty(partyNameOrCode) &&
             (partyNameOrCode.Contains("WALK-IN", StringComparison.OrdinalIgnoreCase) ||
              partyNameOrCode.Contains("WALK IN", StringComparison.OrdinalIgnoreCase) ||
@@ -945,123 +965,84 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
-        // 1. Fetch all unique party codes from the Raw table for the selected period
-        var rawPartyCodesQuery = db.Raws.AsNoTracking()
-            .Where(r => r.MonthNumber == targetMonth && r.YearNumber == targetYear && !r.IsDeleted);
-
-        if (!string.IsNullOrEmpty(branchCode))
-        {
-            rawPartyCodesQuery = rawPartyCodesQuery.Where(r => r.Loc == branchCode);
-        }
+        // 1. Compile the active parties exclusively from the Raw transactions table for the selected period.
+        //    This guarantees that only parties having actual transactional records in the selected month/year are displayed.
+        var rawPartiesQuery = db.Raws.AsNoTracking()
+            .Where(r => !r.IsDeleted && r.ImportLogId > 0 && r.MonthNumber == targetMonth && r.YearNumber == targetYear);
 
         if (!string.IsNullOrEmpty(partCategoryCode))
         {
-            rawPartyCodesQuery = rawPartyCodesQuery.Where(r => r.PartCategoryCode == partCategoryCode);
+            rawPartiesQuery = rawPartiesQuery.Where(r => r.PartCategoryCode == partCategoryCode);
         }
 
-        var rawPartyCodes = await rawPartyCodesQuery
-            .Select(r => r.OriginalCode ?? r.ConsPartyCode)
-            .Where(c => c != null && c != "")
+        // Apply branch filter if selected
+        if (!string.IsNullOrEmpty(branchName))
+        {
+            rawPartiesQuery = rawPartiesQuery.Where(r => r.Loc == branchName);
+        }
+
+        // Project and fetch distinct active party details from Raw transactions
+        var rawActiveSummaries = await rawPartiesQuery
+            .Where(r => r.OriginalCode != null && r.OriginalCode != "" || r.ConsPartyCode != null && r.ConsPartyCode != "")
+            .Select(r => new { 
+                Code = r.OriginalCode ?? r.ConsPartyCode, 
+                Name = r.ConsPartyName, 
+                Loc = r.Loc,
+                PartyTypeVal = r.PartyType
+            })
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        List<Party> parties;
-        if (rawPartyCodes.Any())
+        // Group by Code in memory to select one record per unique party code
+        var uniqueRawSummary = rawActiveSummaries
+            .Where(x => x.Code != null && x.Code != "")
+            .GroupBy(x => x.Code, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+
+        var parties = new List<Party>();
+        foreach (var raw in uniqueRawSummary)
         {
-            var partiesQuery = db.Parties.AsNoTracking().Include(p => p.Branch)
-                .Where(p => !p.IsDeleted && rawPartyCodes.Contains(p.PartyCode)).AsQueryable();
+            // Normalize party type dynamically from Raw or default to INDEPENDENT WORKSHOP
+            var normType = NormalizePartyType(raw.PartyTypeVal, raw.Name ?? raw.Code);
+            
+            // If filtering by party type is active, enforce the filter
+            if (!string.IsNullOrEmpty(partyType) && !string.Equals(normType, partyType, StringComparison.OrdinalIgnoreCase))
+                continue;
 
-            // Enforce user branch permission
-            if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
+            parties.Add(new Party
             {
-                partiesQuery = partiesQuery.Where(p => p.BranchId == currentUser.BranchId.Value);
-            }
-
-            if (!string.IsNullOrEmpty(branchName))
-            {
-                partiesQuery = partiesQuery.Where(p => p.Branch.Name == branchName);
-            }
-
-            if (!string.IsNullOrEmpty(partyType))
-            {
-                partiesQuery = partiesQuery.Where(p => p.DealerType == partyType);
-            }
-
-            parties = await partiesQuery.ToListAsync(cancellationToken);
-
-            // Add virtual placeholder parties for codes in Raw but not in Parties master
-            var foundCodes = new HashSet<string>(parties.Select(p => p.PartyCode), StringComparer.OrdinalIgnoreCase);
-            var missingCodes = rawPartyCodes.Where(c => !foundCodes.Contains(c)).ToList();
-            if (missingCodes.Any())
-            {
-                var missingRawQuery = db.Raws.AsNoTracking()
-                    .Where(r => r.MonthNumber == targetMonth && r.YearNumber == targetYear && !r.IsDeleted && missingCodes.Contains(r.OriginalCode ?? r.ConsPartyCode));
-
-                if (!string.IsNullOrEmpty(branchCode))
-                {
-                    missingRawQuery = missingRawQuery.Where(r => r.Loc == branchCode);
-                }
-
-                var missingRawDetails = await missingRawQuery
-                    .Select(r => new { Code = r.OriginalCode ?? r.ConsPartyCode, Name = r.ConsPartyName, BranchCode = r.Loc })
-                    .ToListAsync(cancellationToken);
-
-                var missingDict = missingRawDetails
-                    .GroupBy(x => x.Code)
-                    .ToDictionary(g => g.Key!, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-                foreach (var code in missingCodes)
-                {
-                    if (missingDict.TryGetValue(code, out var detail))
-                    {
-                        var normType = NormalizePartyType(null, detail.Name ?? code);
-                        if (!string.IsNullOrEmpty(partyType) && !string.Equals(normType, partyType, StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue; // skip if doesn't match filtered party type
-                        }
-
-                        parties.Add(new Party
-                        {
-                            PartyCode = code,
-                            PartyName = detail.Name ?? "Unknown Dealer",
-                            Branch = new Branch { Name = detail.BranchCode ?? "Head Office" },
-                            DealerType = normType
-                        });
-                    }
-                }
-            }
-        }
-        else
-        {
-            var partiesQuery = db.Parties.AsNoTracking().Include(p => p.Branch).Where(p => !p.IsDeleted).AsQueryable();
-
-            // Enforce user branch permission
-            if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
-            {
-                partiesQuery = partiesQuery.Where(p => p.BranchId == currentUser.BranchId.Value);
-            }
-
-            if (!string.IsNullOrEmpty(branchName))
-            {
-                partiesQuery = partiesQuery.Where(p => p.Branch.Name == branchName);
-            }
-
-            if (!string.IsNullOrEmpty(partyType))
-            {
-                partiesQuery = partiesQuery.Where(p => p.DealerType == partyType);
-            }
-
-            parties = await partiesQuery.ToListAsync(cancellationToken);
+                PartyCode = raw.Code!,
+                PartyName = raw.Name ?? "Unknown Dealer",
+                Branch = new Branch { Name = raw.Loc ?? "Head Office", Code = raw.Loc ?? "" },
+                DealerType = normType
+            });
         }
 
-        var allBranches = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).Select(b => b.Name).OrderBy(n => n).ToListAsync(cancellationToken);
+
+        var allBranches = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).Select(b => b.Code).OrderBy(n => n).ToListAsync(cancellationToken);
+        // Also include any Loc codes from Raw that aren't in Branches master by reading the fast PartyPrimaryBranch cache
+        var rawLocCodes = await db.PartyPrimaryBranches.AsNoTracking()
+            .Where(p => !p.IsDeleted && p.PrimaryBranchCode != null && p.PrimaryBranchCode != "")
+            .Select(p => p.PrimaryBranchCode!)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        allBranches = allBranches.Union(rawLocCodes, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c)
+            .ToList();
         var allPartyTypes = await db.Parties.AsNoTracking()
-            .Where(p => !p.IsDeleted && p.DealerType != "")
+            .Where(p => !p.IsDeleted && p.DealerType != "" && p.DealerType != "IMPORTED")
             .Select(p => p.DealerType)
             .Distinct()
             .OrderBy(t => t)
             .ToListAsync(cancellationToken);
         var partyCodes = parties.Select(p => p.PartyCode).ToList();
+
+        // Load primary branch cache — gives us actual business branch codes per party
+        var primaryBranchMap = await db.PartyPrimaryBranches
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .ToDictionaryAsync(x => x.PartyCode, x => x.PrimaryBranchCode, StringComparer.OrdinalIgnoreCase, cancellationToken);
 
         var targets = await db.DealerTargets.AsNoTracking()
             .Where(t => t.Month == targetMonth && t.Year == targetYear && !t.IsDeleted && partyCodes.Contains(t.PartyCode))
@@ -1120,6 +1101,18 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
                         (r.YearNumber == last6MonthsPeriods[4].Year && r.MonthNumber == last6MonthsPeriods[4].Month) ||
                         (r.YearNumber == last6MonthsPeriods[5].Year && r.MonthNumber == last6MonthsPeriods[5].Month)));
 
+        // When filtering by branch, scope all sales to that branch's Loc in Raw
+        if (!string.IsNullOrEmpty(branchName))
+        {
+            currentSalesQuery     = currentSalesQuery.Where(r => r.Loc == branchName);
+            lastMonthSalesQuery   = lastMonthSalesQuery.Where(r => r.Loc == branchName);
+            ytdSalesQuery         = ytdSalesQuery.Where(r => r.Loc == branchName);
+            lyYtdSalesQuery       = lyYtdSalesQuery.Where(r => r.Loc == branchName);
+            priorSalesQuery       = priorSalesQuery.Where(r => r.Loc == branchName);
+            last6MonthsSalesQuery = last6MonthsSalesQuery.Where(r => r.Loc == branchName);
+
+        }
+
         if (!string.IsNullOrEmpty(partCategoryCode))
         {
             currentSalesQuery = currentSalesQuery.Where(r => r.PartCategoryCode == partCategoryCode);
@@ -1130,36 +1123,74 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
             last6MonthsSalesQuery = last6MonthsSalesQuery.Where(r => r.PartCategoryCode == partCategoryCode);
         }
 
-        var currentSalesList = await currentSalesQuery
-            .Select(r => new { PartyCode = r.OriginalCode ?? r.ConsPartyCode, r.NetRetailSelling })
+        // Execute a single combined query to aggregate all monthly sales, YTD sales, prior monthly sales, and last 6 months sales.
+        // This is safe, executes in one database roundtrip, and runs extremely fast.
+        
+        // Define target dates and range criteria
+        int lastMonthVal = lmMonth;
+        int lastMonthYr = lmYear;
+        int currentYr = targetYear;
+        int currentMth = targetMonth;
+        
+        // Find the absolute oldest year we need to query
+        // YTD starts from April of fyStartYear (which could be targetYear - 1)
+        // Last Year YTD starts from April of lyFyStartYear (which could be targetYear - 2)
+        // 6 months history could go back 1 year
+        int minRequiredYear = Math.Min(Math.Min(fyStartYear, lyFyStartYear), last6MonthsPeriods.Min(p => p.Year));
+
+        // Optimize SQL query: Instead of using partyCodes.Contains (which converts to a slow OPENJSON scan in SQL Server for thousands of items),
+        // we write a clean query scoped directly to the branch and filter by the active party list in memory afterwards.
+        // If branch filter is applied, only query that branch's Loc.
+        IQueryable<RawRecord> baseRawQuery = db.Raws.AsNoTracking().Where(r => !r.IsDeleted);
+
+        if (!string.IsNullOrEmpty(branchName))
+        {
+            baseRawQuery = baseRawQuery.Where(r => r.Loc == branchName);
+        }
+        if (!string.IsNullOrEmpty(partCategoryCode))
+        {
+            baseRawQuery = baseRawQuery.Where(r => r.PartCategoryCode == partCategoryCode);
+        }
+
+        // Apply date limits in the database
+        baseRawQuery = baseRawQuery.Where(r => r.YearNumber >= minRequiredYear && r.YearNumber <= currentYr);
+
+        var aggregatedSalesList = await baseRawQuery
+            .Select(r => new {
+                PartyCode = r.OriginalCode ?? r.ConsPartyCode,
+                r.MonthNumber,
+                r.YearNumber,
+                r.NetRetailSelling
+            })
             .ToListAsync(cancellationToken);
 
-        var currentSalesDict = currentSalesList
-            .GroupBy(x => x.PartyCode)
+        // Filter by partyCodes in memory (extremely fast, microseconds)
+        var partyCodesSet = new HashSet<string>(partyCodes, StringComparer.OrdinalIgnoreCase);
+        aggregatedSalesList = aggregatedSalesList
+            .Where(r => r.PartyCode != null && partyCodesSet.Contains(r.PartyCode))
+            .ToList();
+
+        // Group and sum in memory
+        var currentSalesDict = aggregatedSalesList
+            .Where(r => r.MonthNumber == currentMth && r.YearNumber == currentYr)
+            .GroupBy(r => r.PartyCode)
             .ToDictionary(g => g.Key!, g => g.Sum(x => x.NetRetailSelling), StringComparer.OrdinalIgnoreCase);
 
-        var lastMonthSalesList = await lastMonthSalesQuery
-            .Select(r => new { PartyCode = r.OriginalCode ?? r.ConsPartyCode, r.NetRetailSelling })
-            .ToListAsync(cancellationToken);
-
-        var lastMonthSalesDict = lastMonthSalesList
-            .GroupBy(x => x.PartyCode)
+        var lastMonthSalesDict = aggregatedSalesList
+            .Where(r => r.MonthNumber == lastMonthVal && r.YearNumber == lastMonthYr)
+            .GroupBy(r => r.PartyCode)
             .ToDictionary(g => g.Key!, g => g.Sum(x => x.NetRetailSelling), StringComparer.OrdinalIgnoreCase);
 
-        var ytdSalesList = await ytdSalesQuery
-            .Select(r => new { PartyCode = r.OriginalCode ?? r.ConsPartyCode, r.NetRetailSelling })
-            .ToListAsync(cancellationToken);
-
-        var ytdSalesDict = ytdSalesList
-            .GroupBy(x => x.PartyCode)
+        var ytdSalesDict = aggregatedSalesList
+            .Where(r => ((r.YearNumber == fyStartYear && r.MonthNumber >= 4) || (r.YearNumber == fyStartYear + 1 && r.MonthNumber < 4)) &&
+                        (r.YearNumber < currentYr || (r.YearNumber == currentYr && r.MonthNumber <= currentMth)))
+            .GroupBy(r => r.PartyCode)
             .ToDictionary(g => g.Key!, g => g.Sum(x => x.NetRetailSelling), StringComparer.OrdinalIgnoreCase);
 
-        var lyYtdSalesList = await lyYtdSalesQuery
-            .Select(r => new { PartyCode = r.OriginalCode ?? r.ConsPartyCode, r.NetRetailSelling })
-            .ToListAsync(cancellationToken);
-
-        var lyYtdSalesDict = lyYtdSalesList
-            .GroupBy(x => x.PartyCode)
+        var lyYtdSalesDict = aggregatedSalesList
+            .Where(r => ((r.YearNumber == lyFyStartYear && r.MonthNumber >= 4) || (r.YearNumber == lyFyStartYear + 1 && r.MonthNumber < 4)) &&
+                        (r.YearNumber < lyTargetYear || (r.YearNumber == lyTargetYear && r.MonthNumber <= currentMth)))
+            .GroupBy(r => r.PartyCode)
             .ToDictionary(g => g.Key!, g => g.Sum(x => x.NetRetailSelling), StringComparer.OrdinalIgnoreCase);
 
         var scheme = await db.IncentiveSchemes.AsNoTracking()
@@ -1176,21 +1207,20 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
-        var priorSalesList = await priorSalesQuery
-            .Select(r => new { PartyCode = r.OriginalCode ?? r.ConsPartyCode, r.YearNumber, r.NetRetailSelling })
-            .ToListAsync(cancellationToken);
-
-        var priorSalesDict = priorSalesList
+        var priorSalesDict = aggregatedSalesList
+            .Where(r => r.MonthNumber == currentMth && r.YearNumber < currentYr)
             .GroupBy(x => new { x.PartyCode, x.YearNumber })
             .Select(g => new { g.Key.PartyCode, Sales = g.Sum(x => x.NetRetailSelling) })
             .GroupBy(x => x.PartyCode)
             .ToDictionary(g => g.Key!, g => g.Select(x => x.Sales).ToList(), StringComparer.OrdinalIgnoreCase);
 
-        var last6MonthsSalesList = await last6MonthsSalesQuery
-            .Select(r => new { PartyCode = r.OriginalCode ?? r.ConsPartyCode, r.YearNumber, r.MonthNumber, r.NetRetailSelling })
-            .ToListAsync(cancellationToken);
-
-        var last6SalesDict = last6MonthsSalesList
+        var last6SalesDict = aggregatedSalesList
+            .Where(r => (r.YearNumber == last6MonthsPeriods[0].Year && r.MonthNumber == last6MonthsPeriods[0].Month) ||
+                        (r.YearNumber == last6MonthsPeriods[1].Year && r.MonthNumber == last6MonthsPeriods[1].Month) ||
+                        (r.YearNumber == last6MonthsPeriods[2].Year && r.MonthNumber == last6MonthsPeriods[2].Month) ||
+                        (r.YearNumber == last6MonthsPeriods[3].Year && r.MonthNumber == last6MonthsPeriods[3].Month) ||
+                        (r.YearNumber == last6MonthsPeriods[4].Year && r.MonthNumber == last6MonthsPeriods[4].Month) ||
+                        (r.YearNumber == last6MonthsPeriods[5].Year && r.MonthNumber == last6MonthsPeriods[5].Month))
             .GroupBy(x => new { x.PartyCode, x.YearNumber, x.MonthNumber })
             .Select(g => new { g.Key.PartyCode, Sales = g.Sum(x => x.NetRetailSelling) })
             .GroupBy(x => x.PartyCode)
@@ -1272,12 +1302,44 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
 
             decimal growthPercent = lyYtd > 0 ? ((ytd - lyYtd) / lyYtd) * 100m : 0m;
 
+            // Resolve actual business branch code from primary branch cache
+            // Falls back to Party.Branch.Code if cache entry not found
+            if (!primaryBranchMap.TryGetValue(p.PartyCode, out var displayBranch) || string.IsNullOrEmpty(displayBranch))
+                displayBranch = p.Branch?.Code ?? p.Branch?.Name ?? "–";
+
+            decimal avg6MonthSales = recentHistory != null && recentHistory.Any() ? recentHistory.Average() : 0m;
+
+            var rowPartyType = p.DealerType ?? "Unknown";
+            if (string.Equals(rowPartyType, "IMPORTED", StringComparison.OrdinalIgnoreCase))
+            {
+                rowPartyType = "INDEPENDENT WORKSHOP";
+            }
+
+            var rowPartyName = p.PartyName;
+            // Standard dealer codes (e.g. starting with WRJ or TRJ) should never show as WALK-IN CUSTOMER
+            if (!string.IsNullOrEmpty(p.PartyCode) && 
+                (p.PartyCode.StartsWith("WRJ", StringComparison.OrdinalIgnoreCase) || 
+                 p.PartyCode.StartsWith("TRJ", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (string.Equals(rowPartyType, "WALK-IN CUSTOMER", StringComparison.OrdinalIgnoreCase))
+                {
+                    rowPartyType = "INDEPENDENT WORKSHOP";
+                }
+                if (string.Equals(rowPartyName, "WALK-IN CUSTOMER", StringComparison.OrdinalIgnoreCase) || 
+                    string.Equals(rowPartyName, "WALK IN CUSTOMER", StringComparison.OrdinalIgnoreCase))
+                {
+                    rowPartyName = "Independent Workshop";
+                }
+            }
+
             rows.Add(new TargetVsAchievementRow
             {
                 PartyCode = p.PartyCode,
-                PartyName = p.PartyName,
-                BranchName = p.Branch?.Name ?? "Head Office",
+                PartyName = rowPartyName,
+                PartyType = rowPartyType,
+                BranchName = displayBranch,
                 SystemSuggestedTarget = suggestedTgt,
+                AvgSaleLast6Month = Math.Round(avg6MonthSales, 0),
                 AdminDefinedTarget = adminTgt,
                 FinalTarget = finalTgt,
                 CurrentAchievementSales = Math.Round(currentSales, 0),

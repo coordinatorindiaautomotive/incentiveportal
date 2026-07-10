@@ -95,9 +95,8 @@ public sealed class BranchesController(IncentiveDbContext db) : Controller
         {
             if (!categories.Contains(c)) categories.Add(c);
         }
-
         var partyTypes = await db.Parties
-            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.DealerType))
+            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.DealerType) && x.DealerType != "IMPORTED")
             .Select(x => x.DealerType)
             .Distinct()
             .ToListAsync(cancellationToken);

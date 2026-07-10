@@ -134,6 +134,7 @@ builder.Services.AddScoped<IImportRollbackService, ImportRollbackService>();
 builder.Services.AddScoped<IImportPreviewService, ImportPreviewService>();
 builder.Services.AddScoped<IIncentiveCalculationService, IncentiveCalculationService>();
 builder.Services.AddScoped<IAnalyticsRefreshService, AnalyticsRefreshService>();
+builder.Services.AddScoped<IPartyBranchMappingService, PartyBranchMappingService>();
 builder.Services.AddScoped<ITallyIntegrationService, TallyIntegrationService>();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new System.IO.DirectoryInfo(System.IO.Path.Combine(builder.Environment.ContentRootPath, "App_Data", "DataProtectionKeys")));
@@ -149,6 +150,7 @@ builder.Services.AddScoped<ICustomer360Service, Customer360Service>();
 builder.Services.AddScoped<IReportExportService, ReportExportService>();
 builder.Services.AddScoped<ICashManagementService, CashManagementService>();
 builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
+builder.Services.AddScoped<IDynamicReportService, DynamicReportService>();
 
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<SeedDataInitializer>();
@@ -197,6 +199,23 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<SeedDataInitializer>().EnsureSeedDataAsync();
+
+    // Warm up primary branch mapping cache in background (non-blocking)
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            using var bgScope = app.Services.CreateScope();
+            await bgScope.ServiceProvider
+                .GetRequiredService<IPartyBranchMappingService>()
+                .RefreshAsync();
+            Console.WriteLine("[STARTUP] PartyPrimaryBranch cache refreshed successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[STARTUP] PartyPrimaryBranch cache refresh failed: {ex.Message}");
+        }
+    });
 }
 
 

@@ -44,6 +44,17 @@ public sealed class IncentiveDbContext : DbContext
     public DbSet<DealerTarget> DealerTargets => Set<DealerTarget>();
     public DbSet<AssetItem> AssetItems => Set<AssetItem>();
 
+    // ── IT Operations Module ─────────────────────────────────────────
+    public DbSet<ItMasterData> ItMasterDatas => Set<ItMasterData>();
+    public DbSet<ItAsset> ItAssets => Set<ItAsset>();
+    public DbSet<ItAssetHistory> ItAssetHistories => Set<ItAssetHistory>();
+    public DbSet<ItSoftwareLicense> ItSoftwareLicenses => Set<ItSoftwareLicense>();
+    public DbSet<ItTicket> ItTickets => Set<ItTicket>();
+    public DbSet<ItTicketComment> ItTicketComments => Set<ItTicketComment>();
+    public DbSet<ItSlaPolicy> ItSlaPolicies => Set<ItSlaPolicy>();
+    public DbSet<ItMaintenanceSchedule> ItMaintenanceSchedules => Set<ItMaintenanceSchedule>();
+    public DbSet<ItKbArticle> ItKbArticles => Set<ItKbArticle>();
+
     // ── SaaS Modules Extensions ──────────────────────────────────────
     public DbSet<HelpdeskTicket> HelpdeskTickets => Set<HelpdeskTicket>();
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
@@ -66,6 +77,8 @@ public sealed class IncentiveDbContext : DbContext
     public DbSet<TallyIntegrationSetting> TallyIntegrationSettings => Set<TallyIntegrationSetting>();
     public DbSet<ReportColumnConfig> ReportColumnConfigs => Set<ReportColumnConfig>();
     public DbSet<HelpText> HelpTexts => Set<HelpText>();
+    public DbSet<CustomReportLayout> CustomReportLayouts => Set<CustomReportLayout>();
+    public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
 
     // ── Engine DbSets ───────────────────────────────────────────────
     public DbSet<RuleMaster> RuleMasters => Set<RuleMaster>();
@@ -90,8 +103,11 @@ public sealed class IncentiveDbContext : DbContext
     public DbSet<CashMasterItem>     CashMasterItems     => Set<CashMasterItem>();
     public DbSet<CostCenterCash>     CostCenterCashes    => Set<CostCenterCash>();
 
-    // ── Governor Engine ──────────────────────────────────────────────────────
+    // ── Governor Engine ──────────────────────────────────────────────────────────
     public DbSet<ProductCodeMapping> ProductCodeMappings => Set<ProductCodeMapping>();
+
+    // ── Branch Mapping Analytics Cache ───────────────────────────────────────────
+    public DbSet<PartyPrimaryBranch> PartyPrimaryBranches => Set<PartyPrimaryBranch>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -114,6 +130,31 @@ public sealed class IncentiveDbContext : DbContext
 
         modelBuilder.Entity<RawRecord>().HasIndex(x => new { x.YearNumber, x.MonthNumber, x.ConsPartyCode }).IsUnique(false).HasFilter("[IsDeleted] = 0");
         modelBuilder.Entity<RawRecord>().HasIndex(x => x.ImportLogId).HasFilter("[IsDeleted] = 0");
+
+        // ── Performance: Critical composite indexes on Raw table ─────────────────
+        // These indexes are the single biggest performance win — covers every
+        // monthly sales query and location filter without full table scans.
+        modelBuilder.Entity<RawRecord>()
+            .HasIndex(x => new { x.YearNumber, x.MonthNumber })
+            .HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName("IX_Raw_Year_Month");
+
+        modelBuilder.Entity<RawRecord>()
+            .HasIndex(x => x.OriginalCode)
+            .HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName("IX_Raw_OriginalCode");
+
+        modelBuilder.Entity<RawRecord>()
+            .HasIndex(x => x.Loc)
+            .HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName("IX_Raw_Loc");
+
+        // ── PartyPrimaryBranch: unique per party code ─────────────────────────────
+        modelBuilder.Entity<PartyPrimaryBranch>()
+            .HasIndex(x => x.PartyCode)
+            .IsUnique()
+            .HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName("IX_PartyPrimaryBranch_PartyCode");
 
         modelBuilder.Entity<AssetItem>().HasIndex(x => new { x.BranchId, x.AssetCode }).IsUnique().HasFilter("[IsDeleted] = 0");
 
@@ -152,7 +193,7 @@ public sealed class IncentiveDbContext : DbContext
 
 
         // SsIncentive Mappings
-        modelBuilder.Entity<SsIncentive>().HasIndex(x => new { x.Year, x.Month, x.PartyCode }).IsUnique().HasFilter("[IsDeleted] = 0");
+        modelBuilder.Entity<SsIncentive>().HasIndex(x => new { x.Year, x.Month, x.PartyCode, x.PartCategoryCode }).IsUnique().HasFilter("[IsDeleted] = 0");
         modelBuilder.Entity<SsIncentive>().HasIndex(x => x.Status);
 
         // DealerOutstanding Mappings

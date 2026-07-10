@@ -52,7 +52,8 @@ public interface IImportCommitService
 /// </summary>
 public sealed class ImportCommitService(
     IncentiveDbContext db,
-    IHttpContextAccessor httpContextAccessor
+    IHttpContextAccessor httpContextAccessor,
+    IAnalyticsRefreshService analyticsService
 ) : IImportCommitService
 {
     public async Task<ImportSummary> CommitAsync(
@@ -131,6 +132,151 @@ public sealed class ImportCommitService(
 
             // ── 4. STREAM ALL ROWS INTO RAW TABLE AS-IS ──────────────────────────
             await BulkInsertRawsAsync(rows, log.Id, currentUser, now, cancellationToken);
+
+            if (uploadMode == "PreCalculated")
+            {
+                // Delete existing non-finalized incentives for this period
+                var toDelete = await db.SsIncentives
+                    .Where(x => x.Month == firstRow.Month && x.Year == firstRow.Year && !x.IsDeleted && x.PaymentStatus != "Paid" && x.PaymentStatus != "Approved")
+                    .ToListAsync(cancellationToken);
+
+                foreach (var old in toDelete)
+                {
+                    old.IsDeleted = true;
+                    db.Entry(old).State = EntityState.Modified;
+                }
+                await db.SaveChangesAsync(cancellationToken);
+
+                // Group and insert PreCalculated records
+                var parties = await db.Parties.IgnoreQueryFilters().Include(x => x.Branch).ToListAsync(cancellationToken);
+                var partiesDict = parties.GroupBy(x => x.PartyCode, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+                var mappings = await db.PartyCodeMappings.Where(m => m.IsActive && !m.IsDeleted).ToListAsync(cancellationToken);
+                var mappingsDict = mappings.GroupBy(m => m.AlternativeCode, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().OriginalCode, StringComparer.OrdinalIgnoreCase);
+
+                var activeTdsRules = await db.TdsRules
+                    .Where(x => !x.IsDeleted && x.EffectiveFrom <= new DateTime(firstRow.Year, firstRow.Month, 1) && x.EffectiveTo >= new DateTime(firstRow.Year, firstRow.Month, 1))
+                    .OrderByDescending(x => x.AnnualThreshold)
+                    .ToListAsync(cancellationToken);
+
+                var groups = rows.GroupBy(r => {
+                    var rawPartyCode = r.PartyCode ?? string.Empty;
+                    if (mappingsDict.TryGetValue(rawPartyCode, out var mc)) rawPartyCode = mc;
+                    if (partiesDict.TryGetValue(rawPartyCode, out var po) && !string.IsNullOrEmpty(po.OriginalPartyCode))
+                    {
+                        if (partiesDict.TryGetValue(po.OriginalPartyCode, out var pp)) rawPartyCode = pp.PartyCode;
+                    }
+                    return new {
+                        PartyCode = rawPartyCode,
+                        PartCategoryCode = r.PartCategoryCode ?? "Other",
+                        Location = r.Location ?? ""
+                    };
+                }).Select(g => {
+                    var first = g.First();
+                    partiesDict.TryGetValue(g.Key.PartyCode, out var pObj);
+                    var partyName = pObj?.PartyName ?? first.PartyName ?? "Unknown Party";
+                    return new {
+                        g.Key.PartyCode,
+                        PartyName = partyName,
+                        g.Key.PartCategoryCode,
+                        g.Key.Location,
+                        SaleValue = g.Sum(x => x.SaleValue),
+                        Discount = g.Sum(x => x.Discount),
+                        SlabPercent = g.Max(x => x.SlabPercent),
+                        FileIncentive = g.Sum(x => x.FileIncentive),
+                        TransferAmount = g.Sum(x => x.TransferAmount ?? 0m)
+                    };
+                }).ToList();
+
+                foreach (var grp in groups)
+                {
+                    partiesDict.TryGetValue(grp.PartyCode, out var targetParty);
+                    if (targetParty == null) continue;
+
+                    decimal grossIncentive = grp.FileIncentive;
+                    decimal netIncentive = Math.Max(0m, grossIncentive - grp.Discount);
+
+                    var bankDetails = await db.BankDetails.FirstOrDefaultAsync(b => b.PartyId == targetParty.Id && b.ApprovalStatus == "Approved" && !b.IsDeleted, cancellationToken);
+                    var hasPan = bankDetails != null && !string.IsNullOrWhiteSpace(bankDetails.PAN);
+
+                    TdsRule? matchedTdsRule = null;
+                    foreach (var rule in activeTdsRules)
+                    {
+                        if (netIncentive >= rule.AnnualThreshold)
+                        {
+                            matchedTdsRule = rule;
+                            break;
+                        }
+                    }
+                    decimal tdsRate = matchedTdsRule != null ? (hasPan ? matchedTdsRule.RateWithPan : matchedTdsRule.RateNoPan) : 0.05m;
+                    decimal tdsAmount = Math.Round(netIncentive * tdsRate, 2);
+
+                    var outstandingRecord = await db.DealerOutstandings
+                        .FirstOrDefaultAsync(o => o.Year == firstRow.Year && o.Month == firstRow.Month && o.PartyCode == grp.PartyCode && !o.IsDeleted, cancellationToken);
+                    decimal outstanding = outstandingRecord?.Outstanding ?? 0m;
+
+                    decimal netTransfer = Math.Max(0m, netIncentive - tdsAmount);
+                    netTransfer = Math.Max(0m, netTransfer - outstanding);
+
+                    var ssIncentive = new SsIncentive
+                    {
+                        Month = firstRow.Month,
+                        Year = firstRow.Year,
+                        MonthLabel = new DateTime(firstRow.Year, firstRow.Month, 1).ToString("MMMM yyyy"),
+                        PartyCode = grp.PartyCode,
+                        PartyName = grp.PartyName,
+                        SaleValue = grp.SaleValue,
+                        OnBillDiscount = grp.Discount,
+                        GrossIncentive = grossIncentive,
+                        TdsAmount = tdsAmount,
+                        NetTransferAmount = netTransfer,
+                        Outstanding = outstanding,
+                        SlabPercent = grp.SlabPercent,
+                        AchievementPercent = grp.SlabPercent * 100m,
+                        ProcessingDate = DateTime.UtcNow,
+                        PaymentStatus = outstanding < 0 ? "Credit Party" : (netTransfer == 0 ? "Paid" : "Pending"),
+                        PaymentDate = (outstanding >= 0 && netTransfer == 0) ? DateTime.UtcNow : (DateTime?)null,
+                        BankAccountNumber = bankDetails?.AccountNumber ?? "-",
+                        IFSC = bankDetails?.IFSC ?? "-",
+                        BeneficiaryName = bankDetails?.AccountHolder ?? grp.PartyName,
+                        Mode = "PreCalculated",
+                        Status = "Posted",
+                        PartCategoryCode = grp.PartCategoryCode,
+                        SourceLocation = grp.Location,
+                        ImportLogId = log.Id,
+                        IncentiveType = "PreCalculated",
+                        ApplicableSlab = "PreCalculated Upload"
+                    };
+                    db.SsIncentives.Add(ssIncentive);
+                }
+
+                await db.SaveChangesAsync(cancellationToken);
+
+                // Initialize / save incentive period
+                var period = await db.IncentivePeriods
+                    .FirstOrDefaultAsync(p => p.Year == firstRow.Year && p.Month == firstRow.Month && !p.IsDeleted, cancellationToken);
+                if (period != null)
+                {
+                    period.SourceType = "PreCalculated";
+                    period.Status = "Calculated";
+                    db.Entry(period).State = EntityState.Modified;
+                }
+                else
+                {
+                    period = new IncentivePeriod
+                    {
+                        Year = firstRow.Year,
+                        Month = firstRow.Month,
+                        SourceType = "PreCalculated",
+                        Status = "Calculated",
+                        LockedFlag = false
+                    };
+                    db.IncentivePeriods.Add(period);
+                }
+                await db.SaveChangesAsync(cancellationToken);
+
+                await analyticsService.RefreshAsync(firstRow.Month, firstRow.Year, cancellationToken);
+            }
 
             return new ImportSummary
             {
@@ -283,7 +429,9 @@ internal sealed class RawStagingDataReader : System.Data.Common.DbDataReader
                 : $"{r.Month} {r.Year}", // MonthYear
             9  => (object?)r.PartyCode       ?? DBNull.Value,   // ConsPartyCode
             10 => (object?)r.PartyName       ?? DBNull.Value,   // ConsPartyName
-            11 => (object?)r.PartyType       ?? DBNull.Value,   // PartyType
+            11 => (!string.IsNullOrEmpty(r.PartyType) && (r.PartyType.Equals("Others", StringComparison.OrdinalIgnoreCase) || r.PartyType.Equals("Other", StringComparison.OrdinalIgnoreCase)))
+                ? "WALK-IN CUSTOMER"
+                : ((object?)r.PartyType ?? DBNull.Value),   // PartyType
             12 => (object?)r.DocumentNum     ?? DBNull.Value,   // DocumentNum
             13 => (object?)r.Remarks         ?? DBNull.Value,   // Remarks
             14 => r.SaleValue,                                   // NetRetailSelling

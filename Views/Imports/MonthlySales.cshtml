@@ -714,6 +714,19 @@
             width: 100%;
         }
     }
+    .allowed-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 6px 12px;
+    }
+    .allowed-grid-cats {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+        gap: 6px 12px;
+    }
+    #modalBranchesTable .form-check {
+        margin-bottom: 0 !important;
+    }
 </style>
 
 <div class="w-100">
@@ -1137,7 +1150,23 @@
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="fw-bold mb-0 text-secondary" style="font-size:1rem;">Code Redirection Register</h5>
-                            <button type="button" class="btn btn-sm btn-outline-success" id="addMappingRowBtn">+ Add Custom Merge</button>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleBulkMappingArea()"><i class="fa-solid fa-paste"></i> Bulk Copy-Paste</button>
+                                <button type="button" class="btn btn-sm btn-outline-success" id="addMappingRowBtn">+ Add Custom Merge</button>
+                            </div>
+                        </div>
+
+                        <!-- Bulk paste container (initially hidden) -->
+                        <div id="bulkMappingContainer" class="card border mb-3 d-none shadow-sm" style="background:#f8fafc; border-radius:8px;">
+                            <div class="card-body p-3">
+                                <label class="form-label small fw-bold text-muted">Paste your data here (Comma, Tab, or Space separated values - e.g. copied from Excel columns):</label>
+                                <textarea id="bulkMappingInput" class="form-control form-control-sm mb-2 font-monospace" rows="5" placeholder="AlternativeCode,OriginalCode&#10;AlternativeCode2 OriginalCode2&#10;AlternativeCode3	OriginalCode3" style="font-size:0.82rem;"></textarea>
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleBulkMappingArea()">Close</button>
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="processBulkMappings(false)">Append Mappings</button>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="processBulkMappings(true)">Replace Existing</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="table-responsive" style="max-height:350px;border-radius:8px;border:1px solid var(--line);">
                             <table class="table table-hover align-middle mb-0" id="modalMappingsTable">
@@ -1393,12 +1422,53 @@ function addMappingRow(alt, orig) {
     `);
 }
 
-$(document).on('click', '.remove-mapping-row-btn', function() {
-    $(this).closest('tr').remove();
+});
+
+function toggleBulkMappingArea() {
+    $('#bulkMappingContainer').toggleClass('d-none');
+    $('#bulkMappingInput').val('');
+}
+
+function processBulkMappings(replaceExisting) {
+    var txt = $('#bulkMappingInput').val();
+    if (!txt || !txt.trim()) {
+        toggleBulkMappingArea();
+        return;
+    }
+
+    if (replaceExisting) {
+        $('#modalMappingsTable tbody').empty();
+    }
+
+    var lines = txt.split(/\r?\n/);
+    var addedCount = 0;
+
+    $.each(lines, function(i, line) {
+        if (!line || !line.trim()) return;
+        // Split by tab, comma, or space
+        var parts = line.split(/[\t,\s]+/);
+        if (parts.length >= 2) {
+            var alt = $.trim(parts[0]);
+            var orig = $.trim(parts[1]);
+            if (alt && orig) {
+                addMappingRow(alt, orig);
+                addedCount++;
+            }
+        }
+    });
+
+    // If replaceExisting was true and we added no rows, or table is empty, add blank row
     if ($('#modalMappingsTable tbody tr').length === 0) {
         addMappingRow('', '');
     }
-});
+
+    toggleBulkMappingArea();
+    if (addedCount > 0) {
+        portalToast('Successfully processed and added ' + addedCount + ' mappings!', 'success');
+    } else {
+        portalToast('No valid mappings found in the pasted text.', 'warning');
+    }
+}
 
 $(document).on('click', '#addMappingRowBtn', function() {
     addMappingRow('', '');
@@ -1463,32 +1533,36 @@ $(document).on('click', '#runCalcBtn', function () {
                 var typeArray = $.map(allowedTypes.split(','), function(t) { return $.trim(t).toUpperCase(); });
 
                 var catTd = $('<td>').attr('data-label', 'Allowed Categories').css('padding', '12px 16px');
+                var catContainer = $('<div>').addClass('allowed-grid-cats');
                 $.each(categories, function(j, cat) {
                     var isChecked = $.inArray($.trim(cat).toUpperCase(), catArray) >= 0;
                     var id = 'chk_calc_cat_' + i + '_' + cat;
-                    var wrapper = $('<div>').addClass('form-check form-check-inline me-3 mb-1');
+                    var wrapper = $('<div>').addClass('form-check mb-0');
                     var cb = $('<input>').addClass('form-check-input branch-cat-check')
                          .attr({ type: 'checkbox', 'data-loc': loc, value: cat, id: id })
                          .prop('checked', isChecked);
                     var lbl = $('<label>').addClass('form-check-label small fw-bold').attr('for', id)
                         .css('cursor', 'pointer').text(cat);
                     wrapper.append(cb).append(lbl);
-                    catTd.append(wrapper);
+                    catContainer.append(wrapper);
                 });
+                catTd.append(catContainer);
 
                 var typeTd = $('<td>').attr('data-label', 'Allowed Party Types').css('padding', '12px 16px');
+                var typeContainer = $('<div>').addClass('allowed-grid');
                 $.each(partyTypes, function(j, pt) {
                     var isChecked = $.inArray($.trim(pt).toUpperCase(), typeArray) >= 0;
                     var id = 'chk_calc_type_' + i + '_' + pt.replace(/ /g, '_');
-                    var wrapper = $('<div>').addClass('form-check form-check-inline me-3 mb-1');
+                    var wrapper = $('<div>').addClass('form-check mb-0');
                     var cb = $('<input>').addClass('form-check-input branch-type-check')
                          .attr({ type: 'checkbox', 'data-loc': loc, value: pt, id: id })
                          .prop('checked', isChecked);
                     var lbl = $('<label>').addClass('form-check-label small fw-bold').attr('for', id)
                         .css('cursor', 'pointer').text(pt);
                     wrapper.append(cb).append(lbl);
-                    typeTd.append(wrapper);
+                    typeContainer.append(wrapper);
                 });
+                typeTd.append(typeContainer);
 
                 var locTd = $('<td>').attr('data-label', 'Location').css('padding', '12px 16px')
                     .append($('<strong>').css('color', 'var(--primary)').text(loc));

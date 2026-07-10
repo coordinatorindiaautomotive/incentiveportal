@@ -1,0 +1,465 @@
+@{
+    ViewData["Title"] = "IT SLA & Maintenance Schedules";
+    Layout = "_Layout";
+}
+
+<div class="main">
+    <!-- Header Block -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1 fw-bold">Maintenance & SLA Policies</h4>
+            <p class="text-muted small mb-0">Configure SLA rules and monitor preventive maintenance checklists on active equipment.</p>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="cc p-2 mb-4">
+        <ul class="nav nav-pills" id="maintTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="schedules-tab" data-bs-toggle="tab" data-bs-target="#schedules-pane" type="button" role="tab">
+                    Maintenance Schedules
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="sla-tab" data-bs-toggle="tab" data-bs-target="#sla-pane" type="button" role="tab">
+                    SLA Policies
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Tab Contents -->
+    <div class="tab-content" id="maintTabContent">
+        <!-- SCHEDULES TAB -->
+        <div class="tab-pane fade show active" id="schedules-pane" role="tabpanel" tabindex="0">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">Preventive Maintenance Tasks</h5>
+                <button onclick="openScheduleModal(0)" class="btn btn-primary btn-sm">Schedule New Task</button>
+            </div>
+            <div class="cc p-0 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Asset Code</th>
+                                <th>Asset Name</th>
+                                <th>Frequency</th>
+                                <th>Last Maintenance</th>
+                                <th>Next Due Date</th>
+                                <th>Engineer</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schedulesTableBody">
+                            <tr>
+                                <td colspan="8" class="text-center p-4 text-muted">Loading schedules...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLA TAB -->
+        <div class="tab-pane fade" id="sla-pane" role="tabpanel" tabindex="0">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">Escalation Response Policies</h5>
+                <button onclick="openSlaModal(0)" class="btn btn-primary btn-sm">Create SLA Policy</button>
+            </div>
+            <div class="cc p-0 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Policy Name</th>
+                                <th>Priority Tier</th>
+                                <th>Response SLA</th>
+                                <th>Resolution SLA</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="slaTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center p-4 text-muted">Loading SLA rules...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Maintenance Modal -->
+<div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="maintModalTitle">Schedule Task</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="maintForm">
+                    <input type="hidden" id="maintId" value="0" />
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Select Asset</label>
+                            <select id="maintAssetSelect" class="form-select" required></select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Frequency</label>
+                            <select id="maintFreq" class="form-select">
+                                <option value="Monthly">Monthly</option>
+                                <option value="Quarterly">Quarterly</option>
+                                <option value="Half-Yearly">Half-Yearly</option>
+                                <option value="Annually">Annually</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Last Done Date</label>
+                            <input type="date" id="maintLastDate" class="form-control" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Next Due Date</label>
+                            <input type="date" id="maintNextDate" class="form-control" required />
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Assigned Engineer</label>
+                            <select id="maintEngineerSelect" class="form-select"></select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Task Status</label>
+                            <select id="maintStatus" class="form-select">
+                                <option value="Pending">Pending</option>
+                                <option value="Completed">Completed</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Checklist Tasks (One per line)</label>
+                        <textarea id="maintChecklist" class="form-control" rows="4" placeholder="Verify power supply&#10;Clean dust filters&#10;Run OS diagnostics"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" onclick="saveMaint()" class="btn btn-primary btn-sm">Save Schedule</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SLA Modal -->
+<div class="modal fade" id="slaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="slaModalTitle">Create SLA Policy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="slaForm">
+                    <input type="hidden" id="slaId" value="0" />
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Policy Name</label>
+                        <input type="text" id="slaName" class="form-control" placeholder="e.g. Critical SLA" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Priority Tier</label>
+                        <select id="slaPrioritySelect" class="form-select" required></select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label small fw-bold">Response Limit (Hrs)</label>
+                            <input type="number" id="slaResponse" class="form-control" min="1" value="4" required />
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label small fw-bold">Resolution Limit (Hrs)</label>
+                            <input type="number" id="slaResolution" class="form-control" min="1" value="24" required />
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        <input type="checkbox" id="slaActive" class="form-check-input" checked />
+                        <label class="form-check-label small fw-bold" for="slaActive">Active Policy</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" onclick="saveSla()" class="btn btn-primary btn-sm">Save Policy</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let scheduleModal = null;
+        let slaModal = null;
+        let loadedSchedules = [];
+        let loadedSlas = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            scheduleModal = new bootstrap.Modal(document.getElementById("scheduleModal"));
+            slaModal = new bootstrap.Modal(document.getElementById("slaModal"));
+
+            loadDropdowns();
+            loadSchedules();
+            loadSlaPolicies();
+        });
+
+        async function loadDropdowns() {
+            try {
+                const [assetsRes, prioritiesRes, usersRes] = await Promise.all([
+                    fetch("/AssetRegister/GetAssets?pageSize=100"),
+                    fetch("/ItPortal/GetMasterData?type=Priority"),
+                    fetch("/Helpdesk/GetTickets?pageSize=1") // to fetch portal engineers/users
+                ]);
+
+                const assets = await assetsRes.json();
+                const priorities = await prioritiesRes.json();
+                
+                document.getElementById("maintAssetSelect").innerHTML = assets.items.map(a => `<option value="${a.id}">${a.assetCode} - ${a.name}</option>`).join("");
+                document.getElementById("slaPrioritySelect").innerHTML = priorities.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+
+                // Default mock engineers
+                document.getElementById("maintEngineerSelect").innerHTML = `
+                    <option value="admin">Shailendra Kumar (IT Lead)</option>
+                    <option value="engineer1">Support Engineer 1</option>
+                    <option value="engineer2">Support Engineer 2</option>
+                `;
+            } catch (err) {
+                console.error("Dropdown load failed", err);
+            }
+        }
+
+        async function loadSchedules() {
+            const tbody = document.getElementById("schedulesTableBody");
+            try {
+                const res = await fetch("/ItPortal/GetMaintenanceSchedules");
+                loadedSchedules = await res.json();
+
+                if (loadedSchedules.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center p-4 text-muted">No maintenance tasks scheduled.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = loadedSchedules.map(x => `
+                    <tr>
+                        <td><strong>${escapeHtml(x.assetCode)}</strong></td>
+                        <td>${escapeHtml(x.assetName)}</td>
+                        <td><span class="badge bg-light text-dark">${x.frequency}</span></td>
+                        <td>${x.lastDoneDate}</td>
+                        <td>${x.nextDueDate}</td>
+                        <td>${escapeHtml(x.assignedEngineer)}</td>
+                        <td class="text-center">
+                            <span class="badge ${x.status === 'Completed' ? 'bg-success' : 'bg-warning'}">${x.status}</span>
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="openScheduleModal(${x.id})">Edit</button>
+                            <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="deleteMaint(${x.id})">Delete</button>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center p-4 text-danger">Error loading maintenance schedules.</td></tr>`;
+            }
+        }
+
+        async function loadSlaPolicies() {
+            const tbody = document.getElementById("slaTableBody");
+            try {
+                const res = await fetch("/ItPortal/GetSlaPolicies");
+                loadedSlas = await res.json();
+
+                // Fetch priorities lookup to map names
+                const priRes = await fetch("/ItPortal/GetMasterData?type=Priority");
+                const priorities = await priRes.json();
+                const priMap = {};
+                priorities.forEach(p => priMap[p.id] = p.name);
+
+                if (loadedSlas.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-muted">No SLA policies defined.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = loadedSlas.map(x => `
+                    <tr>
+                        <td><strong>${escapeHtml(x.name)}</strong></td>
+                        <td><span class="badge bg-light text-dark">${priMap[x.priorityId] || 'Medium'}</span></td>
+                        <td>${x.responseTimeHours} Hrs</td>
+                        <td>${x.resolutionTimeHours} Hrs</td>
+                        <td class="text-center">
+                            <span class="badge ${x.isActive ? 'bg-success' : 'bg-secondary'}">${x.isActive ? 'Active' : 'Inactive'}</span>
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="openSlaModal(${x.id})">Edit</button>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-danger">Error loading SLA policies.</td></tr>`;
+            }
+        }
+
+        function openScheduleModal(id) {
+            document.getElementById("maintForm").reset();
+            document.getElementById("maintId").value = id;
+
+            if (id === 0) {
+                document.getElementById("maintModalTitle").textContent = "Schedule Maintenance Task";
+                document.getElementById("maintLastDate").valueAsDate = new Date();
+                document.getElementById("maintNextDate").valueAsDate = new Date(new Date().setMonth(new Date().getMonth() + 3));
+            } else {
+                const item = loadedSchedules.find(x => x.id === id);
+                if (!item) return;
+
+                document.getElementById("maintModalTitle").textContent = "Edit Maintenance Task";
+                document.getElementById("maintAssetSelect").value = item.assetId;
+                document.getElementById("maintFreq").value = item.frequency;
+                document.getElementById("maintLastDate").value = item.lastDoneDate;
+                document.getElementById("maintNextDate").value = item.nextDueDate;
+                document.getElementById("maintEngineerSelect").value = item.assignedEngineer;
+                document.getElementById("maintStatus").value = item.status;
+                
+                if (item.checklistJson) {
+                    const tasks = JSON.parse(item.checklistJson);
+                    document.getElementById("maintChecklist").value = tasks.join("\n");
+                }
+            }
+            scheduleModal.show();
+        }
+
+        async function saveMaint() {
+            const id = parseInt(document.getElementById("maintId").value);
+            const assetId = parseInt(document.getElementById("maintAssetSelect").value);
+            const frequency = document.getElementById("maintFreq").value;
+            const lastDoneDate = document.getElementById("maintLastDate").value;
+            const nextDueDate = document.getElementById("maintNextDate").value;
+            const assignedEngineer = document.getElementById("maintEngineerSelect").value;
+            const status = document.getElementById("maintStatus").value;
+            const listStr = document.getElementById("maintChecklist").value.trim();
+            const checklistJson = JSON.stringify(listStr.split('\n').filter(t => t.trim() !== ''));
+
+            if (!assetId || !lastDoneDate || !nextDueDate) {
+                Swal.fire("Validation Error", "Asset and Due Dates are required.", "warning");
+                return;
+            }
+
+            const model = { id, assetId, frequency, lastDoneDate, nextDueDate, assignedEngineer, checklistJson, status };
+
+            try {
+                const res = await fetch("/ItPortal/SaveMaintenanceSchedule", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+                
+                const data = await res.json();
+                if (data.ok) {
+                    scheduleModal.hide();
+                    Swal.fire("Success", data.message, "success");
+                    loadSchedules();
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server error.", "error");
+            }
+        }
+
+        async function deleteMaint(id) {
+            const result = await Swal.fire({
+                title: "Are you sure?",
+                text: "Delete this preventive maintenance schedule?",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#d33",
+                confirmButtonText: "Yes, Delete"
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await fetch(`/ItPortal/DeleteMaintenanceSchedule?id=${id}`, { method: "POST" });
+                const data = await res.json();
+                if (data.ok) {
+                    Swal.fire("Deleted", data.message, "success");
+                    loadSchedules();
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server deletion failed.", "error");
+            }
+        }
+
+        function openSlaModal(id) {
+            document.getElementById("slaForm").reset();
+            document.getElementById("slaId").value = id;
+
+            if (id === 0) {
+                document.getElementById("slaModalTitle").textContent = "Create SLA Policy";
+            } else {
+                const item = loadedSlas.find(x => x.id === id);
+                if (!item) return;
+
+                document.getElementById("slaModalTitle").textContent = "Edit SLA Policy";
+                document.getElementById("slaName").value = item.name;
+                document.getElementById("slaPrioritySelect").value = item.priorityId;
+                document.getElementById("slaResponse").value = item.responseTimeHours;
+                document.getElementById("slaResolution").value = item.resolutionTimeHours;
+                document.getElementById("slaActive").checked = item.isActive;
+            }
+            slaModal.show();
+        }
+
+        async function saveSla() {
+            const id = parseInt(document.getElementById("slaId").value);
+            const name = document.getElementById("slaName").value.trim();
+            const priorityId = parseInt(document.getElementById("slaPrioritySelect").value);
+            const responseTimeHours = parseInt(document.getElementById("slaResponse").value) || 0;
+            const resolutionTimeHours = parseInt(document.getElementById("slaResolution").value) || 0;
+            const isActive = document.getElementById("slaActive").checked;
+
+            if (!name || !priorityId) {
+                Swal.fire("Validation Error", "Name and Priority tier are required.", "warning");
+                return;
+            }
+
+            const model = { id, name, priorityId, responseTimeHours, resolutionTimeHours, isActive };
+
+            try {
+                const res = await fetch("/ItPortal/SaveSlaPolicy", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+                
+                const data = await res.json();
+                if (data.ok) {
+                    slaModal.hide();
+                    Swal.fire("Success", data.message, "success");
+                    loadSlaPolicies();
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server error.", "error");
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+}

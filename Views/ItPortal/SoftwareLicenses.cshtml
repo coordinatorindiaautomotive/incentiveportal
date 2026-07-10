@@ -1,0 +1,309 @@
+@{
+    ViewData["Title"] = "Software License Management";
+    Layout = "_Layout";
+}
+
+<div class="main">
+    <!-- Header Block -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1 fw-bold">Software License Register</h4>
+            <p class="text-muted small mb-0">Track license utilization, keys, assigned machines, and expiry timelines.</p>
+        </div>
+        <div>
+            <button onclick="openFormModal(0)" class="btn btn-primary btn-sm d-flex align-items-center gap-2">
+                <i data-lucide="plus" style="width:14px; height:14px;"></i> Add Software Asset
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters Row -->
+    <div class="cc p-3 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-6 col-lg-4">
+                <input type="text" id="licenseSearch" oninput="loadLicenses()" class="form-control" placeholder="Search by software name or key..." />
+            </div>
+            <div class="col-md-6 col-lg-8 text-md-end">
+                <span class="badge bg-light text-dark p-2" id="licenseCount">0 Assets registered</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Licenses Grid -->
+    <div class="cc p-0 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead class="bg-light">
+                    <tr>
+                        <th style="width: 20%;">Software Name</th>
+                        <th style="width: 15%;">Version</th>
+                        <th style="width: 25%;">License Key</th>
+                        <th style="width: 15%;">Assigned Machine</th>
+                        <th style="width: 10%;">Expiry Date</th>
+                        <th style="width: 5%;" class="text-center">Total</th>
+                        <th style="width: 10%;" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="licenseTableBody">
+                    <tr>
+                        <td colspan="7" class="text-center p-4 text-muted">
+                            Loading software registries...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Form -->
+<div class="modal fade" id="softwareModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add Software Asset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="softwareForm">
+                    <input type="hidden" id="itemId" value="0" />
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Software Name</label>
+                            <input type="text" id="softwareName" class="form-control" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Software Vendor</label>
+                            <select id="vendorSelect" class="form-select" required></select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">License Key</label>
+                            <input type="text" id="licenseKey" class="form-control" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Version</label>
+                            <input type="text" id="softwareVersion" class="form-control" placeholder="e.g. 2026.1" />
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Installation Date</label>
+                            <input type="date" id="installDate" class="form-control" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Expiry Date</label>
+                            <input type="date" id="expiryDate" class="form-control" />
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Assigned Device / Machine</label>
+                            <select id="deviceSelect" class="form-select">
+                                <option value="">Not Assigned (Available)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label small fw-bold">License Count</label>
+                            <input type="number" id="licenseCountInput" class="form-control" value="1" min="1" />
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label small fw-bold">License Type</label>
+                            <select id="licenseTypeSelect" class="form-select" required></select>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        <input type="checkbox" id="licenseActive" class="form-check-input" checked />
+                        <label class="form-check-label small fw-bold" for="licenseActive">License Active</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" onclick="saveLicense()" class="btn btn-primary btn-sm">Save License</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let formModal = null;
+        let loadedLicenses = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            formModal = new bootstrap.Modal(document.getElementById("softwareModal"));
+            loadDropdowns();
+            loadLicenses();
+        });
+
+        async function loadDropdowns() {
+            try {
+                // Fetch masters
+                const [vendorsRes, licenseTypesRes, assetsRes] = await Promise.all([
+                    fetch("/ItPortal/GetMasterData?type=SoftwareVendor"),
+                    fetch("/ItPortal/GetMasterData?type=LicenseType"),
+                    fetch("/AssetRegister/GetAssets?pageSize=100")
+                ]);
+
+                const vendors = await vendorsRes.json();
+                const licenseTypes = await licenseTypesRes.json();
+                const assetsData = await assetsRes.json();
+
+                document.getElementById("vendorSelect").innerHTML = vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join("");
+                document.getElementById("licenseTypeSelect").innerHTML = licenseTypes.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+                
+                const deviceSelect = document.getElementById("deviceSelect");
+                deviceSelect.innerHTML = `<option value="">Not Assigned (Available)</option>` + 
+                    assetsData.items.map(a => `<option value="${a.id}">${a.assetCode} - ${a.name}</option>`).join("");
+            } catch (err) {
+                console.error("Dropdown fetching failed", err);
+            }
+        }
+
+        async function loadLicenses() {
+            const search = document.getElementById("licenseSearch").value;
+            const tbody = document.getElementById("licenseTableBody");
+
+            try {
+                const res = await fetch(`/ItPortal/GetSoftwareLicenses?search=${encodeURIComponent(search)}`);
+                loadedLicenses = await res.json();
+                document.getElementById("licenseCount").textContent = `${loadedLicenses.length} Assets registered`;
+
+                if (loadedLicenses.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-center p-4 text-muted">No software licenses found matching current filters.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = loadedLicenses.map(x => `
+                    <tr>
+                        <td><strong>${escapeHtml(x.softwareName)}</strong></td>
+                        <td>${escapeHtml(x.version || '-')}</td>
+                        <td><code class="small text-muted">${escapeHtml(x.licenseKey)}</code></td>
+                        <td>
+                            ${x.assetId ? `<span class="badge bg-primary">${escapeHtml(x.deviceCode)} - ${escapeHtml(x.deviceName)}</span>` : '<span class="badge bg-secondary">Unassigned</span>'}
+                        </td>
+                        <td>${x.expiryDate || '<span class="text-muted">Lifetime</span>'}</td>
+                        <td class="text-center"><span class="badge bg-light text-dark">${x.totalLicenses}</span></td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="openFormModal(${x.id})">Edit</button>
+                            <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="deleteLicense(${x.id})">Delete</button>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center p-4 text-danger">Error loading software licenses.</td></tr>`;
+            }
+        }
+
+        function openFormModal(id) {
+            document.getElementById("softwareForm").reset();
+            document.getElementById("itemId").value = id;
+
+            if (id === 0) {
+                document.getElementById("modalTitle").textContent = "Add Software Asset";
+                document.getElementById("installDate").valueAsDate = new Date();
+            } else {
+                const item = loadedLicenses.find(x => x.id === id);
+                if (!item) return;
+
+                document.getElementById("modalTitle").textContent = "Edit Software Asset";
+                document.getElementById("softwareName").value = item.softwareName;
+                document.getElementById("vendorSelect").value = item.vendorId;
+                document.getElementById("licenseKey").value = item.licenseKey;
+                document.getElementById("softwareVersion").value = item.version || "";
+                document.getElementById("installDate").value = item.installationDate;
+                document.getElementById("expiryDate").value = item.expiryDate || "";
+                document.getElementById("deviceSelect").value = item.assetId || "";
+                document.getElementById("licenseCountInput").value = item.totalLicenses;
+                document.getElementById("licenseTypeSelect").value = item.licenseTypeId;
+                document.getElementById("licenseActive").checked = item.isActive;
+            }
+
+            formModal.show();
+        }
+
+        async function saveLicense() {
+            const id = parseInt(document.getElementById("itemId").value);
+            const softwareName = document.getElementById("softwareName").value.trim();
+            const vendorId = parseInt(document.getElementById("vendorSelect").value);
+            const licenseKey = document.getElementById("licenseKey").value.trim();
+            const version = document.getElementById("softwareVersion").value.trim();
+            const installationDate = document.getElementById("installDate").value;
+            const expiryStr = document.getElementById("expiryDate").value;
+            const expiryDate = expiryStr ? expiryStr : null;
+            const assetIdStr = document.getElementById("deviceSelect").value;
+            const assetId = assetIdStr ? parseInt(assetIdStr) : null;
+            const totalLicenses = parseInt(document.getElementById("licenseCountInput").value) || 1;
+            const licenseTypeId = parseInt(document.getElementById("licenseTypeSelect").value);
+            const isActive = document.getElementById("licenseActive").checked;
+
+            if (!softwareName || !licenseKey || !installationDate) {
+                Swal.fire("Validation Error", "Name, Key, and Installation Date are required.", "warning");
+                return;
+            }
+
+            const model = {
+                id, softwareName, vendorId, licenseKey, version,
+                installationDate, expiryDate, assetId, totalLicenses,
+                licenseTypeId, isActive
+            };
+
+            try {
+                const res = await fetch("/ItPortal/SaveSoftwareLicense", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+                
+                const data = await res.json();
+                if (data.ok) {
+                    formModal.hide();
+                    Swal.fire("Success", data.message, "success");
+                    loadLicenses();
+                } else {
+                    Swal.fire("Error", data.message, "error");
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server submission failed.", "error");
+            }
+        }
+
+        async function deleteLicense(id) {
+            const result = await Swal.fire({
+                title: "Are you sure?",
+                text: "Delete this software license from records?",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#d33",
+                confirmButtonText: "Yes, Delete"
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await fetch(`/ItPortal/DeleteSoftwareLicense?id=${id}`, { method: "POST" });
+                const data = await res.json();
+                if (data.ok) {
+                    Swal.fire("Deleted", data.message, "success");
+                    loadLicenses();
+                } else {
+                    Swal.fire("Error", data.message, "error");
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server deletion failed.", "error");
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+}

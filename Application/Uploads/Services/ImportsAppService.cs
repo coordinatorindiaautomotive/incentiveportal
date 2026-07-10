@@ -51,6 +51,7 @@ public interface IImportsAppService
         bool forceRecalculate, 
         string? branchRulesJson, 
         string? partyMappingsJson, 
+        string? governorFiltersJson,
         ICurrentUser currentUser, 
         CancellationToken cancellationToken);
     
@@ -60,6 +61,7 @@ public interface IImportsAppService
         bool forceRecalculate,
         string? branchRulesJson,
         string? partyMappingsJson,
+        string? governorFiltersJson,
         ICurrentUser currentUser,
         CancellationToken cancellationToken);
 
@@ -357,7 +359,7 @@ public sealed class ImportsAppService(
             .ToListAsync(cancellationToken);
 
         var partyTypes = await db.Raws
-            .Where(x => x.MonthNumber == month && x.YearNumber == year && !x.IsDeleted && !string.IsNullOrEmpty(x.PartyType))
+            .Where(x => x.MonthNumber == month && x.YearNumber == year && !x.IsDeleted && !string.IsNullOrEmpty(x.PartyType) && x.PartyType != "IMPORTED")
             .Select(x => x.PartyType!)
             .Distinct()
             .OrderBy(x => x)
@@ -366,7 +368,7 @@ public sealed class ImportsAppService(
         if (partyTypes.Count == 0)
         {
             partyTypes = await db.Parties
-                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.DealerType))
+                .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.DealerType) && x.DealerType != "IMPORTED")
                 .Select(x => x.DealerType)
                 .Distinct()
                 .OrderBy(x => x)
@@ -385,7 +387,7 @@ public sealed class ImportsAppService(
         return (locations, categories, partyTypes);
     }
 
-    public async Task<string> RunCalculationJobAsync(int month, int year, bool forceRecalculate, string? branchRulesJson, string? partyMappingsJson, ICurrentUser currentUser, CancellationToken cancellationToken)
+    public async Task<string> RunCalculationJobAsync(int month, int year, bool forceRecalculate, string? branchRulesJson, string? partyMappingsJson, string? governorFiltersJson, ICurrentUser currentUser, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(branchRulesJson))
         {
@@ -420,6 +422,7 @@ public sealed class ImportsAppService(
                 forceRecalculate,
                 branchRulesJson,
                 partyMappingsJson,
+                governorFiltersJson,
                 currentUser.UserName));
 
         var state = new BackgroundJobState
@@ -441,6 +444,7 @@ public sealed class ImportsAppService(
         bool forceRecalculate,
         string? branchRulesJson,
         string? partyMappingsJson,
+        string? governorFiltersJson,
         ICurrentUser currentUser,
         CancellationToken cancellationToken)
     {
@@ -474,6 +478,7 @@ public sealed class ImportsAppService(
                 branchRules,
                 false,
                 customMappings,
+                governorFiltersJson,
                 cancellationToken);
 
             var ledgers = await db.SsIncentives
@@ -497,9 +502,12 @@ public sealed class ImportsAppService(
                     partyCode = l.PartyCode,
                     partyName = l.PartyName,
                     location = l.SourceLocation,
+                    partCategory = l.PartCategoryCode,
                     saleValue = l.SaleValue,
                     discount = l.OnBillDiscount,
-                    slabApplied = (l.SlabPercent * 100).ToString("F2") + "%",
+                    slabApplied = l.ApplicableSlab ?? (l.SlabPercent * 100).ToString("F2") + "%",
+                    incentiveType = l.IncentiveType ?? "Slab",
+                    incentivePercent = (l.SlabPercent * 100).ToString("F2") + "%",
                     grossIncentive = l.GrossIncentive,
                     tdsPercent = l.GrossIncentive > 0 ? Math.Round((l.TdsAmount / l.GrossIncentive) * 100, 2) : 0m,
                     tdsAmount = l.TdsAmount,

@@ -380,12 +380,12 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
             sheet.Cell(row, 3).Value = item.PartyName;
             
             sheet.Cell(row, 4).Value = item.SystemSuggestedTarget;
-            sheet.Cell(row, 4).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 4).Style.NumberFormat.Format = "#,##0";
             
             if (item.AdminDefinedTarget.HasValue)
             {
                 sheet.Cell(row, 5).Value = item.AdminDefinedTarget.Value;
-                sheet.Cell(row, 5).Style.NumberFormat.Format = "₹#,##0";
+                sheet.Cell(row, 5).Style.NumberFormat.Format = "#,##0";
             }
             else
             {
@@ -393,10 +393,10 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
             }
             
             sheet.Cell(row, 6).Value = item.FinalTarget;
-            sheet.Cell(row, 6).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 6).Style.NumberFormat.Format = "#,##0";
             
             sheet.Cell(row, 7).Value = item.CurrentAchievementSales;
-            sheet.Cell(row, 7).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 7).Style.NumberFormat.Format = "#,##0";
             
             sheet.Cell(row, 8).Value = item.AchievementPercent / 100m;
             sheet.Cell(row, 8).Style.NumberFormat.Format = "0.0%";
@@ -404,16 +404,16 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
             sheet.Cell(row, 9).Value = item.CurrentSlabLabel;
             
             sheet.Cell(row, 10).Value = item.NextSlabTarget;
-            sheet.Cell(row, 10).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 10).Style.NumberFormat.Format = "#,##0";
             
             sheet.Cell(row, 11).Value = item.LastMonthSales;
-            sheet.Cell(row, 11).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 11).Style.NumberFormat.Format = "#,##0";
             
             sheet.Cell(row, 12).Value = item.YTDSales;
-            sheet.Cell(row, 12).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 12).Style.NumberFormat.Format = "#,##0";
             
             sheet.Cell(row, 13).Value = item.LastYearYTDSales;
-            sheet.Cell(row, 13).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 13).Style.NumberFormat.Format = "#,##0";
             
             sheet.Cell(row, 14).Value = item.YoYGrowthPercent / 100m;
             sheet.Cell(row, 14).Style.NumberFormat.Format = "0.0%";

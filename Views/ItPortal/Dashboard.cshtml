@@ -1,0 +1,201 @@
+@{
+    ViewData["Title"] = "IT Operations Dashboard";
+    Layout = "_Layout";
+}
+
+<div class="main">
+    <!-- Breadcrumbs / Premium Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1 fw-bold text-gradient">IT Operations Dashboard</h4>
+            <p class="text-muted small mb-0">Real-time telemetry of branch IT assets, service desk tickets, and SLA compliance.</p>
+        </div>
+        <div>
+            <button onclick="refreshDashboard()" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2">
+                <i data-lucide="refresh-cw" style="width:14px; height:14px;"></i> Refresh Telemetry
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Dashboard Cards Grid -->
+    <div class="krow mb-4">
+        <!-- Card 1: Total Assets -->
+        <div class="kcard" style="--kg2: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+            <div class="k-icon"><i data-lucide="database"></i></div>
+            <div class="kl">Total Managed Assets</div>
+            <div class="kv" id="kpiTotalAssets">-</div>
+            <div class="ksub">Central asset repository</div>
+        </div>
+
+        <!-- Card 2: Asset Availability -->
+        <div class="kcard" style="--kg2: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);">
+            <div class="k-icon"><i data-lucide="check-circle-2"></i></div>
+            <div class="kl">Active / Idle / Repair</div>
+            <div class="kv" id="kpiAssetBreakdown" style="font-size:1.15rem; font-weight:800; padding:4px 0;">- / - / -</div>
+            <div class="ksub">Current operational states</div>
+        </div>
+
+        <!-- Card 3: Expiry Telemetry -->
+        <div class="kcard" style="--kg2: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+            <div class="k-icon"><i data-lucide="alert-triangle"></i></div>
+            <div class="kl">Expiries (60 Days)</div>
+            <div class="kv" id="kpiExpiries" style="font-size:1.15rem; font-weight:800; padding:4px 0;">W: - / A: -</div>
+            <div class="ksub">Warranty & AMC renewals due</div>
+        </div>
+
+        <!-- Card 4: Service Desk Tickets -->
+        <div class="kcard" style="--kg2: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);">
+            <div class="k-icon"><i data-lucide="life-buoy"></i></div>
+            <div class="kl">Open / Critical Tickets</div>
+            <div class="kv" id="kpiTickets" style="font-size:1.15rem; font-weight:800; padding:4px 0;">- / -</div>
+            <div class="ksub" id="kpiSlaBreached">SLA Breached: -</div>
+        </div>
+    </div>
+
+    <!-- Visualizations Row -->
+    <div class="row g-4">
+        <!-- Asset Category Mix -->
+        <div class="col-lg-6">
+            <div class="cc h-100">
+                <div class="ch">
+                    <div>
+                        <div class="ct">Asset Category Distribution</div>
+                        <div class="cs">Hardware vs Network vs Furniture categories</div>
+                    </div>
+                </div>
+                <div class="chart-area d-flex align-items-center justify-content-center">
+                    <div id="chartCategory" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Branches Asset Count -->
+        <div class="col-lg-6">
+            <div class="cc h-100">
+                <div class="ch">
+                    <div>
+                        <div class="ct">Top Branches by Asset Volume</div>
+                        <div class="cs">Top 5 branches hosting inventory</div>
+                    </div>
+                </div>
+                <div class="chart-area d-flex align-items-center justify-content-center">
+                    <div id="chartBranches" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <style>
+        .text-gradient {
+            background: linear-gradient(90deg, var(--primary) 0%, #0062ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script>
+        let categoryChart = null;
+        let branchChart = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            refreshDashboard();
+            lucide.createIcons();
+        });
+
+        async function refreshDashboard() {
+            try {
+                const res = await fetch("/ItPortal/GetDashboardStats");
+                if (!res.ok) throw new Error("Failed to fetch stats");
+                const data = await res.json();
+
+                // Load KPIs
+                document.getElementById("kpiTotalAssets").textContent = data.totalAssets;
+                document.getElementById("kpiAssetBreakdown").textContent = `${data.activeAssets} A / ${data.idleAssets} I / ${data.inRepair} R`;
+                document.getElementById("kpiExpiries").textContent = `W: ${data.expiringWarranty} / A: ${data.expiringAmc}`;
+                document.getElementById("kpiTickets").textContent = `${data.openTickets} Open / ${data.criticalTickets} Crit`;
+                document.getElementById("kpiSlaBreached").textContent = `SLA Breached: ${data.slaBreached}`;
+
+                // Update charts
+                renderCategoryChart(data.categorySummary);
+                renderBranchChart(data.branchSummary);
+            } catch (err) {
+                console.error("Dashboard refresh failed", err);
+            }
+        }
+
+        function renderCategoryChart(summary) {
+            const labels = summary.map(x => x.name);
+            const series = summary.map(x => x.count);
+
+            const options = {
+                chart: { type: 'donut', height: 260 },
+                series: series,
+                labels: labels,
+                colors: ['#0062ff', '#10b981', '#fbbf24', '#f43f5e', '#a78bfa'],
+                legend: { position: 'bottom', labels: { colors: 'var(--ink-2)' } },
+                dataLabels: { enabled: true, style: { fontSize: '10px' } },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '65%',
+                            labels: {
+                                show: true,
+                                total: {
+                                    show: true,
+                                    label: 'Assets',
+                                    color: 'var(--ink)',
+                                    formatter: w => w.globals.seriesTotals.reduce((a, b) => a + b, 0)
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            if (categoryChart) {
+                categoryChart.updateOptions(options);
+            } else {
+                categoryChart = new ApexCharts(document.querySelector("#chartCategory"), options);
+                categoryChart.render();
+            }
+        }
+
+        function renderBranchChart(summary) {
+            const labels = summary.map(x => x.name);
+            const series = summary.map(x => x.count);
+
+            const options = {
+                chart: { type: 'bar', height: 260, toolbar: { show: false } },
+                series: [{ name: 'Assets', data: series }],
+                colors: ['#0062ff'],
+                plotOptions: {
+                    bar: {
+                        borderRadius: 4,
+                        horizontal: true,
+                        barHeight: '55%'
+                    }
+                },
+                xaxis: {
+                    categories: labels,
+                    labels: { style: { colors: 'var(--ink-2)' } }
+                },
+                yaxis: {
+                    labels: { style: { colors: 'var(--ink-2)' } }
+                },
+                dataLabels: { enabled: true, style: { colors: ['#fff'] } }
+            };
+
+            if (branchChart) {
+                branchChart.updateOptions(options);
+            } else {
+                branchChart = new ApexCharts(document.querySelector("#chartBranches"), options);
+                branchChart.render();
+            }
+        }
+    </script>
+}

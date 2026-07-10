@@ -1,283 +1,522 @@
-@model IEnumerable<IncentivePortal.Models.HelpdeskTicket>
 @{
-    ViewData["Title"] = "Helpdesk Support Hub";
-    var parties = ViewBag.Parties as IEnumerable<dynamic>;
-    var users = ViewBag.Users as IEnumerable<string>;
-    var kbArticles = ViewBag.KBArticles as List<IncentivePortal.Models.KnowledgeBaseArticle>;
+    ViewData["Title"] = "IT Support Help Desk";
+    Layout = "_Layout";
 }
 
-<div class="container-fluid py-4">
+<div class="main">
     <!-- Header Block -->
-    <div class="card p-3 mb-4 border-0 shadow-sm" style="background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);">
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <h4 class="mb-1 text-primary fw-bold" style="font-family:'Inter',sans-serif;"><i class="fa-solid fa-headset me-2"></i> Dealer Helpdesk Hub</h4>
-                <p class="text-muted small mb-0">Manage billing disputes, scheme verification, system outages, and customer complaints.</p>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1 fw-bold text-gradient">IT Service Desk Portal</h4>
+            <p class="text-muted small mb-0">Create, monitor, and resolve support requests in line with branch SLA metrics.</p>
+        </div>
+        <div>
+            <button onclick="openCreateModal()" class="btn btn-primary btn-sm d-flex align-items-center gap-2">
+                <i data-lucide="plus" style="width:14px; height:14px;"></i> Raise Support Ticket
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="cc p-3 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-3">
+                <input type="text" id="tktSearch" oninput="loadTickets()" class="form-control" placeholder="Search by number, requester..." />
             </div>
-            <div class="col-md-6 text-end">
-                <button class="btn btn-primary btn-sm bg-primary border-0" data-bs-toggle="modal" data-bs-target="#createTicketModal"><i class="fa-solid fa-plus-circle me-1"></i> Create Support Ticket</button>
+            <div class="col-md-3">
+                <select id="filterStatus" onchange="loadTickets()" class="form-select">
+                    <option value="">All Statuses</option>
+                    <option value="New">New</option>
+                    <option value="InProgress">In Progress</option>
+                    <option value="WaitingForUser">Waiting for User</option>
+                    <option value="WaitingForVendor">Waiting for Vendor</option>
+                    <option value="Resolved">Resolved</option>
+                    <option value="Closed">Closed</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select id="filterPriority" onchange="loadTickets()" class="form-select">
+                    <option value="">All Priorities</option>
+                </select>
+            </div>
+            <div class="col-md-3 text-md-end">
+                <span class="badge bg-light text-dark p-2" id="ticketCountLabel">0 Tickets found</span>
             </div>
         </div>
     </div>
 
-    <!-- Summary Stats Bar -->
-    <div class="row g-4 mb-4 text-center">
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm p-3">
-                <div class="small text-muted mb-1">New Tickets</div>
-                <h2 class="fw-bold mb-0 text-info">@ViewBag.NewCount</h2>
+    <!-- Tickets Table -->
+    <div class="row">
+        <!-- Tickets Grid -->
+        <div class="col-md-7">
+            <div class="cc p-0 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Ticket</th>
+                                <th>Subject</th>
+                                <th>Priority</th>
+                                <th>Deadline</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ticketsTableBody">
+                            <tr>
+                                <td colspan="5" class="text-center p-4 text-muted">Loading service desk tickets...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm p-3">
-                <div class="small text-muted mb-1">In Progress / Assigned</div>
-                <h2 class="fw-bold mb-0 text-warning">@ViewBag.InprogressCount</h2>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm p-3">
-                <div class="small text-muted mb-1">Resolved / Closed</div>
-                <h2 class="fw-bold mb-0 text-success">@ViewBag.ResolvedCount</h2>
-            </div>
-        </div>
-    </div>
 
-    <div class="row g-4">
-        <!-- Ticket list sidebar (Left) -->
-        <div class="col-lg-5">
-            <div class="card border-0 shadow-sm h-100 p-3">
-                <form method="get" action="/Helpdesk/Index" class="mb-3">
-                    <div class="input-group input-group-sm mb-2">
-                        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
-                        <input type="text" class="form-control" name="search" value="@ViewBag.SearchFilter" placeholder="Search ticket details..." />
-                        <button type="submit" class="btn btn-primary bg-primary border-0">Find</button>
+        <!-- Interactive Ticket Detail Panel -->
+        <div class="col-md-5">
+            <div class="cc p-4" id="ticketDetailPanel" style="display: none; position: sticky; top: 16px;">
+                <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-3">
+                    <div>
+                        <h5 class="fw-bold mb-0" id="detailNumber">TKT-000000</h5>
+                        <div class="small text-muted" id="detailMeta">Raised by user</div>
                     </div>
-                    <div class="row g-2">
+                    <span class="badge bg-primary" id="detailStatus">New</span>
+                </div>
+
+                <div class="mb-3">
+                    <div class="small text-muted fw-bold mb-1">Subject</div>
+                    <div class="fw-bold" id="detailSubject">Support Request</div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="small text-muted fw-bold mb-1">Description</div>
+                    <div class="bg-light p-2 rounded small" id="detailDesc" style="white-space: pre-wrap;"></div>
+                </div>
+
+                <!-- SLA & Assignment -->
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <div class="small text-muted fw-bold mb-1">SLA Deadline</div>
+                        <div class="small fw-bold" id="detailSla">Calculating...</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="small text-muted fw-bold mb-1">Assigned Engineer</div>
+                        <select id="assignEngineerSelect" onchange="updateAssignment()" class="form-select form-select-sm"></select>
+                    </div>
+                </div>
+
+                <!-- Workflow Actions (Engineers only) -->
+                <div class="mb-3 border-top pt-3" id="engineerActionsGroup">
+                    <label class="form-label small fw-bold text-danger">Resolve Support Action</label>
+                    <div class="row g-2 mb-2">
                         <div class="col-6">
-                            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                                <option value="">All Statuses</option>
-                                <option value="New" selected="@(ViewBag.StatusFilter == "New" ? "selected" : null)">New</option>
-                                <option value="Assigned" selected="@(ViewBag.StatusFilter == "Assigned" ? "selected" : null)">Assigned</option>
-                                <option value="InProgress" selected="@(ViewBag.StatusFilter == "InProgress" ? "selected" : null)">In Progress</option>
-                                <option value="Resolved" selected="@(ViewBag.StatusFilter == "Resolved" ? "selected" : null)">Resolved</option>
-                                <option value="Closed" selected="@(ViewBag.StatusFilter == "Closed" ? "selected" : null)">Closed</option>
+                            <select id="resolveStatus" class="form-select form-select-sm">
+                                <option value="InProgress">In Progress</option>
+                                <option value="WaitingForUser">Waiting for User</option>
+                                <option value="WaitingForVendor">Waiting for Vendor</option>
+                                <option value="Resolved">Resolved</option>
                             </select>
                         </div>
                         <div class="col-6">
-                            <select name="priority" class="form-select form-select-sm" onchange="this.form.submit()">
-                                <option value="">All Priorities</option>
-                                <option value="Low" selected="@(ViewBag.PriorityFilter == "Low" ? "selected" : null)">Low</option>
-                                <option value="Medium" selected="@(ViewBag.PriorityFilter == "Medium" ? "selected" : null)">Medium</option>
-                                <option value="High" selected="@(ViewBag.PriorityFilter == "High" ? "selected" : null)">High</option>
-                                <option value="Urgent" selected="@(ViewBag.PriorityFilter == "Urgent" ? "selected" : null)">Urgent</option>
-                            </select>
+                            <button onclick="changeStatus()" class="btn btn-outline-primary btn-sm w-100">Update State</button>
                         </div>
                     </div>
-                </form>
-
-                <div class="ticket-list scrollbar" style="max-height: 480px; overflow-y: auto;">
-                    @if (Model != null && Model.Any())
-                    {
-                        foreach (var ticket in Model)
-                        {
-                            <div class="ticket-item p-3 mb-2 rounded border cursor-pointer" onclick="loadTicketDetails(@ticket.Id)" id="ticket-item-@ticket.Id" style="transition: all 0.2s; border-color: rgba(196,198,207,0.3) !important;">
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span class="small text-muted">Ticket #@ticket.Id | @ticket.Category</span>
-                                    <span class="badge @(ticket.Priority == "Urgent" ? "bg-danger" : ticket.Priority == "High" ? "bg-warning text-dark" : "bg-secondary")" style="font-size: 0.65rem;">@ticket.Priority</span>
-                                </div>
-                                <h6 class="fw-bold text-dark mb-2 text-truncate">@ticket.Title</h6>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span class="badge @(ticket.Status == "New" ? "bg-info text-dark" : ticket.Status == "Resolved" ? "bg-success" : "bg-primary")" style="font-size: 0.7rem;">@ticket.Status</span>
-                                    <span class="small text-muted"><i class="fa-regular fa-clock me-1"></i> @ticket.CreatedAt.ToString("dd MMM yy")</span>
-                                </div>
+                    <div id="resolutionDetailsGroup" style="display: none;">
+                        <textarea id="resolutionText" class="form-control form-control-sm mb-2" rows="2" placeholder="Resolution summary..."></textarea>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <select id="rootCauseSelect" class="form-select form-select-sm"></select>
                             </div>
-                        }
-                    }
-                    else
-                    {
-                        <div class="text-center text-muted py-5">
-                            <i class="fa-regular fa-folder-open fa-3x mb-3 opacity-55"></i>
-                            <p class="small mb-0">No active tickets found matching parameters.</p>
+                            <div class="col-6">
+                                <select id="resTypeSelect" class="form-select form-select-sm"></select>
+                            </div>
                         </div>
-                    }
+                    </div>
+                </div>
+
+                <!-- Feedback Form (Requesters only on Resolved) -->
+                <div class="mb-3 border-top pt-3 bg-light-warning p-2 rounded" id="userFeedbackGroup" style="display: none;">
+                    <h6 class="fw-bold text-warning mb-2 small uppercase">Submit Ticket Feedback</h6>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Star Rating (1 to 5)</label>
+                        <input type="number" id="feedbackScore" class="form-control form-control-sm" min="1" max="5" value="5" />
+                    </div>
+                    <div class="mb-2">
+                        <textarea id="feedbackText" class="form-control form-control-sm" rows="2" placeholder="Review comments..."></textarea>
+                    </div>
+                    <button onclick="submitFeedback()" class="btn btn-warning btn-sm w-100 text-white">Close & Approve Resolution</button>
+                </div>
+
+                <!-- Comments Timeline -->
+                <div class="border-top pt-3">
+                    <h6 class="fw-bold mb-2 small text-muted uppercase">Timeline & Comments</h6>
+                    <div id="commentsTimeline" class="d-flex flex-column gap-2 mb-3" style="max-height: 180px; overflow-y: auto;">
+                        <!-- Chronological comments -->
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="newCommentText" class="form-control" placeholder="Write a comment..." />
+                        <button onclick="addComment(false)" class="btn btn-primary">Send</button>
+                        @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                        {
+                            <button onclick="addComment(true)" class="btn btn-outline-danger">Internal</button>
+                        }
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Ticket Detail Workspace (Right) -->
-        <div class="col-lg-7">
-            <div class="card border-0 shadow-sm h-100 p-4" id="ticketDetailPanel" style="min-height: 400px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(255,255,255,0.95);">
-                <div class="text-center text-muted" id="detailEmptyState">
-                    <i class="fa-solid fa-ticket fa-4x mb-3 text-secondary opacity-35"></i>
-                    <h5 class="fw-bold mb-1">Select a support ticket</h5>
-                    <p class="small mb-0">Click any ticket in the list to open, assign, add comments and review SLA timeline details.</p>
-                </div>
+            <!-- Empty Detail State -->
+            <div class="cc p-4 text-center text-muted" id="emptyDetailPanel" style="position: sticky; top: 16px;">
+                Select a ticket from the left to view details and action workflow.
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal: Create Ticket -->
-<div class="modal fade" id="createTicketModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-md">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 12px;">
-            <div class="modal-header border-bottom bg-light">
-                <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-plus-circle me-1"></i> Create Support Ticket</h5>
+<!-- Create Modal -->
+<div class="modal fade" id="createModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Raise Support Ticket</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="/Helpdesk/Save" method="post" data-ajax="true">
-                @Html.AntiForgeryToken()
-                <div class="modal-body p-4">
+            <div class="modal-body">
+                <form id="ticketForm">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small text-muted">Ticket Title</label>
-                        <input type="text" class="form-control" name="Title" required placeholder="Brief description of the issue" />
+                        <label class="form-label small fw-bold">Subject / Summary</label>
+                        <input type="text" id="tktSubject" class="form-control" required />
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Department</label>
+                            <select id="tktDept" class="form-select" required></select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label small fw-bold">Ticket Category</label>
+                            <select id="tktCategory" class="form-select" required></select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label small fw-bold">Sub-Category</label>
+                            <select id="tktSubCategory" class="form-select" required></select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label small fw-bold">Priority</label>
+                            <select id="tktPriority" class="form-select" required></select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label small fw-bold">Severity</label>
+                            <select id="tktSeverity" class="form-select" required></select>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small text-muted">Detail Description</label>
-                        <textarea class="form-control" name="Description" rows="4" required placeholder="Describe the inquiry or outage in full detail..."></textarea>
+                        <label class="form-label small fw-bold">Detailed Description</label>
+                        <textarea id="tktDesc" class="form-control" rows="5" required></textarea>
                     </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-6">
-                            <label class="form-label fw-semibold small text-muted">Category</label>
-                            <select class="form-select" name="Category">
-                                <option value="General">General Inquiry</option>
-                                <option value="Schemes">Slab / Schemes</option>
-                                <option value="Billing">Dispute Invoice</option>
-                                <option value="Systems">Tally Mismatch</option>
-                                <option value="Logistics">Parts Delivery</option>
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label fw-semibold small text-muted">Priority</label>
-                            <select class="form-select" name="Priority">
-                                <option value="Low">Low</option>
-                                <option value="Medium" selected>Medium</option>
-                                <option value="High">High</option>
-                                <option value="Urgent">Urgent</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-6">
-                            <label class="form-label fw-semibold small text-muted">Associated Customer</label>
-                            <select class="form-select" name="AssociatedPartyCode">
-                                <option value="">General (No Customer)</option>
-                                @if (parties != null)
-                                {
-                                    foreach (var p in parties)
-                                    {
-                                        <option value="@p.PartyCode">@p.PartyName (@p.PartyCode)</option>
-                                    }
-                                }
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label fw-semibold small text-muted">Assign Agent</label>
-                            <select class="form-select" name="AssignedTo">
-                                <option value="">Unassigned (Queue)</option>
-                                @if (users != null)
-                                {
-                                    foreach (var u in users)
-                                    {
-                                        <option value="@u">@u</option>
-                                    }
-                                }
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-top bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-sm bg-primary border-0">Submit Ticket</button>
-                </div>
-            </form>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" onclick="saveTicket()" class="btn btn-primary btn-sm">Submit Ticket</button>
+            </div>
         </div>
     </div>
 </div>
 
 @section Scripts {
     <script>
-        function loadTicketDetails(id) {
-            $('.ticket-item').removeClass('border-primary shadow-sm bg-light-glow');
-            $('#ticket-item-' + id).addClass('border-primary shadow-sm bg-light-glow');
+        let createModal = null;
+        let loadedTickets = [];
+        let selectedTicketId = null;
 
-            $('#ticketDetailPanel').html('<div class="d-flex flex-column align-items-center py-5"><div class="spinner-border text-primary" role="status"></div><span class="mt-3 text-muted">Retrieving ticket details...</span></div>');
+        document.addEventListener("DOMContentLoaded", () => {
+            createModal = new bootstrap.Modal(document.getElementById("createModal"));
+            loadDropdowns();
+            loadTickets();
 
-            $.get('/Helpdesk/Details/' + id, function(t) {
-                let commentsHtml = '';
-                t.comments.forEach(c => {
-                    commentsHtml += `
-                        <div class="p-3 mb-2 rounded ${c.isInternal ? 'bg-warning-light border-warning' : 'bg-light'} border" style="font-size:0.82rem;">
-                            <div class="d-flex justify-content-between mb-1">
-                                <span class="fw-bold text-dark">${c.createdBy} ${c.isInternal ? '<span class="badge bg-warning text-dark px-2 py-0 ms-1" style="font-size:0.6rem">INTERNAL NOTE</span>' : ''}</span>
-                                <span class="text-muted text-end" style="font-size:0.72rem;">${c.createdAt}</span>
-                            </div>
-                            <div class="text-secondary">${c.commentText}</div>
-                        </div>
-                    `;
-                });
-
-                const html = `
-                    <div class="d-flex flex-column h-100 w-100" style="text-align: left;">
-                        <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
-                            <div>
-                                <span class="badge bg-primary mb-2">${t.category}</span>
-                                <h4 class="fw-bold text-dark mb-1">${t.title}</h4>
-                                <div class="small text-muted">Ticket #${t.id} | Assigned Agent: <strong>${t.assignedTo || 'Unassigned'}</strong></div>
-                            </div>
-                            <div class="text-end">
-                                <span class="badge ${t.priority === 'Urgent' ? 'bg-danger' : t.priority === 'High' ? 'bg-warning text-dark' : 'bg-secondary'} px-3 py-1 rounded-pill mb-2">${t.priority}</span>
-                                <div class="small text-muted">SLA Expiry: <strong>${t.slaExpiry || 'N/A'}</strong></div>
-                            </div>
-                        </div>
-
-                        <div class="mb-4">
-                            <h6 class="fw-bold text-muted small text-uppercase mb-2">Description</h6>
-                            <div class="p-3 bg-light rounded text-secondary" style="font-size:0.88rem; white-space: pre-wrap;">${t.description}</div>
-                        </div>
-
-                        <div class="flex-grow-1 mb-3 scrollbar" style="max-height: 220px; overflow-y: auto;">
-                            <h6 class="fw-bold text-muted small text-uppercase mb-2">Discussion & Logs</h6>
-                            ${commentsHtml || '<div class="text-center text-muted py-3 small">No messages or internal notes added.</div>'}
-                        </div>
-
-                        <form id="addCommentForm" class="border-top pt-3">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="ticketId" value="${t.id}" />
-                            <div class="mb-2">
-                                <textarea class="form-control form-control-sm" name="commentText" rows="2" placeholder="Write a response or note..." required></textarea>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="form-check form-switch mb-0">
-                                    <input class="form-check-input" type="checkbox" id="isInternalCheck" name="isInternal" value="true">
-                                    <label class="form-check-input-label small text-muted ms-1" for="isInternalCheck"><i class="fa-solid fa-lock text-warning"></i> Internal Note Only</label>
-                                </div>
-                                <button type="button" class="btn btn-primary btn-sm bg-primary border-0" onclick="submitComment()"><i class="fa-solid fa-paper-plane me-1"></i> Send Reply</button>
-                            </div>
-                        </form>
-                    </div>
-                `;
-                $('#ticketDetailPanel').html(html);
+            // Toggle Resolution groups based on select
+            document.getElementById("resolveStatus").addEventListener("change", (e) => {
+                const isResolved = e.target.value === 'Resolved';
+                document.getElementById("resolutionDetailsGroup").style.display = isResolved ? 'block' : 'none';
             });
+        });
+
+        async function loadDropdowns() {
+            try {
+                const res = await fetch("/Helpdesk/GetMasterOptions");
+                const m = await res.json();
+
+                // Load filter priorities
+                document.getElementById("filterPriority").innerHTML = `<option value="">All Priorities</option>` +
+                    m.priorities.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+
+                // Load Form Selects
+                document.getElementById("tktDept").innerHTML = m.departments.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+                document.getElementById("tktCategory").innerHTML = m.categories.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+                document.getElementById("tktSubCategory").innerHTML = m.subCategories.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+                document.getElementById("tktPriority").innerHTML = m.priorities.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+                document.getElementById("tktSeverity").innerHTML = m.severities.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+
+                // Load Detail Resolution select
+                document.getElementById("rootCauseSelect").innerHTML = `<option value="">Select Root Cause</option>` + m.rootCauses.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+                document.getElementById("resTypeSelect").innerHTML = `<option value="">Select Resolution</option>` + m.resolutionTypes.map(x => `<option value="${x.id}">${x.name}</option>`).join("");
+
+                // Mock IT engineers list
+                document.getElementById("assignEngineerSelect").innerHTML = `
+                    <option value="">Unassigned</option>
+                    <option value="admin">Shailendra Kumar (IT Lead)</option>
+                    <option value="engineer1">Support Engineer 1</option>
+                    <option value="engineer2">Support Engineer 2</option>
+                `;
+
+            } catch (err) {
+                console.error("Failed to load options", err);
+            }
         }
 
-        function submitComment() {
-            const form = $('#addCommentForm');
-            $.ajax({
-                url: '/Helpdesk/AddComment',
-                method: 'POST',
-                data: form.serialize(),
-                success: function(res) {
-                    if (res.ok) {
-                        const ticketId = form.find('input[name="ticketId"]').val();
-                        loadTicketDetails(ticketId);
-                    }
-                },
-                error: function(err) {
-                    portalToast(err.responseText || 'Comment submission failed.', 'error');
+        async function loadTickets() {
+            const search = document.getElementById("tktSearch").value;
+            const status = document.getElementById("filterStatus").value;
+            const priorityId = document.getElementById("filterPriority").value;
+            const tbody = document.getElementById("ticketsTableBody");
+
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center p-4"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</td></tr>`;
+
+            try {
+                const res = await fetch(`/Helpdesk/GetTickets?status=${status}&priorityId=${priorityId}&search=${encodeURIComponent(search)}`);
+                const data = await res.json();
+                loadedTickets = data.items;
+
+                document.getElementById("ticketCountLabel").textContent = `${data.total} Tickets found`;
+
+                if (loadedTickets.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center p-4 text-muted">No tickets found in Service Desk.</td></tr>`;
+                    return;
                 }
-            });
+
+                tbody.innerHTML = loadedTickets.map(x => `
+                    <tr onclick="viewDetails(${x.id})" style="cursor:pointer;" class="${selectedTicketId === x.id ? 'table-primary' : ''}">
+                        <td><strong>${x.ticketNumber}</strong></td>
+                        <td class="small">
+                            <strong>${escapeHtml(x.subject)}</strong>
+                            <div class="text-muted" style="font-size:10px;">By ${x.requester} &bull; ${x.branchName}</div>
+                        </td>
+                        <td><span class="badge bg-light text-dark">${escapeHtml(x.priority)}</span></td>
+                        <td class="small text-muted ${x.slaBreached ? 'text-danger fw-bold' : ''}">${x.slaDeadline}</td>
+                        <td class="text-center">
+                            <span class="badge ${x.status === 'Closed' ? 'bg-secondary' : 'bg-primary'}">${x.status}</span>
+                        </td>
+                    </tr>
+                `).join("");
+
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center p-4 text-danger">Error loading service desk tickets.</td></tr>`;
+            }
+        }
+
+        async function viewDetails(id) {
+            selectedTicketId = id;
+            
+            // Mark selected row
+            loadTickets();
+
+            document.getElementById("emptyDetailPanel").style.display = "none";
+            const panel = document.getElementById("ticketDetailPanel");
+            panel.style.display = "block";
+
+            try {
+                const res = await fetch(`/Helpdesk/Details?id=${id}`);
+                const x = await res.json();
+
+                document.getElementById("detailNumber").textContent = x.ticketNumber;
+                document.getElementById("detailMeta").innerHTML = `Raised by <strong>${x.requester}</strong> &bull; ${x.branchName}`;
+                
+                const statusBadge = document.getElementById("detailStatus");
+                statusBadge.textContent = x.status;
+                statusBadge.className = `badge ${x.status === 'Closed' ? 'bg-secondary' : 'bg-primary'}`;
+
+                document.getElementById("detailSubject").textContent = x.subject;
+                document.getElementById("detailDesc").textContent = x.description;
+                
+                const slaLabel = document.getElementById("detailSla");
+                slaLabel.textContent = x.slaDeadline;
+                if (x.slaBreached) {
+                    slaLabel.textContent += " (BREACHED)";
+                    slaLabel.className = "small text-danger fw-bold";
+                } else {
+                    slaLabel.className = "small text-muted";
+                }
+
+                document.getElementById("assignEngineerSelect").value = x.assignedEngineer || "";
+
+                // Comments
+                const timeline = document.getElementById("commentsTimeline");
+                if (x.comments.length === 0) {
+                    timeline.innerHTML = `<div class="text-center small text-muted py-2">No comments logged.</div>`;
+                } else {
+                    timeline.innerHTML = x.comments.map(c => `
+                        <div class="bg-light p-2 rounded small" style="${c.isInternal ? 'border-left: 3px solid var(--danger); background: #fff5f5 !important;' : ''}">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="fw-bold text-primary" style="font-size: 11px;">${c.createdBy} ${c.isInternal ? '<span class="text-danger">[Internal]</span>' : ''}</span>
+                                <span class="text-muted" style="font-size: 10px;">${c.createdAt}</span>
+                            </div>
+                            <div style="font-size: 11.5px;">${escapeHtml(c.commentText)}</div>
+                        </div>
+                    `).join("");
+                }
+
+                // Show feedback panel if ticket is resolved and current user is the requester
+                const isRequester = x.requester === "@User.Identity?.Name";
+                document.getElementById("userFeedbackGroup").style.display = (x.status === 'Resolved' && isRequester) ? 'block' : 'none';
+
+            } catch (err) {
+                console.error("Failed to load details", err);
+            }
+        }
+
+        function openCreateModal() {
+            document.getElementById("ticketForm").reset();
+            createModal.show();
+        }
+
+        async function saveTicket() {
+            const subject = document.getElementById("tktSubject").value.trim();
+            const departmentId = parseInt(document.getElementById("tktDept").value);
+            const categoryId = parseInt(document.getElementById("tktCategory").value);
+            const subCategoryId = parseInt(document.getElementById("tktSubCategory").value);
+            const priorityId = parseInt(document.getElementById("tktPriority").value);
+            const severityId = parseInt(document.getElementById("tktSeverity").value);
+            const description = document.getElementById("tktDesc").value.trim();
+
+            if (!subject || !description) {
+                Swal.fire("Validation Error", "Subject and Description are required.", "warning");
+                return;
+            }
+
+            const model = { subject, departmentId, categoryId, subCategoryId, priorityId, severityId, impactId: severityId, description };
+
+            try {
+                const res = await fetch("/Helpdesk/Save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+
+                const data = await res.json();
+                if (data.ok) {
+                    createModal.hide();
+                    Swal.fire("Success", data.message, "success");
+                    loadTickets();
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server submit error.", "error");
+            }
+        }
+
+        async function updateAssignment() {
+            const engineer = document.getElementById("assignEngineerSelect").value;
+            const model = {
+                id: selectedTicketId,
+                assignedEngineer: engineer,
+                status: engineer ? "InProgress" : "New",
+                // Load default matching inputs
+                subject: "Updated Assignment",
+                description: "Updating assigned engineer properties."
+            };
+
+            try {
+                await fetch("/Helpdesk/Save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+                viewDetails(selectedTicketId);
+                loadTickets();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function changeStatus() {
+            const status = document.getElementById("resolveStatus").value;
+            const resolutionText = document.getElementById("resolutionText").value.trim();
+            const rootCauseId = parseInt(document.getElementById("rootCauseSelect").value) || null;
+            const resolutionTypeId = parseInt(document.getElementById("resTypeSelect").value) || null;
+
+            if (status === 'Resolved' && !resolutionText) {
+                Swal.fire("Validation Error", "Resolution details are required to resolve ticket.", "warning");
+                return;
+            }
+
+            const model = {
+                id: selectedTicketId, status, resolutionText, rootCauseId, resolutionTypeId,
+                subject: "State Transition",
+                description: "State transition update."
+            };
+
+            try {
+                const res = await fetch("/Helpdesk/Save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+                
+                const data = await res.json();
+                if (data.ok) {
+                    Swal.fire("Updated", "Ticket status successfully transitioned.", "success");
+                    viewDetails(selectedTicketId);
+                    loadTickets();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function addComment(isInternal) {
+            const commentText = document.getElementById("newCommentText").value.trim();
+            if (!commentText) return;
+
+            try {
+                const res = await fetch(`/Helpdesk/AddComment?ticketId=${selectedTicketId}&commentText=${encodeURIComponent(commentText)}&isInternal=${isInternal}`, {
+                    method: "POST"
+                });
+                
+                const data = await res.json();
+                if (data.ok) {
+                    document.getElementById("newCommentText").value = "";
+                    viewDetails(selectedTicketId);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function submitFeedback() {
+            const score = parseInt(document.getElementById("feedbackScore").value) || 5;
+            const text = document.getElementById("feedbackText").value.trim();
+
+            try {
+                const res = await fetch(`/Helpdesk/CloseTicket?ticketId=${selectedTicketId}&score=${score}&feedback=${encodeURIComponent(text)}`, {
+                    method: "POST"
+                });
+
+                const data = await res.json();
+                if (data.ok) {
+                    Swal.fire("Closed", "Thank you for your feedback! Ticket closed.", "success");
+                    viewDetails(selectedTicketId);
+                    loadTickets();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
     </script>
 }
-

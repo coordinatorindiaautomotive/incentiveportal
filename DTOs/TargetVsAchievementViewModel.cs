@@ -19,8 +19,10 @@ public sealed class TargetVsAchievementRow
 {
     public string PartyCode { get; set; } = string.Empty;
     public string PartyName { get; set; } = string.Empty;
+    public string PartyType { get; set; } = string.Empty;
     public string BranchName { get; set; } = string.Empty;
     public decimal SystemSuggestedTarget { get; set; }
+    public decimal AvgSaleLast6Month { get; set; }
     public decimal? AdminDefinedTarget { get; set; }
     public decimal FinalTarget { get; set; }
     public decimal CurrentAchievementSales { get; set; }

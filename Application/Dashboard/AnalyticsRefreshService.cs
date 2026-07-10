@@ -23,7 +23,7 @@ public interface IAnalyticsRefreshService
 /// <summary>
 /// Sealed implementation of <see cref="IAnalyticsRefreshService"/> that purges old analytics and generates fresh comparative reports.
 /// </summary>
-public sealed class AnalyticsRefreshService(IncentiveDbContext db, IDashboardService dashboardService) : IAnalyticsRefreshService
+public sealed class AnalyticsRefreshService(IncentiveDbContext db, IDashboardService dashboardService, IPartyBranchMappingService branchMappingService) : IAnalyticsRefreshService
 {
     public async Task RefreshAsync(int month, int year, CancellationToken cancellationToken = default)
     {
@@ -41,7 +41,7 @@ public sealed class AnalyticsRefreshService(IncentiveDbContext db, IDashboardSer
             var currentIncentives = await db.SsIncentives
                 .AsNoTracking()
                 .Include(x => x.ImportLog)
-                .Where(x => x.Month == month && x.Year == year && x.ImportLogId > 0 && !x.ImportLog!.IsHistorical && !x.IsDeleted)
+                .Where(x => x.Month == month && x.Year == year && x.ImportLogId > 0 && !x.ImportLog!.IsHistorical && !x.IsDeleted && x.Status == "Posted")
                 .ToListAsync(cancellationToken);
 
             if (currentIncentives.Count == 0) return;
@@ -82,7 +82,7 @@ public sealed class AnalyticsRefreshService(IncentiveDbContext db, IDashboardSer
             int prevYear = month == 1 ? year - 1 : year;
             var prevIncentivesRaw = await db.SsIncentives
                 .AsNoTracking()
-                .Where(x => x.Month == prevMonth && x.Year == prevYear && !x.IsDeleted)
+                .Where(x => x.Month == prevMonth && x.Year == prevYear && !x.IsDeleted && x.Status == "Posted")
                 .ToListAsync(cancellationToken);
             var prevIncentives = prevIncentivesRaw
                 .GroupBy(x => x.PartyCode, StringComparer.OrdinalIgnoreCase)
@@ -96,7 +96,7 @@ public sealed class AnalyticsRefreshService(IncentiveDbContext db, IDashboardSer
             int lastYearYear = year - 1;
             var lastYearIncentivesRaw = await db.SsIncentives
                 .AsNoTracking()
-                .Where(x => x.Month == lastYearMonth && x.Year == lastYearYear && !x.IsDeleted)
+                .Where(x => x.Month == lastYearMonth && x.Year == lastYearYear && !x.IsDeleted && x.Status == "Posted")
                 .ToListAsync(cancellationToken);
             var lastYearIncentives = lastYearIncentivesRaw
                 .GroupBy(x => x.PartyCode, StringComparer.OrdinalIgnoreCase)
@@ -287,6 +287,17 @@ public sealed class AnalyticsRefreshService(IncentiveDbContext db, IDashboardSer
 
             await db.SaveChangesAsync(cancellationToken);
             dashboardService.InvalidateCache();
+
+            // Refresh primary branch mapping cache (reads Raw, never writes to it)
+            try
+            {
+                await branchMappingService.RefreshAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Non-critical — log and continue; will refresh on next import or startup
+                Console.WriteLine($"[BranchMapping] RefreshAsync failed: {ex.Message}");
+            }
         }
         finally
         {

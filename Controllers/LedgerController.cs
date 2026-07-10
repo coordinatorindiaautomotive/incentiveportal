@@ -62,7 +62,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                             from p in pGroup.DefaultIfEmpty()
                             join b in db.Branches.AsNoTracking() on (p != null ? p.BranchId : 0) equals b.Id into bGroup
                             from b in bGroup.DefaultIfEmpty()
-                            where !inc.IsDeleted
+                            where !inc.IsDeleted && inc.Status == "Posted"
                             select new { s = inc, p, b };
 
             // Sales Executive isolation filter
@@ -109,11 +109,11 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                     .Where(x => x.ExecutiveCode == currentUser.UserName)
                     .Select(x => x.PartyCode)
                     .ToListAsync(cancellationToken);
-                recordsTotal = await db.SsIncentives.CountAsync(x => !x.IsDeleted && mappedPartyCodes.Contains(x.PartyCode), cancellationToken);
+                recordsTotal = await db.SsIncentives.CountAsync(x => !x.IsDeleted && x.Status == "Posted" && mappedPartyCodes.Contains(x.PartyCode), cancellationToken);
             }
             else
             {
-                recordsTotal = await db.SsIncentives.CountAsync(x => !x.IsDeleted, cancellationToken);
+                recordsTotal = await db.SsIncentives.CountAsync(x => !x.IsDeleted && x.Status == "Posted", cancellationToken);
             }
             int recordsFiltered = await baseQuery.CountAsync(cancellationToken);
 

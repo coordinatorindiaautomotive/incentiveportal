@@ -33,6 +33,7 @@ public interface IBackgroundJobExecutor
         bool forceRecalculate,
         string? branchRulesJson,
         string? partyMappingsJson,
+        string? governorFiltersJson,
         string username);
 }
 
@@ -174,6 +175,7 @@ public class BackgroundJobExecutor(
         bool forceRecalculate,
         string? branchRulesJson,
         string? partyMappingsJson,
+        string? governorFiltersJson,
         string username)
     {
         var state = new BackgroundJobState
@@ -205,6 +207,7 @@ public class BackgroundJobExecutor(
                 branchRules,
                 false,
                 customMappings,
+                governorFiltersJson,
                 CancellationToken.None);
 
             state.Status = "Succeeded";

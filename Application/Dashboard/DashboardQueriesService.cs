@@ -298,16 +298,10 @@ public sealed class DashboardQueriesService(IncentiveDbContext db, ICurrentUser 
 
         if (fc.MonthNums.Count > 0)
             query = query.Where(x => x.MonthNumber.HasValue && fc.MonthNums.Contains(x.MonthNumber.Value));
-
         if (fc.PartyTypes.Count > 0)
         {
-            var pTypes = fc.PartyTypes.ToList();
-            query = from x in query
-                    join p in db.Parties on (x.OriginalCode ?? x.ConsPartyCode) equals p.PartyCode into pj
-                    from p in pj.DefaultIfEmpty()
-                    where (p != null && p.DealerType != null && pTypes.Contains(p.DealerType.ToUpper())) ||
-                          (p == null && x.PartyType != null && pTypes.Contains(x.PartyType.ToUpper()))
-                    select x;
+            var pTypes = fc.PartyTypes.Select(t => t.ToUpper()).ToList();
+            query = query.Where(x => x.PartyType != null && pTypes.Contains(x.PartyType.ToUpper()));
         }
 
         if (fc.Categories.Count > 0)
@@ -325,13 +319,43 @@ public sealed class DashboardQueriesService(IncentiveDbContext db, ICurrentUser 
 
         if (fc.DealerSubTypes.Count > 0)
             query = query.Where(x => x.DealerSubType != null && fc.DealerSubTypes.Contains(x.DealerSubType.ToUpper()));
-
         if (fc.Locations.Count > 0)
             query = query.Where(x => x.Loc != null && fc.Locations.Contains(x.Loc.ToUpper()));
 
+        var fiscalOrder = new List<int> { 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3 };
+        int latestM = 3;
+        if (fc.MonthNums.Count > 0)
+        {
+            latestM = fc.MonthNums.OrderByDescending(m => fiscalOrder.IndexOf(m)).First();
+        }
+        else
+        {
+            var latestGroup = await db.Raws.AsNoTracking()
+                .Where(x => !x.IsDeleted && x.ImportLogId > 0 && 
+                            (x.YearNumber == fc.TargetYear || x.YearNumber == fc.TargetYear + 1))
+                .Select(x => x.MonthNumber ?? 0)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            if (latestGroup.Count > 0)
+            {
+                latestM = latestGroup.OrderByDescending(m => fiscalOrder.IndexOf(m)).First();
+            }
+        }
+
+        int calendarYear = latestM <= 3 ? fc.TargetYear + 1 : fc.TargetYear;
+        int? maxDay = await db.Raws.AsNoTracking()
+            .Where(x => !x.IsDeleted && x.ImportLogId > 0 && x.YearNumber == calendarYear && x.MonthNumber == latestM && x.Day.HasValue)
+            .Select(x => x.Day)
+            .OrderByDescending(d => d)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (latestM > 0 && maxDay.HasValue)
+        {
+            query = query.Where(x => x.MonthNumber != latestM || !x.Day.HasValue || x.Day.Value <= maxDay.Value);
+        }
+
         return query;
     }
-
     private async Task<IQueryable<RawRecord>> GetFilteredQueryWithMonthsAsync(
         FilterContext fc, 
         bool compareYear, 
@@ -369,16 +393,10 @@ public sealed class DashboardQueriesService(IncentiveDbContext db, ICurrentUser 
 
         if (ytdMonths.Count > 0)
             query = query.Where(x => x.MonthNumber.HasValue && ytdMonths.Contains(x.MonthNumber.Value));
-
         if (fc.PartyTypes.Count > 0)
         {
-            var pTypes = fc.PartyTypes.ToList();
-            query = from x in query
-                    join p in db.Parties on (x.OriginalCode ?? x.ConsPartyCode) equals p.PartyCode into pj
-                    from p in pj.DefaultIfEmpty()
-                    where (p != null && p.DealerType != null && pTypes.Contains(p.DealerType.ToUpper())) ||
-                          (p == null && x.PartyType != null && pTypes.Contains(x.PartyType.ToUpper()))
-                    select x;
+            var pTypes = fc.PartyTypes.Select(t => t.ToUpper()).ToList();
+            query = query.Where(x => x.PartyType != null && pTypes.Contains(x.PartyType.ToUpper()));
         }
 
         if (fc.Categories.Count > 0)

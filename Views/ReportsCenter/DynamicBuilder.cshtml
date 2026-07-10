@@ -1,0 +1,953 @@
+@inject IncentivePortal.Helpers.ICurrentUser CurrentUser
+@inject IncentivePortal.Data.IncentiveDbContext DbContext
+@{
+    ViewData["Title"] = "Dynamic Report - Maruti Suzuki";
+}
+
+<!-- Custom High-Fidelity Styles for Maruti Suzuki Qlik Sense Workspace -->
+<style>
+    /* Hide layout topbar and footer for clean fullscreen view */
+    header.topbar, .topbar {
+        display: none !important;
+    }
+    .main-footer {
+        display: none !important;
+    }
+    
+    /* Remove padding/margins from main content area to make it fit edge-to-edge next to the sidebar */
+    .main-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* Content wrapper height and overflow */
+    .content-wrapper {
+        padding-top: 0 !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+    }
+
+    :root {
+        --qlik-bg: #f5f5f5;
+        --qlik-border: #d9d9d9;
+        --qlik-text: #333333;
+        --qlik-muted: #595959;
+        --qlik-green: #009845;
+        --maruti-blue: #142954;
+    }
+
+    body {
+        background-color: var(--qlik-bg);
+        color: var(--qlik-text);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* Qlik top menu header */
+    .qlik-top-menu {
+        background-color: #ffffff;
+        border-bottom: 1px solid var(--qlik-border);
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        font-size: 0.82rem;
+    }
+
+    .qlik-logo-area {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 800;
+        font-size: 0.95rem;
+    }
+
+    .qlik-logo-q {
+        color: var(--qlik-green);
+        font-weight: 900;
+    }
+
+    .qlik-nav-tabs {
+        display: flex;
+        height: 100%;
+    }
+
+    .qlik-nav-tab {
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        cursor: pointer;
+        color: var(--qlik-muted);
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+        transition: all 0.15s ease;
+    }
+
+    .qlik-nav-tab.active {
+        color: var(--qlik-green);
+        border-bottom-color: var(--qlik-green);
+        font-weight: 600;
+    }
+
+    /* Maruti Suzuki banner */
+    .maruti-banner {
+        background-color: var(--maruti-blue);
+        color: #ffffff;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        font-weight: 600;
+    }
+
+    .maruti-logo-text {
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        font-weight: 800;
+        border-right: 1.5px solid rgba(255,255,255,0.4);
+        padding-right: 12px;
+        margin-right: 12px;
+        display: inline-block;
+    }
+
+    .maruti-banner-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+
+    /* Filter cards panel */
+    .filter-panel-row {
+        background-color: #ffffff;
+        border-bottom: 1px solid var(--qlik-border);
+        padding: 8px 16px;
+        display: flex;
+        gap: 12px;
+    }
+
+    .filter-card {
+        background-color: #ffffff;
+        border: 1px solid var(--qlik-border);
+        border-radius: 4px;
+        flex: 1;
+        max-width: 250px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        font-size: 0.78rem;
+        color: var(--qlik-muted);
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+    }
+
+    .filter-card:hover {
+        border-color: #a6a6a6;
+    }
+
+    .filter-card-label {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 80%;
+    }
+
+    .filter-card-selected-count {
+        background-color: var(--qlik-green);
+        color: #ffffff;
+        font-size: 0.65rem;
+        font-weight: 700;
+        border-radius: 10px;
+        padding: 1px 6px;
+    }
+
+    /* Floating filter dropdown list */
+    .filter-dropdown {
+        position: absolute;
+        top: 36px;
+        left: 0;
+        width: 100%;
+        background-color: #ffffff;
+        border: 1px solid var(--qlik-border);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        border-radius: 4px;
+        display: none;
+        flex-direction: column;
+    }
+
+    .filter-dropdown-search {
+        padding: 6px;
+        border-bottom: 1px solid var(--qlik-border);
+    }
+
+    .filter-dropdown-list {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 4px 0;
+    }
+
+    .filter-dropdown-item {
+        padding: 6px 12px;
+        font-size: 0.78rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .filter-dropdown-item:hover {
+        background-color: #f0f0f0;
+    }
+
+    .filter-dropdown-item.selected {
+        background-color: rgba(0, 152, 69, 0.08);
+        color: var(--qlik-green);
+        font-weight: 600;
+    }
+
+    /* Main Workspace 3-column layout */
+    .qlik-workspace-grid {
+        display: flex;
+        height: calc(100vh - 99px);
+        overflow: hidden;
+    }
+
+    .qlik-sidebar-panel {
+        width: 220px;
+        background-color: #ffffff;
+        border-right: 1px solid var(--qlik-border);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .qlik-sidebar-panel.right-sidebar {
+        border-right: none;
+        border-left: 1px solid var(--qlik-border);
+    }
+
+    .sidebar-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--qlik-border);
+        font-size: 0.76rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--qlik-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .sidebar-search-container {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--qlik-border);
+        background-color: #fafafa;
+    }
+
+    .sidebar-search-input {
+        width: 100%;
+        height: 28px;
+        border: 1px solid var(--qlik-border);
+        border-radius: 4px;
+        padding: 0 8px;
+        font-size: 0.78rem;
+    }
+
+    .sidebar-items-list {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .sidebar-item {
+        padding: 8px 14px;
+        font-size: 0.76rem;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        user-select: none;
+        transition: background-color 0.15s ease;
+    }
+
+    .sidebar-item:hover {
+        background-color: #f7f7f7;
+    }
+
+    .sidebar-item.selected {
+        border-left: 3px solid var(--qlik-green);
+        background-color: rgba(0, 152, 69, 0.04);
+        font-weight: 600;
+    }
+
+    /* Central board */
+    .central-workspace {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background-color: #fafafa;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .workspace-placeholder {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        color: #8c8c8c;
+        font-weight: 500;
+        background-color: #fcfcfc;
+        background-image: radial-gradient(var(--qlik-border) 1px, transparent 0);
+        background-size: 24px 24px;
+    }
+
+    .workspace-active-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        overflow: hidden;
+    }
+
+    .workspace-table-container {
+        flex: 1;
+        background-color: #ffffff;
+        border: 1px solid var(--qlik-border);
+        border-radius: 4px;
+        overflow: auto;
+    }
+
+    .qlik-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.78rem;
+    }
+
+    .qlik-table th {
+        background-color: #f5f5f5;
+        border: 1px solid var(--qlik-border);
+        padding: 8px 12px;
+        font-weight: 700;
+        text-align: left;
+        color: var(--qlik-text);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .qlik-table td {
+        border: 1px solid var(--qlik-border);
+        padding: 8px 12px;
+        color: var(--qlik-text);
+    }
+
+    .qlik-table tr:hover {
+        background-color: #f7f9fc;
+    }
+
+    /* Pagination */
+    .qlik-pager-bar {
+        height: 38px;
+        border-top: 1px solid var(--qlik-border);
+        background-color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        font-size: 0.76rem;
+    }
+
+    .pager-buttons {
+        display: flex;
+        gap: 6px;
+    }
+
+    .pager-btn {
+        height: 26px;
+        padding: 0 10px;
+        border: 1px solid var(--qlik-border);
+        background-color: #ffffff;
+        font-size: 0.76rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .pager-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>
+
+<div class="d-flex flex-column h-screen overflow-hidden">
+    <!-- Maruti Suzuki banner -->
+    <div class="maruti-banner">
+        <div class="d-flex align-items-center">
+            <span class="maruti-banner-title">Dynamic Report</span>
+        </div>
+        <div class="d-flex align-items-center gap-3.5">
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-light py-0.5 px-2" onclick="openSaveLayoutModal()" style="font-size: 0.75rem;">
+                    <i class="fa-solid fa-floppy-disk me-1"></i> Save Layout
+                </button>
+                <button class="btn btn-sm btn-outline-light py-0.5 px-2" onclick="openScheduleModal()" style="font-size: 0.75rem;">
+                    <i class="fa-regular fa-envelope me-1"></i> Email Schedule
+                </button>
+                <button class="btn btn-sm btn-success py-0.5 px-2 bg-success border-0 text-white" onclick="exportExcel()" style="font-size: 0.75rem;">
+                    <i class="fa-solid fa-file-excel me-1"></i> Export Excel
+                </button>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-chevron-left cursor-pointer text-white-50"></i>
+                <i class="fa-solid fa-chevron-right cursor-pointer text-white-50"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Filter Cards panel -->
+    <div class="filter-panel-row">
+        <!-- Year Filter -->
+        <div class="filter-card" id="cardYear" onclick="toggleFilterDropdown('Year')">
+            <span class="filter-card-label" id="labelYear">Year</span>
+            <i class="fa-solid fa-chevron-down text-muted small"></i>
+            
+            <div class="filter-dropdown" id="dropdownYear" onclick="event.stopPropagation()">
+                <div class="filter-dropdown-search">
+                    <input type="text" placeholder="Search..." class="form-control form-control-sm" oninput="filterDropdownList('Year', this.value)" />
+                </div>
+                <div class="filter-dropdown-list" id="listYear">
+                    <!-- Dynamic Items -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Month Filter -->
+        <div class="filter-card" id="cardMonth" onclick="toggleFilterDropdown('Month')">
+            <span class="filter-card-label" id="labelMonth">Month</span>
+            <i class="fa-solid fa-chevron-down text-muted small"></i>
+            
+            <div class="filter-dropdown" id="dropdownMonth" onclick="event.stopPropagation()">
+                <div class="filter-dropdown-search">
+                    <input type="text" placeholder="Search..." class="form-control form-control-sm" oninput="filterDropdownList('Month', this.value)" />
+                </div>
+                <div class="filter-dropdown-list" id="listMonth">
+                    <!-- Dynamic Items -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Days Filter -->
+        <div class="filter-card" id="cardDays" onclick="toggleFilterDropdown('Days')">
+            <span class="filter-card-label" id="labelDays">Days</span>
+            <i class="fa-solid fa-chevron-down text-muted small"></i>
+            
+            <div class="filter-dropdown" id="dropdownDays" onclick="event.stopPropagation()">
+                <div class="filter-dropdown-search">
+                    <input type="text" placeholder="Search..." class="form-control form-control-sm" oninput="filterDropdownList('Days', this.value)" />
+                </div>
+                <div class="filter-dropdown-list" id="listDays">
+                    <!-- Dynamic Items -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Part Category Code Filter -->
+        <div class="filter-card" id="cardCategory" onclick="toggleFilterDropdown('Category')">
+            <span class="filter-card-label" id="labelCategory">Part Category Code</span>
+            <i class="fa-solid fa-chevron-down text-muted small"></i>
+            
+            <div class="filter-dropdown" id="dropdownCategory" onclick="event.stopPropagation()">
+                <div class="filter-dropdown-search">
+                    <input type="text" placeholder="Search..." class="form-control form-control-sm" oninput="filterDropdownList('Category', this.value)" />
+                </div>
+                <div class="filter-dropdown-list" id="listCategory">
+                    <!-- Dynamic Items -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main 3-column Layout -->
+    <div class="qlik-workspace-grid">
+        <!-- Dimensions Sidebar (Left) -->
+        <div class="qlik-sidebar-panel">
+            <div class="sidebar-header">
+                <i class="fa-solid fa-magnifying-glass text-muted"></i> Dimension
+            </div>
+            <div class="sidebar-search-container">
+                <input type="text" placeholder="Search dimensions..." class="sidebar-search-input" id="searchDims" oninput="filterSidebarList('dims', this.value)" />
+            </div>
+            <div class="sidebar-items-list" id="dimsList">
+                <div class="sidebar-item" data-field="MonthYear" onclick="toggleDimension('MonthYear', this)">Calendar Month Year</div>
+                <div class="sidebar-item" data-field="Consignee" onclick="toggleDimension('Consignee', this)">Consignee Code</div>
+                <div class="sidebar-item" data-field="ConsPartyCode" onclick="toggleDimension('ConsPartyCode', this)">Consumption Party Code</div>
+                <div class="sidebar-item" data-field="ConsPartyName" onclick="toggleDimension('ConsPartyName', this)">Consumption Party Name</div>
+                <div class="sidebar-item" data-field="PartyType" onclick="toggleDimension('PartyType', this)">Consumption Party Type</div>
+                <div class="sidebar-item" data-field="DealerCode" onclick="toggleDimension('DealerCode', this)">Dealer Code</div>
+                <div class="sidebar-item" data-field="DealerSubType" onclick="toggleDimension('DealerSubType', this)">Dealer Sub Type</div>
+                <div class="sidebar-item" data-field="DocumentNum" onclick="toggleDimension('DocumentNum', this)">Document Num</div>
+                <div class="sidebar-item" data-field="Quarter" onclick="toggleDimension('Quarter', this)">Financial Quarter</div>
+                <div class="sidebar-item" data-field="FiscalYear" onclick="toggleDimension('FiscalYear', this)">Financial Year</div>
+                <div class="sidebar-item" data-field="Loc" onclick="toggleDimension('Loc', this)">Location Code</div>
+                <div class="sidebar-item" data-field="PartCategoryCode" onclick="toggleDimension('PartCategoryCode', this)">Part Category Code</div>
+                <div class="sidebar-item" data-field="OriginalCode" onclick="toggleDimension('OriginalCode', this)">Original Code</div>
+                <div class="sidebar-item" data-field="PartNum" onclick="toggleDimension('PartNum', this)">Part Number</div>
+                <div class="sidebar-item" data-field="RootPartNum" onclick="toggleDimension('RootPartNum', this)">Root Part Number</div>
+                <div class="sidebar-item" data-field="Day" onclick="toggleDimension('Day', this)">Day</div>
+                <div class="sidebar-item" data-field="MonthNumber" onclick="toggleDimension('MonthNumber', this)">Month Number</div>
+                <div class="sidebar-item" data-field="YearNumber" onclick="toggleDimension('YearNumber', this)">Year Number</div>
+                <div class="sidebar-item" data-field="Remarks" onclick="toggleDimension('Remarks', this)">Remarks</div>
+            </div>
+        </div>
+
+        <!-- Central Workspace -->
+        <div class="central-workspace">
+            <!-- Placeholder -->
+            <div class="workspace-placeholder" id="workspacePlaceholder">
+                Select A Dimension and Measure
+            </div>
+
+            <!-- Active Content -->
+            <div class="workspace-active-content d-none" id="workspaceContent">
+                <div class="workspace-table-container scrollbar">
+                    <table class="qlik-table">
+                        <thead>
+                            <tr id="tableHeader">
+                                <!-- Dynamic Headers -->
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Dynamic Rows -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination footer -->
+                <div class="qlik-pager-bar">
+                    <div id="pagerText">Showing 0-0 of 0</div>
+                    <div class="pager-buttons">
+                        <button class="pager-btn" onclick="prevPage()"><i class="fa-solid fa-chevron-left"></i></button>
+                        <button class="pager-btn" onclick="nextPage()"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Measures Sidebar (Right) -->
+        <div class="qlik-sidebar-panel right-sidebar">
+            <div class="sidebar-header">
+                <i class="fa-solid fa-magnifying-glass text-muted"></i> Measure
+            </div>
+            <div class="sidebar-search-container">
+                <input type="text" placeholder="Search measures..." class="sidebar-search-input" id="searchMeasures" oninput="filterSidebarList('measures', this.value)" />
+            </div>
+            <div class="sidebar-items-list" id="measuresList">
+                <div class="sidebar-item" data-field="DiscountAmount" onclick="toggleMeasure('DiscountAmount', this)">Discount Amount</div>
+                <div class="sidebar-item" data-field="NetRetailDdl" onclick="toggleMeasure('NetRetailDdl', this)">Net Retail DDL</div>
+                <div class="sidebar-item" data-field="NetRetailQty" onclick="toggleMeasure('NetRetailQty', this)">Net Retail Qty</div>
+                <div class="sidebar-item" data-field="NetRetailSelling" onclick="toggleMeasure('NetRetailSelling', this)">Net Retail Selling</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Save Custom Layout -->
+<div class="modal fade" id="saveLayoutModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 8px;">
+            <div class="modal-header border-bottom bg-light">
+                <h6 class="modal-title fw-bold text-primary"><i class="fa-solid fa-floppy-disk me-1"></i> Save Custom Layout</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Layout Name</label>
+                    <input type="text" id="layoutNameInput" placeholder="e.g. Regional Sales Analysis" class="form-control form-control-sm" />
+                </div>
+            </div>
+            <div class="modal-footer border-top bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-sm bg-primary border-0" onclick="saveLayout()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Email Delivery Scheduler -->
+<div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 8px;">
+            <div class="modal-header border-bottom bg-light">
+                <h6 class="modal-title fw-bold text-primary"><i class="fa-regular fa-envelope me-1"></i> Configure Report Delivery</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Recipient Emails (Semicolon separated)</label>
+                    <input type="text" id="recipientEmailsInput" placeholder="analytics@company.com; manager@company.com" class="form-control form-control-sm" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Delivery Frequency</label>
+                    <select id="frequencySelect" class="form-select form-select-sm">
+                        <option value="Daily">Daily at 8:00 AM</option>
+                        <option value="Weekly">Weekly on Monday at 8:00 AM</option>
+                        <option value="Monthly">Monthly on 1st at 8:00 AM</option>
+                    </select>
+                </div>
+                <div class="form-check form-switch mt-3">
+                    <input class="form-check-input" type="checkbox" id="scheduleActiveCheck" checked />
+                    <label class="form-check-label fw-bold small" for="scheduleActiveCheck">Status Active</label>
+                </div>
+            </div>
+            <div class="modal-footer border-top bg-light">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-sm bg-primary border-0" onclick="saveSchedule()">Save Schedule</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    let selectedDims = [];
+    let selectedMeasures = []; // Array of field names (we assume SUM by default)
+    
+    // Active Filters
+    let filters = {
+        Year: [],
+        Month: [],
+        Days: [],
+        Category: []
+    };
+
+    // Filter distinct values loaded from DB metadata
+    let distinctValues = {
+        Year: [],
+        Month: [],
+        Days: Array.from({length: 31}, (_, i) => (i + 1).toString()),
+        Category: []
+    };
+
+    let currentPage = 1;
+    let pageSize = 50;
+    let totalCount = 0;
+
+    $(function() {
+        loadFilterMetadata();
+        
+        // Hide dropdowns when clicking outside
+        $(document).on('click', function() {
+            $('.filter-dropdown').hide();
+        });
+    });
+
+    function loadFilterMetadata() {
+        $.ajax({
+            url: '/DynamicReport/GetFilterMetadata',
+            method: 'GET',
+            success: function(res) {
+                distinctValues.Year = res.years.map(y => y.toString());
+                distinctValues.Month = res.months;
+                distinctValues.Category = res.categories;
+                
+                populateFilterList('Year');
+                populateFilterList('Month');
+                populateFilterList('Days');
+                populateFilterList('Category');
+            }
+        });
+    }
+
+    function toggleFilterDropdown(type) {
+        event.stopPropagation();
+        let dropdown = $(`#dropdown${type}`);
+        let isVisible = dropdown.is(':visible');
+        $('.filter-dropdown').hide(); // Hide all first
+        if (!isVisible) dropdown.show();
+    }
+
+    function populateFilterList(type) {
+        let listContainer = $(`#list${type}`);
+        let itemsHtml = distinctValues[type].map(val => {
+            let isSelected = filters[type].includes(val);
+            return `
+                <div class="filter-dropdown-item ${isSelected ? 'selected' : ''}" onclick="toggleFilterValue('${type}', '${val}')">
+                    <i class="fa-solid fa-check ${isSelected ? '' : 'text-transparent'}"></i>
+                    <span>${val}</span>
+                </div>
+            `;
+        }).join('');
+        listContainer.html(itemsHtml);
+    }
+
+    function toggleFilterValue(type, val) {
+        event.stopPropagation();
+        if (filters[type].includes(val)) {
+            filters[type] = filters[type].filter(v => v !== val);
+        } else {
+            filters[type].push(val);
+        }
+        
+        populateFilterList(type);
+        updateFilterLabel(type);
+        triggerReload();
+    }
+
+    function updateFilterLabel(type) {
+        let label = $(`#label${type}`);
+        let countBadge = $(`#card${type}`).find('.filter-card-selected-count');
+        
+        if (filters[type].length > 0) {
+            label.text(`${type}: ${filters[type].join(', ')}`);
+            if (countBadge.length === 0) {
+                $(`#card${type}`).append(`<span class="filter-card-selected-count">${filters[type].length}</span>`);
+            } else {
+                countBadge.text(filters[type].length);
+            }
+        } else {
+            let defaultText = type === 'Category' ? 'Part Category Code' : type;
+            label.text(defaultText);
+            countBadge.remove();
+        }
+    }
+
+    function filterDropdownList(type, query) {
+        let cleanQuery = query.toLowerCase();
+        $(`#list${type}`).find('.filter-dropdown-item').each(function() {
+            let text = $(this).find('span').text().toLowerCase();
+            $(this).toggle(text.includes(cleanQuery));
+        });
+    }
+
+    function filterSidebarList(type, query) {
+        let cleanQuery = query.toLowerCase();
+        let listId = type === 'dims' ? '#dimsList' : '#measuresList';
+        $(listId).find('.sidebar-item').each(function() {
+            let text = $(this).text().toLowerCase();
+            $(this).toggle(text.includes(cleanQuery));
+        });
+    }
+
+    function toggleDimension(field, element) {
+        $(element).toggleClass('selected');
+        if (selectedDims.includes(field)) {
+            selectedDims = selectedDims.filter(d => d !== field);
+        } else {
+            selectedDims.push(field);
+        }
+        triggerReload();
+    }
+
+    function toggleMeasure(field, element) {
+        $(element).toggleClass('selected');
+        if (selectedMeasures.includes(field)) {
+            selectedMeasures = selectedMeasures.filter(m => m !== field);
+        } else {
+            selectedMeasures.push(field);
+        }
+        triggerReload();
+    }
+
+    function triggerReload() {
+        currentPage = 1;
+        fetchData();
+    }
+
+    function fetchData() {
+        if (selectedDims.length === 0 && selectedMeasures.length === 0) {
+            $('#workspacePlaceholder').removeClass('d-none');
+            $('#workspaceContent').addClass('d-none');
+            return;
+        }
+
+        $('#workspacePlaceholder').addClass('d-none');
+        $('#workspaceContent').removeClass('d-none');
+        $('#tableBody').html(`<tr><td colspan="20" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Calculating matrix...</td></tr>`);
+
+        // Format active filters for service query request
+        let apiFilters = [];
+        if (filters.Year.length > 0) apiFilters.push({ field: 'YearNumber', operator: 'in', values: filters.Year });
+        if (filters.Month.length > 0) apiFilters.push({ field: 'Month', operator: 'in', values: filters.Month });
+        if (filters.Category.length > 0) apiFilters.push({ field: 'PartCategoryCode', operator: 'in', values: filters.Category });
+
+        let payload = {
+            reportType: 'Pivot', // Pivot mode performs aggregations automatically
+            dimensions: selectedDims,
+            values: selectedMeasures.map(m => ({ field: m, aggregation: 'Sum' })),
+            filters: apiFilters,
+            sorts: [],
+            page: currentPage,
+            pageSize: pageSize
+        };
+
+        $.ajax({
+            url: '/DynamicReport/GetData',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(res) {
+                renderTableOutput(res);
+            },
+            error: function(err) {
+                portalToast('Calculation error: ' + (err.responseJSON?.message || err.statusText), 'error');
+            }
+        });
+    }
+
+    function renderTableOutput(res) {
+        totalCount = res.totalCount;
+        
+        let start = (currentPage - 1) * pageSize + 1;
+        let end = Math.min(currentPage * pageSize, totalCount);
+        $('#pagerText').text(`Showing ${start}-${end} of ${totalCount}`);
+
+        let data = res.data;
+        if (data.length === 0) {
+            $('#tableBody').html(`<tr><td colspan="20" class="text-center text-muted py-4">No records found matching active filters.</td></tr>`);
+            return;
+        }
+
+        // Headers
+        let headers = Object.keys(data[0]);
+        let headerHtml = headers.map(h => `<th>${h}</th>`).join('');
+        $('#tableHeader').html(headerHtml);
+
+        // Body
+        let bodyHtml = data.map(row => {
+            let cells = headers.map(h => {
+                let val = row[h];
+                if (typeof val === 'number') {
+                    return `<td class="text-end fw-bold font-mono text-success">${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>`;
+                }
+                return `<td>${val ?? '—'}</td>`;
+            }).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+        $('#tableBody').html(bodyHtml);
+    }
+
+    function nextPage() {
+        if (currentPage * pageSize < totalCount) {
+            currentPage++;
+            fetchData();
+        }
+    }
+
+    function prevPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            fetchData();
+        }
+    }
+
+    function openSaveLayoutModal() {
+        $('#saveLayoutModal').modal('show');
+    }
+
+    function saveLayout() {
+        let name = $('#layoutNameInput').val().trim();
+        if (!name) {
+            portalToast('Name is required.', 'warning');
+            return;
+        }
+
+        let payload = {
+            name: name,
+            reportType: 'Pivot',
+            selectedFieldsJson: JSON.stringify(selectedDims),
+            pivotRowsJson: JSON.stringify(selectedDims),
+            pivotColumnsJson: JSON.stringify([]),
+            pivotValuesJson: JSON.stringify(selectedMeasures.map(m => ({ field: m, aggregation: 'Sum' }))),
+            filtersJson: JSON.stringify(filters),
+            sortsJson: '[]',
+            groupsJson: '[]'
+        };
+
+        $.ajax({
+            url: '/DynamicReport/SaveLayout',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(res) {
+                portalToast('Layout saved successfully.', 'success');
+                $('#saveLayoutModal').modal('hide');
+            }
+        });
+    }
+
+    function openScheduleModal() {
+        $('#scheduleModal').modal('show');
+    }
+
+    function saveSchedule() {
+        let emails = $('#recipientEmailsInput').val().trim();
+        let freq = $('#frequencySelect').val();
+        let active = $('#scheduleActiveCheck').is(':checked');
+
+        if (!emails) {
+            portalToast('Recipient Emails are required.', 'warning');
+            return;
+        }
+
+        let payload = {
+            layoutId: 1, // Default layout context
+            recipientEmails: emails,
+            frequency: freq,
+            isActive: active
+        };
+
+        $.ajax({
+            url: '/DynamicReport/SaveSchedule',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(res) {
+                portalToast('Delivery schedule saved.', 'success');
+                $('#scheduleModal').modal('hide');
+            }
+        });
+    }
+
+    function exportExcel() {
+        let apiFilters = [];
+        if (filters.Year.length > 0) apiFilters.push({ field: 'YearNumber', operator: 'in', values: filters.Year });
+        if (filters.Month.length > 0) apiFilters.push({ field: 'Month', operator: 'in', values: filters.Month });
+        if (filters.Category.length > 0) apiFilters.push({ field: 'PartCategoryCode', operator: 'in', values: filters.Category });
+
+        let payload = {
+            reportType: 'Pivot',
+            dimensions: selectedDims,
+            values: selectedMeasures.map(m => ({ field: m, aggregation: 'Sum' })),
+            filters: apiFilters,
+            sorts: []
+        };
+
+        $.ajax({
+            url: '/DynamicReport/Export',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            xhrFields: { responseType: 'blob' },
+            success: function(blob) {
+                let link = document.createElement('a');
+                link.href = window.URL.createObjectURL(blob);
+                link.download = `Maruti_Suzuki_Dynamic_Report_${new Date().toISOString().slice(0,10)}.csv`;
+                link.click();
+            }
+        });
+    }
+</script>
+}

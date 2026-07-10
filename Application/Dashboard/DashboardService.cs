@@ -45,7 +45,7 @@ public sealed class DashboardService(IncentiveDbContext db, ICurrentUser current
 
             var query = db.SsIncentives.AsNoTracking()
                 .Include(x => x.ImportLog)
-                .Where(x => x.ImportLogId > 0 && !x.ImportLog!.IsHistorical)
+                .Where(x => x.ImportLogId > 0 && !x.ImportLog!.IsHistorical && x.Status == "Posted")
                 .AsQueryable();
 
             if (currentUser.IsInRole(AppRoles.SalesExecutive))
@@ -198,8 +198,8 @@ public sealed class DashboardService(IncentiveDbContext db, ICurrentUser current
 
             var lastImport = await db.ImportLogs.OrderByDescending(x => x.CreatedAt).FirstOrDefaultAsync(cancellationToken);
             var pendingApprovals = await db.BankApprovalRequests.CountAsync(x => x.Status == "Pending", cancellationToken);
-            var pendingTransfers = await db.SsIncentives.CountAsync(x => (x.PaymentStatus == "Pending" || x.PaymentStatus == "Credit Party") && !x.IsDeleted, cancellationToken);
-            var unreconciledAmount = await db.SsIncentives.Where(x => (x.PaymentStatus == "Pending" || x.PaymentStatus == "Credit Party") && !x.IsDeleted).SumAsync(x => (decimal?)x.NetTransferAmount, cancellationToken) ?? 0;
+            var pendingTransfers = await db.SsIncentives.CountAsync(x => (x.PaymentStatus == "Pending" || x.PaymentStatus == "Credit Party") && x.Status == "Posted" && !x.IsDeleted, cancellationToken);
+            var unreconciledAmount = await db.SsIncentives.Where(x => (x.PaymentStatus == "Pending" || x.PaymentStatus == "Credit Party") && x.Status == "Posted" && !x.IsDeleted).SumAsync(x => (decimal?)x.NetTransferAmount, cancellationToken) ?? 0;
             var workQueue = new List<DashboardWorkItem>();
 
             if (!currentUser.IsInRole(AppRoles.SalesExecutive))
@@ -335,7 +335,7 @@ public sealed class DashboardService(IncentiveDbContext db, ICurrentUser current
             var currYearRows = await db.ImportLogs.Where(x => x.IsDeleted == false && !x.IsHistorical && x.Year == DateTime.UtcNow.Year).SumAsync(x => (int?)x.SuccessRows, cancellationToken) ?? 0;
             var monthLock = await db.MonthLocks.AnyAsync(x => x.LockYear == DateTime.UtcNow.Year && x.LockMonth == DateTime.UtcNow.Month && x.IsLocked, cancellationToken);
             
-            var ledgerQueryForSums = db.SsIncentives.AsNoTracking().Where(x => !x.IsDeleted).AsQueryable();
+            var ledgerQueryForSums = db.SsIncentives.AsNoTracking().Where(x => !x.IsDeleted && x.Status == "Posted").AsQueryable();
             if (currentUser.IsInRole(AppRoles.SalesExecutive))
             {
                 var mappedPartyCodes = await db.PartyExecutiveMappings
@@ -367,7 +367,7 @@ public sealed class DashboardService(IncentiveDbContext db, ICurrentUser current
                 selectedTotalDiscount(),
                 currentSales.Count,
                 pendingTransfers,
-                await db.SsIncentives.CountAsync(x => x.PaymentStatus == "Paid" && !x.IsDeleted, cancellationToken),
+                await db.SsIncentives.CountAsync(x => x.PaymentStatus == "Paid" && x.Status == "Posted" && !x.IsDeleted, cancellationToken),
                 lastImport?.FileName ?? "No import yet",
                 lastImport?.CreatedAt,
                 Growth(selectedTotalSales(), previousSalesTotal()),

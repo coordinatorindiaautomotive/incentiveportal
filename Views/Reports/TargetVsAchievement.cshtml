@@ -6,7 +6,7 @@
     // Modern HTML helper method for rendering empty cells as muted hyphens
     Func<decimal?, string, Microsoft.AspNetCore.Html.IHtmlContent> FormatCell = (val, classes) => {
         if (val.HasValue && val.Value != 0m) {
-            return new Microsoft.AspNetCore.Html.HtmlString($"<span class='{classes}'>₹{val.Value.ToString("N0")}</span>");
+            return new Microsoft.AspNetCore.Html.HtmlString($"<span class='{classes}'>{val.Value.ToString("N0")}</span>");
         }
         return new Microsoft.AspNetCore.Html.HtmlString("<span style='color:#94a3b8;'>—</span>");
     };
@@ -151,10 +151,51 @@
         font-weight: 700 !important;
     }
 
-    /* Next slab target colored */
-    .next-slab-val {
-        color: #2563eb !important;
-        font-weight: 600 !important;
+    /* System and Admin target togglable styling */
+    .hide-targets .toggle-target-cols {
+        display: none !important;
+    }
+
+    /* ── Sticky Table Headers ── */
+    .corp-table-wrapper {
+        overflow-y: auto;
+        max-height: 70vh; /* Set comfortable max height to scroll within dashboard */
+        border: 1px solid rgba(196,198,207,0.4);
+        border-radius: 8px;
+        position: relative;
+    }
+    #targetGrid {
+        border-collapse: separate; /* Required for sticky borders to look nice */
+        border-spacing: 0;
+        margin-bottom: 0;
+    }
+    #targetGrid thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #f8fafc !important; /* Premium light slate background (opaque) */
+        border-bottom: 2px solid #cbd5e1;
+        box-shadow: inset 0 -1px 0 #cbd5e1;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        text-transform: none !important; /* Prevent uppercase from making texts too wide */
+        letter-spacing: normal !important; /* Reset spacing to prevent overlaps */
+        padding: 12px 14px !important; /* Compact padding to fit data */
+        white-space: nowrap !important; /* Prevent mid-word wrapping */
+        color: #334155 !important;
+    }
+    /* Specific styling for highlighted headers to stay opaque and readable */
+    #targetGrid thead th.th-final-target {
+        background: #eff6ff !important; /* Light blue accent background */
+        color: #1e3a8a !important;
+    }
+    #targetGrid thead th.th-current-sales {
+        background: #f0fdf4 !important; /* Light green accent background */
+        color: #14532d !important;
+    }
+    /* Ensure action cell dropdown/popups stay below headers */
+    .editable-target-cell {
+        position: relative;
     }
 </style>
 
@@ -227,6 +268,9 @@
                     <a href="@Url.Action("DownloadTargetVsAchievement", "Reports", new { month = Model.SelectedMonth, year = Model.SelectedYear, branchName = Model.SelectedBranch, partyType = Model.SelectedPartyType, partCategoryCode = Model.SelectedPartCategory })" class="btn btn-success">
                         Export Excel
                     </a>
+                    <button type="button" onclick="toggleTargetColumns()" class="btn btn-outline-secondary d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">visibility</span> Toggle Targets
+                    </button>
                     @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
                     {
                         <button type="button" onclick="openBulkActionsModal()" class="btn btn-outline-primary">
@@ -247,13 +291,13 @@
                     <th>Branch</th>
                     <th>Party Code</th>
                     <th>Party Name</th>
-                    <th style="text-align: right;">System Target</th>
-                    <th style="text-align: right;">Admin Target</th>
+                    <th>Party Type</th>
+                    <th style="text-align: right;">AVG Sale Last 6 Month</th>
+                    <th class="toggle-target-cols" style="text-align: right;">System Target</th>
+                    <th class="toggle-target-cols" style="text-align: right;">Admin Target</th>
                     <th class="th-final-target" style="text-align: right;">Final Target</th>
                     <th class="th-current-sales" style="text-align: right;">Current Sales</th>
                     <th style="text-align: center;">Achievement %</th>
-                    <th style="text-align: center;">Slab Placement</th>
-                    <th style="text-align: right;">Next Slab Target</th>
                     <th style="text-align: right;">Last Month Sales</th>
                     <th style="text-align: right;">YTD Sales</th>
                     <th style="text-align: right;">LY YTD Sales</th>
@@ -281,16 +325,18 @@
                             <td style="font-weight: 600; white-space: nowrap;">@row.BranchName</td>
                             <td><span class="party-code-pill">@row.PartyCode</span></td>
                             <td class="party-name">@row.PartyName</td>
-                            <td style="text-align: right;" class="currency-val">@FormatCell(row.SystemSuggestedTarget, "")</td>
+                            <td style="white-space: nowrap; font-size: 11px; font-weight: 500; color: #475569;">@row.PartyType</td>
+                            <td style="text-align: right;" class="currency-val">@FormatCell(row.AvgSaleLast6Month, "")</td>
+                            <td style="text-align: right;" class="currency-val toggle-target-cols">@FormatCell(row.SystemSuggestedTarget, "")</td>
                             @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
                             {
-                                <td style="text-align: right;" class="editable-target-cell" onclick="editSingleTarget('@row.PartyCode', '@row.PartyName', @(row.AdminDefinedTarget ?? 0m))">
+                                <td style="text-align: right;" class="editable-target-cell toggle-target-cols" onclick="editSingleTarget('@row.PartyCode', '@row.PartyName', @(row.AdminDefinedTarget ?? 0m))">
                                     <span class="admin-target-val currency-val">@FormatCell(row.AdminDefinedTarget, "")</span><span class="edit-hint">✏️</span>
                                 </td>
                             }
                             else
                             {
-                                <td style="text-align: right;" class="admin-target-val currency-val">@FormatCell(row.AdminDefinedTarget, "")</td>
+                                <td style="text-align: right;" class="admin-target-val currency-val toggle-target-cols">@FormatCell(row.AdminDefinedTarget, "")</td>
                             }
                             <td style="text-align: right;" class="col-final-target currency-val">@FormatCell(row.FinalTarget, "")</td>
                             <td style="text-align: right;" class="col-current-sales currency-val">@FormatCell(row.CurrentAchievementSales, "")</td>
@@ -299,17 +345,6 @@
                                     @row.AchievementPercent.ToString("F1")%
                                 </span>
                             </td>
-                            <td style="text-align: center;">
-                                @if (row.CurrentSlabLabel != "None")
-                                {
-                                    <span class="slab-chip">@row.CurrentSlabLabel</span>
-                                }
-                                else
-                                {
-                                    <span style="color: #94a3b8;">—</span>
-                                }
-                            </td>
-                            <td style="text-align: right;" class="next-slab-val currency-val">@FormatCell(row.NextSlabTarget, "")</td>
                             <td style="text-align: right;" class="currency-val">@FormatCell(row.LastMonthSales, "")</td>
                             <td style="text-align: right; font-weight: 600;" class="currency-val">@FormatCell(row.YTDSales, "")</td>
                             <td style="text-align: right;" class="currency-val">@FormatCell(row.LastYearYTDSales, "")</td>
@@ -338,13 +373,32 @@
 </div>
 
 <script>
+    // Toggle system suggested target and admin target columns
+    function toggleTargetColumns() {
+        var wrapper = document.querySelector('.corp-table-wrapper');
+        if (wrapper) {
+            wrapper.classList.toggle('hide-targets');
+            var isHidden = wrapper.classList.contains('hide-targets');
+            localStorage.setItem('hideTargetColumnsState', isHidden ? 'true' : 'false');
+        }
+    }
+
+    // Apply the saved target columns visibility preference on page load
+    document.addEventListener("DOMContentLoaded", function() {
+        var isHiddenSaved = localStorage.getItem('hideTargetColumnsState') === 'true';
+        var wrapper = document.querySelector('.corp-table-wrapper');
+        if (wrapper && isHiddenSaved) {
+            wrapper.classList.add('hide-targets');
+        }
+    });
+
     function editSingleTarget(partyCode, partyName, currentVal) {
         Swal.fire({
             title: 'Set Target Override',
             html: `
                 <div style="text-align: left; font-size: 13px;">
                     <p style="margin-bottom: 10px;"><strong>Dealer:</strong> ${partyName} <span class="party-code-pill">${partyCode}</span></p>
-                    <label class="filter-label" style="margin-bottom: 6px; display: block;">Custom Target Value (₹)</label>
+                    <label class="filter-label" style="margin-bottom: 6px; display: block;">Custom Target Value</label>
                     <input type="number" id="singleTargetInput" value="${currentVal > 0 ? currentVal : ''}" placeholder="Enter new target value" class="form-control">
                     <span style="color: #94a3b8; font-size: 10.5px; display: block; margin-top: 6px;">Leave blank to clear the override and reset back to system default.</span>
                 </div>

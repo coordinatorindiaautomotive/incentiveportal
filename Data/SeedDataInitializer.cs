@@ -33,8 +33,8 @@ public sealed class SeedDataInitializer(IncentiveDbContext db, IPasswordHasher h
         await EnsureCashMasterItemsAsync(cancellationToken);
         await EnsureCostCenterCashesTableAsync(cancellationToken);
         await EnsureSaasTablesAsync(cancellationToken);
-
-        // await EnsureExternalIncentiveTablesAsync(cancellationToken);
+        await EnsureDynamicReportBuilderTablesAsync(cancellationToken);
+        await EnsureItPortalTablesAsync(cancellationToken);
         await EnsureControlTowerTablesAsync(cancellationToken);
         await EnsureEngineTablesAsync(cancellationToken);
 
@@ -787,6 +787,8 @@ public sealed class SeedDataInitializer(IncentiveDbContext db, IPasswordHasher h
                     PartCategoryCode NVARCHAR(20) NOT NULL DEFAULT '',
                     SourceLocation NVARCHAR(40) NOT NULL DEFAULT '',
                     TdsNote NVARCHAR(200) NULL,
+                    IncentiveType NVARCHAR(50) NULL,
+                    ApplicableSlab NVARCHAR(100) NULL,
                     
                     [Mode] NVARCHAR(50) NOT NULL DEFAULT '',
                     [Status] NVARCHAR(50) NOT NULL DEFAULT 'Draft',
@@ -803,7 +805,6 @@ public sealed class SeedDataInitializer(IncentiveDbContext db, IPasswordHasher h
                     UpdatedBy NVARCHAR(100) NULL
                 );
 
-                CREATE UNIQUE INDEX UX_ssincentives_PeriodParty ON ssincentives([Year], [Month], PartyCode) WHERE IsDeleted = 0;
                 CREATE INDEX IX_ssincentives_Status ON ssincentives([Status]);
             END
             ELSE
@@ -820,7 +821,22 @@ public sealed class SeedDataInitializer(IncentiveDbContext db, IPasswordHasher h
                     ALTER TABLE ssincentives ADD ImportLogId INT NULL CONSTRAINT FK_ssincentives_ImportLogs_ImportLogId REFERENCES ImportLogs(Id);
                 IF COL_LENGTH('ssincentives', 'TdsNote') IS NULL
                     ALTER TABLE ssincentives ADD TdsNote NVARCHAR(200) NULL;
+                IF COL_LENGTH('ssincentives', 'IncentiveType') IS NULL
+                    ALTER TABLE ssincentives ADD IncentiveType NVARCHAR(50) NULL;
+                IF COL_LENGTH('ssincentives', 'ApplicableSlab') IS NULL
+                    ALTER TABLE ssincentives ADD ApplicableSlab NVARCHAR(100) NULL;
             END
+
+            IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_ssincentives_Year_Month_PartyCode' AND object_id = OBJECT_ID('ssincentives'))
+            BEGIN
+                DROP INDEX IX_ssincentives_Year_Month_PartyCode ON ssincentives;
+            END
+
+            IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_ssincentives_PeriodParty' AND object_id = OBJECT_ID('ssincentives'))
+            BEGIN
+                DROP INDEX UX_ssincentives_PeriodParty ON ssincentives;
+            END
+            CREATE UNIQUE INDEX UX_ssincentives_PeriodParty ON ssincentives([Year], [Month], PartyCode, PartCategoryCode) WHERE IsDeleted = 0;
 
             -- Data migration: sync TransferredAmount for legacy paid/reconciled records
             UPDATE ssincentives
@@ -1861,5 +1877,452 @@ public sealed class SeedDataInitializer(IncentiveDbContext db, IPasswordHasher h
             END
             """, cancellationToken);
     }
-}
 
+    private async Task EnsureDynamicReportBuilderTablesAsync(CancellationToken cancellationToken)
+    {
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID('CustomReportLayouts', 'U') IS NULL
+            BEGIN
+                CREATE TABLE CustomReportLayouts (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    Name NVARCHAR(120) NOT NULL,
+                    ReportType NVARCHAR(20) NOT NULL DEFAULT 'Tabular',
+                    SelectedFieldsJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    PivotRowsJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    PivotColumnsJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    PivotValuesJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    FiltersJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    SortsJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    GroupsJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+            END
+
+            IF OBJECT_ID('ReportSchedules', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ReportSchedules (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    LayoutId INT NOT NULL FOREIGN KEY REFERENCES CustomReportLayouts(Id),
+                    RecipientEmails NVARCHAR(300) NOT NULL,
+                    Frequency NVARCHAR(20) NOT NULL DEFAULT 'Daily',
+                    CronExpression NVARCHAR(50) NOT NULL DEFAULT '0 8 * * *',
+                    IsActive BIT NOT NULL DEFAULT 1,
+                    LastRunJobId NVARCHAR(100) NULL,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+            END
+            """, cancellationToken);
+    }
+
+    private async Task EnsureItPortalTablesAsync(CancellationToken cancellationToken)
+    {
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID('ItMasterDatas', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItMasterDatas (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    Type NVARCHAR(100) NOT NULL,
+                    Code NVARCHAR(100) NOT NULL,
+                    Name NVARCHAR(250) NOT NULL,
+                    ParentId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    IsActive BIT NOT NULL DEFAULT 1,
+                    SortOrder INT NOT NULL DEFAULT 0,
+                    Description NVARCHAR(500) NULL,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+                
+                -- Seed Master Data
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Location', 'LOC-HO', 'Head Office', 1),
+                ('Location', 'LOC-DEL', 'Warehouse Delhi', 2),
+                ('Location', 'LOC-MUM', 'Branch Mumbai', 3),
+                ('Location', 'LOC-BLR', 'Branch Bangalore', 4);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Department', 'DEPT-IT', 'IT Support', 1),
+                ('Department', 'DEPT-FIN', 'Finance & Accounts', 2),
+                ('Department', 'DEPT-SLS', 'Sales & Marketing', 3),
+                ('Department', 'DEPT-HR', 'Human Resources', 4),
+                ('Department', 'DEPT-LOG', 'Logistics & Ops', 5);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Employee', 'EMP-001', 'Shailendra Kumar (IT Lead)', 1),
+                ('Employee', 'EMP-002', 'Amit Sharma (Sales Exec)', 2),
+                ('Employee', 'EMP-003', 'Priya Patel (Finance Manager)', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Vendor', 'VND-DELL', 'Dell Technologies India', 1),
+                ('Vendor', 'VND-HP', 'HP India Sales Pvt Ltd', 2),
+                ('Vendor', 'VND-MSFT', 'Microsoft Cloud Services', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('AssetCategory', 'CAT-HW', 'IT Hardware', 1),
+                ('AssetCategory', 'CAT-SW', 'Software & Licensing', 2),
+                ('AssetCategory', 'CAT-NET', 'Networking Equipment', 3),
+                ('AssetCategory', 'CAT-FUR', 'Office Furniture', 4);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('AssetType', 'TYP-LPT', 'Laptop', 1),
+                ('AssetType', 'TYP-DSK', 'Desktop PC', 2),
+                ('AssetType', 'TYP-RTR', 'Network Router', 3),
+                ('AssetType', 'TYP-SWT', 'Network Switch', 4),
+                ('AssetType', 'TYP-CHR', 'Ergonomic Chair', 5);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('AssetBrand', 'BRD-DELL', 'Dell', 1),
+                ('AssetBrand', 'BRD-HP', 'HP', 2),
+                ('AssetBrand', 'BRD-CSCO', 'Cisco', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('AssetModel', 'MDL-LAT34', 'Latitude 3420', 1),
+                ('AssetModel', 'MDL-ELT84', 'EliteBook 840 G8', 2),
+                ('AssetModel', 'MDL-ISR43', 'ISR 4331 Router', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('OperatingSystem', 'OS-WIN11', 'Windows 11 Pro', 1),
+                ('OperatingSystem', 'OS-MACOS', 'macOS Sequoia', 2),
+                ('OperatingSystem', 'OS-LINUX', 'Ubuntu 22.04 LTS', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('ProcessorType', 'CPU-I5', 'Intel Core i5', 1),
+                ('ProcessorType', 'CPU-I7', 'Intel Core i7', 2),
+                ('ProcessorType', 'CPU-R5', 'AMD Ryzen 5', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('RAMConfiguration', 'RAM-8G', '8 GB DDR4', 1),
+                ('RAMConfiguration', 'RAM-16G', '16 GB DDR4', 2),
+                ('RAMConfiguration', 'RAM-32G', '32 GB DDR4', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('StorageType', 'ST-256S', '256 GB NVMe SSD', 1),
+                ('StorageType', 'ST-512S', '512 GB NVMe SSD', 2),
+                ('StorageType', 'ST-1TS', '1 TB NVMe SSD', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('SoftwareCategory', 'SWCAT-OS', 'Operating System', 1),
+                ('SoftwareCategory', 'SWCAT-PRD', 'Productivity Suite', 2),
+                ('SoftwareCategory', 'SWCAT-SEC', 'Endpoint Security', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('SoftwareVendor', 'SWVND-MSFT', 'Microsoft', 1),
+                ('SoftwareVendor', 'SWVND-ADBE', 'Adobe Inc', 2);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('LicenseType', 'LIC-OEM', 'OEM License', 1),
+                ('LicenseType', 'LIC-VOL', 'Volume Licensing', 2),
+                ('LicenseType', 'LIC-SaaS', 'Subscription (SaaS)', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Priority', 'PRI-LOW', 'Low', 1),
+                ('Priority', 'PRI-MED', 'Medium', 2),
+                ('Priority', 'PRI-HIGH', 'High', 3),
+                ('Priority', 'PRI-CRIT', 'Critical', 4);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Severity', 'SEV-LOW', 'Low', 1),
+                ('Severity', 'SEV-MED', 'Medium', 2),
+                ('Severity', 'SEV-HIGH', 'High', 3),
+                ('Severity', 'SEV-CRIT', 'Critical', 4);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Impact', 'IMP-LOW', 'Low (Single User)', 1),
+                ('Impact', 'IMP-MED', 'Medium (Department)', 2),
+                ('Impact', 'IMP-HIGH', 'High (Branch/Enterprise)', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('TicketCategory', 'TC-HW', 'Hardware Issue', 1),
+                ('TicketCategory', 'TC-SW', 'Software Issue', 2),
+                ('TicketCategory', 'TC-NET', 'Network Connection', 3),
+                ('TicketCategory', 'TC-ACC', 'Access & Security', 4);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('TicketSubCategory', 'TSC-PASS', 'Password Reset', 1),
+                ('TicketSubCategory', 'TSC-VPN', 'VPN Disconnection', 2),
+                ('TicketSubCategory', 'TSC-WIFI', 'Wi-Fi Slow', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('RootCause', 'RC-HWFAIL', 'Hardware Component Failure', 1),
+                ('RootCause', 'RC-BUG', 'Software Glitch/Bug', 2),
+                ('RootCause', 'RC-USER', 'User Education Required', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('ResolutionType', 'RT-REST', 'Rebooted / Restarted Device', 1),
+                ('ResolutionType', 'RT-PART', 'Replaced Hardware Part', 2),
+                ('ResolutionType', 'RT-INST', 'Reinstalled Software App', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('IssueType', 'IT-INC', 'Incident Ticket', 1),
+                ('IssueType', 'IT-REQ', 'Service Request', 2);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('Status', 'ST-NEW', 'New', 1),
+                ('Status', 'ST-ASG', 'Assigned', 2),
+                ('Status', 'ST-PRG', 'In Progress', 3),
+                ('Status', 'ST-WFU', 'Waiting for User', 4),
+                ('Status', 'ST-WFV', 'Waiting for Vendor', 5),
+                ('Status', 'ST-RES', 'Resolved', 6),
+                ('Status', 'ST-CLD', 'Closed', 7);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('SlaPolicy', 'SLA-STD', 'Standard Enterprise SLA', 1);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('AMCProvider', 'AMC-AIRT', 'Airtel Enterprise Care', 1),
+                ('AMCProvider', 'AMC-TATA', 'Tata Communications Support', 2);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('WarrantyProvider', 'WR-DELL', 'Dell ProSupport Plus', 1),
+                ('WarrantyProvider', 'WR-HP', 'HP Care Pack Support', 2);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('DisposalReason', 'DR-EOL', 'End of Useful Life', 1),
+                ('DisposalReason', 'DR-DAM', 'Accidental Physical Damage', 2),
+                ('DisposalReason', 'DR-STOL', 'Stolen / Lost', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('PurchaseType', 'PT-CAP', 'Direct Capital Purchase', 1),
+                ('PurchaseType', 'PT-LSE', 'Operational Leasing', 2);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('CostCenter', 'CC-IT', 'CC - Corporate IT', 1),
+                ('CostCenter', 'CC-HO', 'CC - Head Office Ops', 2);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('ApprovalLevels', 'AL-L1', 'Level 1 (IT Lead)', 1),
+                ('ApprovalLevels', 'AL-L2', 'Level 2 (Branch Manager)', 2),
+                ('ApprovalLevels', 'AL-L3', 'Level 3 (Corporate CFO)', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('UserRoles', 'RL-ADMIN', 'IT Lead Administrator', 1),
+                ('UserRoles', 'RL-ENG', 'Support Engineer', 2),
+                ('UserRoles', 'RL-COORD', 'Branch IT Coordinator', 3);
+
+                INSERT INTO ItMasterDatas (Type, Code, Name, SortOrder) VALUES 
+                ('NotificationTemplates', 'NT-NEWTKT', 'New Ticket Raised Template', 1),
+                ('NotificationTemplates', 'NT-ASGTKT', 'Ticket Assignment Template', 2);
+            END
+
+            IF OBJECT_ID('ItAssets', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItAssets (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    AssetCode NVARCHAR(40) NOT NULL,
+                    Name NVARCHAR(200) NOT NULL,
+                    CategoryId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    TypeId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    BrandId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    ModelId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    SerialNumber NVARCHAR(100) NOT NULL,
+                    AssetTag NVARCHAR(100) NOT NULL,
+                    PurchaseDate DATETIME2 NOT NULL,
+                    PurchaseCost DECIMAL(18,2) NOT NULL DEFAULT 0,
+                    VendorId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    InvoiceNumber NVARCHAR(100) NOT NULL,
+                    WarrantyStart DATETIME2 NULL,
+                    WarrantyEnd DATETIME2 NULL,
+                    AmcStart DATETIME2 NULL,
+                    AmcEnd DATETIME2 NULL,
+                    AmcProviderId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    WarrantyProviderId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    BranchId INT NOT NULL FOREIGN KEY REFERENCES Branches(Id),
+                    LocationId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    DepartmentId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    AssignedEmployeeId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    AssetStatusId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    Condition NVARCHAR(50) NOT NULL DEFAULT 'Good',
+                    CurrentUserId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    PurchaseOrder NVARCHAR(100) NOT NULL DEFAULT '',
+                    DepreciationRatePercent DECIMAL(9,4) NOT NULL DEFAULT 0,
+                    InsuranceDetails NVARCHAR(500) NOT NULL DEFAULT '',
+                    DisposalDate DATETIME2 NULL,
+                    DisposalReasonId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    CostCenterId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    Remarks NVARCHAR(1000) NOT NULL DEFAULT '',
+                    AttachmentPath NVARCHAR(300) NULL,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+                CREATE UNIQUE INDEX UX_ItAssets_Code ON ItAssets(AssetCode) WHERE IsDeleted = 0;
+            END
+
+            IF OBJECT_ID('ItAssetHistories', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItAssetHistories (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    AssetId INT NOT NULL FOREIGN KEY REFERENCES ItAssets(Id),
+                    ActionType NVARCHAR(50) NOT NULL,
+                    FromBranchId INT NULL,
+                    ToBranchId INT NULL,
+                    FromUserId INT NULL,
+                    ToUserId INT NULL,
+                    TransactionDate DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    Reason NVARCHAR(500) NOT NULL DEFAULT '',
+                    ApprovalStatus NVARCHAR(30) NOT NULL DEFAULT 'Approved',
+                    ApprovedBy NVARCHAR(100) NOT NULL DEFAULT '',
+                    AttachmentPath NVARCHAR(300) NULL,
+                    Details NVARCHAR(1000) NOT NULL DEFAULT '',
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+            END
+
+            IF OBJECT_ID('ItSoftwareLicenses', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItSoftwareLicenses (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    SoftwareName NVARCHAR(150) NOT NULL,
+                    VendorId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    LicenseKey NVARCHAR(200) NOT NULL,
+                    Version NVARCHAR(50) NOT NULL DEFAULT '',
+                    InstallationDate DATETIME2 NOT NULL,
+                    ExpiryDate DATETIME2 NULL,
+                    AssetId INT NULL FOREIGN KEY REFERENCES ItAssets(Id),
+                    TotalLicenses INT NOT NULL DEFAULT 1,
+                    LicenseTypeId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    IsActive BIT NOT NULL DEFAULT 1,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+            END
+
+            IF OBJECT_ID('ItTickets', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItTickets (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    TicketNumber NVARCHAR(40) NOT NULL,
+                    Requester NVARCHAR(100) NOT NULL,
+                    BranchId INT NOT NULL FOREIGN KEY REFERENCES Branches(Id),
+                    DepartmentId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    CategoryId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    SubCategoryId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    PriorityId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    SeverityId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    ImpactId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    Subject NVARCHAR(250) NOT NULL,
+                    Description NVARCHAR(MAX) NOT NULL,
+                    AttachmentPath NVARCHAR(300) NULL,
+                    AssignedEngineer NVARCHAR(100) NOT NULL DEFAULT '',
+                    Status NVARCHAR(30) NOT NULL DEFAULT 'New',
+                    ResolutionText NVARCHAR(MAX) NOT NULL DEFAULT '',
+                    RootCauseId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    ResolutionTypeId INT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    ClosureDate DATETIME2 NULL,
+                    UserFeedbackScore INT NULL,
+                    UserFeedbackText NVARCHAR(500) NULL,
+                    SlaDeadline DATETIME2 NOT NULL,
+                    SlaBreached BIT NOT NULL DEFAULT 0,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+                CREATE UNIQUE INDEX UX_ItTickets_Number ON ItTickets(TicketNumber) WHERE IsDeleted = 0;
+            END
+
+            IF OBJECT_ID('ItTicketComments', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItTicketComments (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    TicketId INT NOT NULL FOREIGN KEY REFERENCES ItTickets(Id),
+                    CommentText NVARCHAR(MAX) NOT NULL,
+                    IsInternal BIT NOT NULL DEFAULT 0,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+            END
+
+            IF OBJECT_ID('ItSlaPolicies', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItSlaPolicies (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    Name NVARCHAR(100) NOT NULL,
+                    PriorityId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    ResponseTimeHours INT NOT NULL,
+                    ResolutionTimeHours INT NOT NULL,
+                    IsActive BIT NOT NULL DEFAULT 1,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+
+                -- Seed default SLA policies linked to ItMasterDatas priority IDs
+                DECLARE @LowId INT = (SELECT TOP 1 Id FROM ItMasterDatas WHERE Type = 'Priority' AND Code = 'PRI-LOW');
+                DECLARE @MedId INT = (SELECT TOP 1 Id FROM ItMasterDatas WHERE Type = 'Priority' AND Code = 'PRI-MED');
+                DECLARE @HighId INT = (SELECT TOP 1 Id FROM ItMasterDatas WHERE Type = 'Priority' AND Code = 'PRI-HIGH');
+                DECLARE @CritId INT = (SELECT TOP 1 Id FROM ItMasterDatas WHERE Type = 'Priority' AND Code = 'PRI-CRIT');
+
+                IF @LowId IS NOT NULL AND @MedId IS NOT NULL AND @HighId IS NOT NULL AND @CritId IS NOT NULL
+                BEGIN
+                    INSERT INTO ItSlaPolicies (Name, PriorityId, ResponseTimeHours, ResolutionTimeHours) VALUES
+                    ('Low Priority Policy', @LowId, 24, 72),
+                    ('Medium Priority Policy', @MedId, 8, 24),
+                    ('High Priority Policy', @HighId, 2, 8),
+                    ('Critical Priority Policy', @CritId, 1, 4);
+                END
+            END
+
+            IF OBJECT_ID('ItMaintenanceSchedules', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItMaintenanceSchedules (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    AssetId INT NOT NULL FOREIGN KEY REFERENCES ItAssets(Id),
+                    Frequency NVARCHAR(30) NOT NULL DEFAULT 'Quarterly',
+                    LastDoneDate DATETIME2 NOT NULL,
+                    NextDueDate DATETIME2 NOT NULL,
+                    AssignedEngineer NVARCHAR(100) NOT NULL DEFAULT '',
+                    ChecklistJson NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    Status NVARCHAR(30) NOT NULL DEFAULT 'Pending',
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+            END
+
+            IF OBJECT_ID('ItKbArticles', 'U') IS NULL
+            BEGIN
+                CREATE TABLE ItKbArticles (
+                    Id INT IDENTITY(1,1) PRIMARY KEY,
+                    Title NVARCHAR(250) NOT NULL,
+                    Content NVARCHAR(MAX) NOT NULL,
+                    CategoryId INT NOT NULL FOREIGN KEY REFERENCES ItMasterDatas(Id),
+                    Tags NVARCHAR(200) NOT NULL DEFAULT '',
+                    ViewsCount INT NOT NULL DEFAULT 0,
+                    IsDeleted BIT NOT NULL DEFAULT 0,
+                    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                    CreatedBy NVARCHAR(100) NOT NULL DEFAULT 'system',
+                    UpdatedAt DATETIME2 NULL,
+                    UpdatedBy NVARCHAR(100) NULL
+                );
+            END
+            """, cancellationToken);
+    }
+}

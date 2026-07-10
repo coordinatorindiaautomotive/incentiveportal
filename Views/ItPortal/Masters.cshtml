@@ -1,0 +1,262 @@
+@{
+    ViewData["Title"] = "IT Configurable Masters";
+    Layout = "_Layout";
+}
+
+<div class="main">
+    <!-- Header Block -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1 fw-bold">IT Master Configuration</h4>
+            <p class="text-muted small mb-0">Manage all 34 enterprise dropdown values dynamically without code changes.</p>
+        </div>
+        <div>
+            <button onclick="openFormModal(0)" class="btn btn-primary btn-sm d-flex align-items-center gap-2">
+                <i data-lucide="plus" style="width:14px; height:14px;"></i> Add Master Item
+            </button>
+        </div>
+    </div>
+
+    <!-- Master Selection Row -->
+    <div class="cc p-3 mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <label class="form-label fw-bold text-muted small uppercase">Select Master Category</label>
+                <select id="masterTypeSelect" onchange="loadMasterData()" class="form-select"></select>
+            </div>
+            <div class="col-md-8 text-md-end mt-3 mt-md-0">
+                <span class="badge bg-light text-dark p-2" id="itemCountLabel">0 Items found</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Master Grid Table -->
+    <div class="cc p-0 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead class="bg-light">
+                    <tr>
+                        <th style="width: 15%;">Code</th>
+                        <th style="width: 25%;">Name</th>
+                        <th style="width: 35%;">Description</th>
+                        <th style="width: 10%;" class="text-center">Sort Order</th>
+                        <th style="width: 10%;" class="text-center">Status</th>
+                        <th style="width: 10%;" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="masterDataBody">
+                    <tr>
+                        <td colspan="6" class="text-center p-4 text-muted">
+                            Select a category above to load data.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal fade" id="formModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Add Master Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="masterForm">
+                    <input type="hidden" id="itemId" value="0" />
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Code (Unique)</label>
+                        <input type="text" id="itemCode" class="form-control" placeholder="e.g. LOC-DELHI" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Display Name</label>
+                        <input type="text" id="itemName" class="form-control" placeholder="e.g. New Delhi Office" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Description</label>
+                        <textarea id="itemDesc" class="form-control" rows="2" placeholder="Optional details..."></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label small fw-bold">Sort Order</label>
+                            <input type="number" id="itemSort" class="form-control" value="0" />
+                        </div>
+                        <div class="col-6 mb-3 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input type="checkbox" id="itemActive" class="form-check-input" checked />
+                                <label class="form-check-label small fw-bold" for="itemActive">Active</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" onclick="saveItem()" class="btn btn-primary btn-sm">Save Master</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let masterModal = null;
+        let loadedItems = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            masterModal = new bootstrap.Modal(document.getElementById("formModal"));
+            loadMasterTypes();
+        });
+
+        async function loadMasterTypes() {
+            try {
+                const res = await fetch("/ItPortal/GetMasterTypes");
+                const types = await res.json();
+                const select = document.getElementById("masterTypeSelect");
+                select.innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join("");
+                
+                // Set default select to Location if available
+                if (types.includes("Location")) select.value = "Location";
+                loadMasterData();
+            } catch (err) {
+                console.error("Failed to load types", err);
+            }
+        }
+
+        async function loadMasterData() {
+            const type = document.getElementById("masterTypeSelect").value;
+            const tbody = document.getElementById("masterDataBody");
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center p-4"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</td></tr>`;
+
+            try {
+                const res = await fetch(`/ItPortal/GetMasterData?type=${type}`);
+                loadedItems = await res.json();
+                
+                document.getElementById("itemCountLabel").textContent = `${loadedItems.length} Items found`;
+
+                if (loadedItems.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-muted">No configuration items defined for this master.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = loadedItems.map(item => `
+                    <tr>
+                        <td><strong>${escapeHtml(item.code)}</strong></td>
+                        <td>${escapeHtml(item.name)}</td>
+                        <td class="text-muted small">${escapeHtml(item.description || '-')}</td>
+                        <td class="text-center">${item.sortOrder}</td>
+                        <td class="text-center">
+                            <span class="badge ${item.isActive ? 'bg-success' : 'bg-secondary'}">${item.isActive ? 'Active' : 'Inactive'}</span>
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="openFormModal(${item.id})">Edit</button>
+                            <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="deleteItem(${item.id})">Delete</button>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-danger">Error loading master data configurations.</td></tr>`;
+            }
+        }
+
+        function openFormModal(id) {
+            const type = document.getElementById("masterTypeSelect").value;
+            document.getElementById("masterForm").reset();
+            document.getElementById("itemId").value = id;
+
+            if (id === 0) {
+                document.getElementById("modalTitle").textContent = `Add ${type} Item`;
+                document.getElementById("itemCode").disabled = false;
+                document.getElementById("itemActive").checked = true;
+            } else {
+                const item = loadedItems.find(x => x.id === id);
+                if (!item) return;
+
+                document.getElementById("modalTitle").textContent = `Edit ${type} Item`;
+                document.getElementById("itemId").value = item.id;
+                document.getElementById("itemCode").value = item.code;
+                document.getElementById("itemCode").disabled = true; // Code stays unique/read-only
+                document.getElementById("itemName").value = item.name;
+                document.getElementById("itemDesc").value = item.description || "";
+                document.getElementById("itemSort").value = item.sortOrder;
+                document.getElementById("itemActive").checked = item.isActive;
+            }
+
+            masterModal.show();
+        }
+
+        async function saveItem() {
+            const id = parseInt(document.getElementById("itemId").value);
+            const type = document.getElementById("masterTypeSelect").value;
+            const code = document.getElementById("itemCode").value.trim();
+            const name = document.getElementById("itemName").value.trim();
+            const description = document.getElementById("itemDesc").value.trim();
+            const sortOrder = parseInt(document.getElementById("itemSort").value) || 0;
+            const isActive = document.getElementById("itemActive").checked;
+
+            if (!code || !name) {
+                Swal.fire("Validation Error", "Code and Name are required.", "warning");
+                return;
+            }
+
+            const model = { id, type, code, name, description, sortOrder, isActive };
+
+            try {
+                const res = await fetch("/ItPortal/SaveMasterItem", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+                
+                const data = await res.json();
+                if (data.ok) {
+                    masterModal.hide();
+                    Swal.fire("Success", data.message, "success");
+                    loadMasterData();
+                } else {
+                    Swal.fire("Error", data.message, "error");
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server submission failed.", "error");
+            }
+        }
+
+        async function deleteItem(id) {
+            const result = await Swal.fire({
+                title: "Are you sure?",
+                text: "This item will be deleted from the master choice registries.",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#d33",
+                confirmButtonText: "Yes, Delete"
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await fetch(`/ItPortal/DeleteMasterItem?id=${id}`, { method: "POST" });
+                const data = await res.json();
+                if (data.ok) {
+                    Swal.fire("Deleted", data.message, "success");
+                    loadMasterData();
+                } else {
+                    Swal.fire("Error", data.message, "error");
+                }
+            } catch (err) {
+                Swal.fire("Error", "Server deletion failed.", "error");
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+}

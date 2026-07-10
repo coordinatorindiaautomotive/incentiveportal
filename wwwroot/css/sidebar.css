@@ -1,161 +1,337 @@
 /* ==========================================================================
-   SIDEBAR - Enterprise SaaS
+   SIDEBAR - Premium Responsive Dark Navy Redesign
+   Matching reference UI color palettes and colorful responsive icons.
    ========================================================================== */
 .sidebar {
   width: var(--sidebar-w);
-  background: var(--nav);
-  color: var(--nav-text);
+  background: #09192c !important; /* Deep dark navy background */
+  color: rgba(255, 255, 255, 0.65);
   display: flex;
   flex-direction: column;
-  transition: width var(--transition-normal);
+  transition: all var(--transition-normal);
   z-index: 200;
-  border-radius: 0 var(--radius-sidebar) var(--radius-sidebar) 0;
-  box-shadow: var(--shadow-floating);
+  border-radius: 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   position: relative;
   height: 100%;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.brand-block {
-  padding: 24px;
+.brand-premium-block {
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: #061120; /* Darker navy for branding */
+}
+
+.brand-premium-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.brand-logo {
-  width: 32px;
-  height: 32px;
-  background: var(--sidebar-grad-start);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
+.brand-premium-title i {
+  color: #0062ff;
 }
 
-.brand-text-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.brand-title {
-  font-size: var(--font-lg);
-  font-weight: 700;
-  color: var(--sidebar-text);
+.brand-premium-sub {
+  font-size: 10.5px;
+  color: #64748b;
+  margin-top: 4px;
+  font-weight: 500;
 }
 
 .side-nav {
-  padding: 16px;
+  padding: 12px;
   flex: 1;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
+/* --- Section Title --- */
+.nav-section-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.25);
+  padding: 14px 12px 6px 12px;
+  user-select: none;
+}
+
+/* --- Nav Links --- */
 .nav-link {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  color: var(--nav-text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.65) !important;
   font-weight: 600;
-  font-size: var(--font-sm);
-  transition: all var(--transition-fast);
+  font-size: 13px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   text-decoration: none;
 }
 
 .nav-link:hover {
-  background: var(--sidebar-hover);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff !important;
+  transform: translateX(3px);
 }
 
 .nav-link.active {
-  background: linear-gradient(135deg, var(--sidebar-grad-start), var(--sidebar-grad-end));
-  color: #fff;
-  box-shadow: var(--shadow-btn);
+  background: #0062ff !important; /* Premium solid blue pill selection */
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 98, 255, 0.3);
 }
 
 .nav-link.active::before {
-  content: "";
-  position: absolute;
-  left: -16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 24px;
-  background: #fff;
-  border-radius: 0 4px 4px 0;
+  display: none; /* Removed the line indicator for cleaner full pill selection */
 }
 
+/* --- Nav Icons (Colorized & Glow Effects) --- */
 .nav-icon {
-  width: 20px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.nav-icon svg,
+.nav-icon i {
+  stroke-width: 2.2px;
+  transition: all 0.2s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
+/* Apply Reference Color Palettes to Icons */
+.icon-overview {
+  color: #f97316; /* Amber/Orange - Executive Dashboard */
+}
+.icon-customer {
+  color: #c084fc; /* Purple/Violet - Salesmen/Customer Master */
+}
+.icon-upload {
+  color: #f43f5e; /* Rose/Red - Voucher/Sales Monitor */
+}
+.icon-incentive {
+  color: #10b981; /* Green/Emerald - Sync/Incentive Engine */
+}
+.icon-cash {
+  color: #3b82f6; /* Bright Blue - Sync/Cash Terminal */
+}
+.icon-reports {
+  color: #fbbf24; /* Yellow/Amber - Reports & Exports */
+}
+.icon-masters {
+  color: #eab308; /* Yellow/Gold - Ledger/Outlets Mappings */
+}
+.icon-users {
+  color: #a78bfa; /* Light Purple - Users */
+}
+.icon-branches {
+  color: #06b6d4; /* Cyan - Branch Mapping */
+}
+.icon-settings {
+  color: #94a3b8; /* Gray/Slate - General Settings */
+}
+.icon-helpdesk {
+  color: #f97316; /* Orange - Helpdesk & Support */
+}
+
+/* Active Link Icon Override to Solid White */
+.nav-link.active .nav-icon svg,
+.nav-link.active .nav-icon i {
+  color: #ffffff !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+/* Hover Icon Glow Scaling */
+.nav-link:hover .nav-icon svg,
+.nav-link:hover .nav-icon i {
+  transform: scale(1.08);
+}
+
 .nav-badge {
   margin-left: auto;
-  background: var(--primary);
+  background: #0062ff;
   color: #fff;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: var(--radius-full);
-}
-
-.sidebar-help-card {
-  margin: 16px;
-  padding: 20px;
-  background: linear-gradient(135deg, var(--grad-support-start), var(--grad-support-end));
-  border-radius: var(--radius-lg);
-  color: #fff;
-  box-shadow: var(--shadow-btn);
-}
-
-.help-card-title {
+  font-size: 9px;
   font-weight: 700;
-  font-size: var(--font-sm);
-  margin-bottom: 4px;
+  padding: 2px 7px;
+  border-radius: 10px;
 }
 
-.help-card-subtext {
-  font-size: 12px;
-  opacity: 0.8;
-  margin-bottom: 12px;
+.nav-dropdown-wrapper {
+  margin-bottom: 2px;
+}
+
+/* --- Dropdown Caret Color --- */
+.nav-caret {
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.2s ease;
+}
+.nav-link[aria-expanded="true"] .nav-caret {
+  transform: rotate(90deg);
+  color: #ffffff;
+}
+
+/* --- Sub-menu Layout --- */
+.nav-dropdown-content {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+  border-left: 1px dashed rgba(255, 255, 255, 0.1);
+  margin-left: 22px;
+}
+
+.nav-dropdown-content .nav-link {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.nav-dropdown-content .nav-link:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: #ffffff !important;
+}
+
+.nav-dropdown-content .nav-link.active {
+  background: rgba(0, 98, 255, 0.15) !important;
+  color: #0062ff !important;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+/* --- Support Card --- */
+.sidebar-help-card {
+  margin: 16px 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  color: #e2e8f0;
+  box-shadow: none;
+}
+
+.sidebar-help-card h6 {
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.sidebar-help-card p {
+  color: #64748b;
+  font-size: 11px;
 }
 
 .help-card-btn {
-  background: #fff;
-  color: var(--grad-support-start);
+  background: #0062ff !important;
+  color: #ffffff !important;
   border: none;
-  border-radius: var(--radius-md);
-  padding: 8px 16px;
+  border-radius: 6px;
+  padding: 8px 12px;
   font-weight: 700;
-  font-size: var(--font-xs);
+  font-size: 11px;
   cursor: pointer;
   width: 100%;
+  transition: all 0.2s;
+  box-shadow: 0 4px 10px rgba(0, 98, 255, 0.2);
+}
+
+.help-card-btn:hover {
+  background: #0056e0 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 98, 255, 0.3);
+}
+
+/* --- User Profile Section --- */
+.sidebar-user-profile {
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+  background: #061120 !important;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+}
+
+.sidebar-user-profile .user-info .username {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.sidebar-user-profile .user-info .role {
+  color: #64748b;
 }
 
 .sidebar-copyright {
   text-align: center;
-  font-size: 11px;
-  color: var(--nav-text);
-  opacity: 0.5;
-  padding-bottom: 16px;
+  font-size: 10px;
+  color: #475569;
+  padding-bottom: 12px;
 }
 
+/* Collapse Adjustments */
 .app-shell.sidebar-collapsed .sidebar {
   width: var(--sidebar-collapsed-w);
 }
 
 .app-shell.sidebar-collapsed .nav-label,
 .app-shell.sidebar-collapsed .nav-badge,
-.app-shell.sidebar-collapsed .brand-title,
+.app-shell.sidebar-collapsed .brand-premium-sub,
+.app-shell.sidebar-collapsed .brand-status-indicator,
 .app-shell.sidebar-collapsed .sidebar-help-card,
-.app-shell.sidebar-collapsed .sidebar-copyright {
-  display: none;
+.app-shell.sidebar-collapsed .sidebar-user-profile .user-info,
+.app-shell.sidebar-collapsed .sidebar-copyright,
+.app-shell.sidebar-collapsed .nav-section-title,
+.app-shell.sidebar-collapsed .nav-caret {
+  display: none !important;
 }
 
+.app-shell.sidebar-collapsed .brand-premium-title {
+  justify-content: center;
+  font-size: 0px;
+}
+
+.app-shell.sidebar-collapsed .brand-premium-block {
+  padding: 16px 0;
+}
+
+.app-shell.sidebar-collapsed .nav-link {
+  justify-content: center;
+  padding: 12px;
+}
+
+.app-shell.sidebar-collapsed .nav-dropdown-content {
+  display: none !important;
+}
+
+.app-shell.sidebar-collapsed .sidebar-user-profile {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+/* Custom Scrollbar for premium scroller */
+.sidebar-menu-scroller::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-menu-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-menu-scroller::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+.sidebar-menu-scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}

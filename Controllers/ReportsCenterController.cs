@@ -84,8 +84,13 @@ public sealed class ReportsCenterController(IncentiveDbContext db) : Controller
             };
             db.ReportColumnConfigs.Add(config);
         }
-
         await db.SaveChangesAsync();
         return Json(new { ok = true, message = "Report column configuration saved." });
+    }
+
+    [HttpGet("ReportsCenter/DynamicBuilder")]
+    public IActionResult DynamicBuilder()
+    {
+        return View();
     }
 }

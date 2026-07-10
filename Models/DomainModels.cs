@@ -525,6 +525,9 @@ public sealed class SsIncentive : AuditableEntity
 
     [MaxLength(200)]
     public string? TdsNote { get; set; }
+
+    [MaxLength(50)] public string? IncentiveType { get; set; }
+    [MaxLength(100)] public string? ApplicableSlab { get; set; }
 }
 
 [Table("BankStatementRecords")]
@@ -626,11 +629,73 @@ public sealed class ProductCodeMapping : AuditableEntity
 
     /// <summary>The alternative/alias part number that may appear in uploaded sales files.</summary>
     [Required, MaxLength(100)] public string AlternativeCode { get; set; } = string.Empty;
-
     [MaxLength(200)] public string? Description { get; set; }
 
     /// <summary>Inactive mappings are excluded from resolution but kept for audit.</summary>
     public bool IsActive { get; set; } = true;
 }
+
+[Table("CustomReportLayouts")]
+public sealed class CustomReportLayout : AuditableEntity
+{
+    [Required, MaxLength(120)]
+    public string Name { get; set; } = string.Empty;
+    [Required, MaxLength(20)]
+    public string ReportType { get; set; } = "Tabular"; // Tabular, Pivot, Summary
+    
+    public string SelectedFieldsJson { get; set; } = "[]"; 
+    public string PivotRowsJson { get; set; } = "[]";      
+    public string PivotColumnsJson { get; set; } = "[]";   
+    public string PivotValuesJson { get; set; } = "[]";    
+    public string FiltersJson { get; set; } = "[]";         
+    public string SortsJson { get; set; } = "[]";           
+    public string GroupsJson { get; set; } = "[]";          
+}
+
+[Table("ReportSchedules")]
+public sealed class ReportSchedule : AuditableEntity
+{
+    public int LayoutId { get; set; }
+    public CustomReportLayout Layout { get; set; } = default!;
+    
+    [Required, MaxLength(300)]
+    public string RecipientEmails { get; set; } = string.Empty;
+    [Required, MaxLength(20)]
+    public string Frequency { get; set; } = "Daily"; 
+    [Required, MaxLength(50)]
+    public string CronExpression { get; set; } = "0 8 * * *"; 
+    public bool IsActive { get; set; } = true;
+    [MaxLength(100)]
+    public string? LastRunJobId { get; set; }
+}
+
+/// <summary>
+/// Analytics cache table — stores the computed Primary Branch for each party.
+/// Derived from the Raw sales table by finding the branch code (Loc) with the
+/// maximum number of transactions for each party. Raw is NEVER modified.
+/// Rebuilt after each import and on startup.
+/// </summary>
+[Table("PartyPrimaryBranch")]
+public sealed class PartyPrimaryBranch : AuditableEntity
+{
+    /// <summary>Canonical party code (OriginalCode or ConsPartyCode from Raw).</summary>
+    [Required, MaxLength(40)]
+    public string PartyCode { get; set; } = string.Empty;
+
+    /// <summary>Branch code (Loc) from which this party has made the most purchases.</summary>
+    [Required, MaxLength(40)]
+    public string PrimaryBranchCode { get; set; } = string.Empty;
+
+    /// <summary>Transaction count at the primary branch (determines dominance).</summary>
+    public int TransactionCount { get; set; }
+
+    /// <summary>Total NetRetailSelling at the primary branch.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal TotalSales { get; set; }
+
+    /// <summary>UTC timestamp of the last recomputation.</summary>
+    public DateTime LastRefreshedAt { get; set; } = DateTime.UtcNow;
+}
+
 
 

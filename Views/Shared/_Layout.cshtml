@@ -96,12 +96,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/css/core.min.css" />
     <link rel="stylesheet" href="~/css/app.min.css" />
-    <link rel="stylesheet" href="~/css/design-tokens.css" />
-    <link rel="stylesheet" href="~/css/sidebar.css" />
-    <link rel="stylesheet" href="~/css/topbar.css" />
-    <link rel="stylesheet" href="~/css/dashboard.css" />
-    <link rel="stylesheet" href="~/css/components.css" />
-    <link rel="stylesheet" href="~/css/tables.css" />
+    <link rel="stylesheet" href="~/css/design-tokens.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/sidebar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/topbar.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/tables.css" asp-append-version="true" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.0/dist/sweetalert2.all.min.js" integrity="sha384-3X/ekz+OfKpD8GxRB34ZNUuGC4p3wdoeX2WJhtJfoSyktaKzu7vmlRYCD4bV6lHa" crossorigin="anonymous" defer></script>
@@ -113,7 +113,7 @@
             }
         })();
     </script>
-    
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
     <div class="@(isEmbed ? "" : "app-shell")" id="appShell">
@@ -123,11 +123,11 @@
             <aside class="sidebar" id="appSidebar">
                 <!-- Brand Area -->
                 <div class="brand-premium-block">
-                    <div class="brand-premium-title">
-                        <i data-lucide="gem" style="width: 22px; height: 22px;"></i> ThessBuddy
+                    <div class="brand-premium-title" style="justify-content: center; padding: 4px 0;">
+                        <img src="/thessbuddy-logo.png" alt="ThessBuddy Logo" style="height: 38px; width: auto; object-fit: contain;" />
                     </div>
-                    <div class="brand-premium-sub">Enterprise Distribution Platform</div>
-                    <div class="brand-status-indicator mt-2">
+                    <div class="brand-premium-sub text-center" style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #74777f; margin-top: 6px;">Enterprise Distribution Platform</div>
+                    <div class="brand-status-indicator mt-2 d-flex justify-content-center">
                         <div class="d-flex align-items-center gap-1.5 small text-success fw-bold" style="font-size:0.7rem;">
                             <span class="status-dot active" style="background:#22c55e; width:6px; height:6px; border-radius:50%; display:inline-block; box-shadow: 0 0 6px #22c55e; margin-right:4px;"></span> Business Healthy
                         </div>
@@ -137,23 +137,29 @@
                 <!-- Scrollable Navigation Menu -->
                 <div class="sidebar-menu-scroller scrollbar" style="flex: 1; overflow-y: auto; padding: 12px 0;">
                     <div class="side-nav">
+                        <!-- OVERVIEW -->
+                        <div class="nav-section-title">Overview</div>
+
                         <!-- Dashboard -->
                         @if (IsModuleAllowed("Reports", "View"))
                         {
                             <a class="nav-link @IsActive("Reports", "PerformanceReports")" asp-controller="Reports" asp-action="PerformanceReports">
-                                <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span>
+                                <span class="nav-icon"><i data-lucide="layout-dashboard" class="icon-overview"></i></span>
                                 <span class="nav-label">Dashboard</span>
                             </a>
                             <a class="nav-link @IsActive("Customer360")" asp-controller="Customer360" asp-action="Index">
-                                <span class="nav-icon"><i data-lucide="users"></i></span>
+                                <span class="nav-icon"><i data-lucide="users" class="icon-customer"></i></span>
                                 <span class="nav-label">Customer 360&deg; Hub</span>
                             </a>
                         }
 
+                        <!-- OPERATIONS -->
+                        <div class="nav-section-title">Operations</div>
+
                         <!-- Sales Upload Center -->
                         <div class="nav-dropdown-wrapper">
                             <a class="nav-link nav-dropdown-trigger @IsActive("UploadManagement") @IsActive("Reports", "OutstandingMaster")" data-bs-toggle="collapse" data-bs-target="#menuSalesUpload" href="javascript:void(0);" role="button" aria-expanded="false">
-                                <span class="nav-icon"><i data-lucide="file-spreadsheet"></i></span>
+                                <span class="nav-icon"><i data-lucide="file-spreadsheet" class="icon-upload"></i></span>
                                 <span class="nav-label">Sales Upload Center</span>
                                 <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                             </a>
@@ -175,7 +181,7 @@
                         <!-- Incentive Engine -->
                         <div class="nav-dropdown-wrapper">
                             <a class="nav-link nav-dropdown-trigger @IsActive("Schemes") @IsActive("AiCenter")" data-bs-toggle="collapse" data-bs-target="#menuIncentive" href="javascript:void(0);" role="button" aria-expanded="false">
-                                <span class="nav-icon"><i data-lucide="award"></i></span>
+                                <span class="nav-icon"><i data-lucide="award" class="icon-incentive"></i></span>
                                 <span class="nav-label">Incentive Engine</span>
                                 <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                             </a>
@@ -192,7 +198,7 @@
                         {
                             <div class="nav-dropdown-wrapper">
                                 <a class="nav-link nav-dropdown-trigger @IsActive("CashManagement", "CashBook") @IsActive("CashManagement", "CostCenterCash") @IsActive("ApprovalEngine")" data-bs-toggle="collapse" data-bs-target="#menuCash" href="javascript:void(0);" role="button" aria-expanded="false">
-                                    <span class="nav-icon"><i data-lucide="wallet"></i></span>
+                                    <span class="nav-icon"><i data-lucide="wallet" class="icon-cash"></i></span>
                                     <span class="nav-label">Cash In / Cash Out</span>
                                     <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                                 </a>
@@ -209,23 +215,23 @@
                         <!-- Reports -->
                         <div class="nav-dropdown-wrapper">
                             <a class="nav-link nav-dropdown-trigger @IsActive("ReportsCenter")" data-bs-toggle="collapse" data-bs-target="#menuReports" href="javascript:void(0);" role="button" aria-expanded="false">
-                                <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span>
+                                <span class="nav-icon"><i data-lucide="bar-chart-3" class="icon-reports"></i></span>
                                 <span class="nav-label">Reports</span>
                                 <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                             </a>
                             <div class="collapse" id="menuReports">
                                 <div class="nav-dropdown-content">
                                     <a class="nav-link @IsActive("ReportsCenter")" asp-controller="ReportsCenter" asp-action="Index">Reports Center</a>
-                                    <a class="nav-link" href="/Reports/PerformanceReports">Performance Dash</a>
                                     <a class="nav-link" href="/Reports/TargetVsAchievement">Target vs Achievement</a>
+                                    <a class="nav-link @IsActive("ReportsCenter", "DynamicBuilder")" href="/ReportsCenter/DynamicBuilder">Dynamic Report Builder</a>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Masters -->
                         <div class="nav-dropdown-wrapper">
-                            <a class="nav-link nav-dropdown-trigger @IsActive("Customer360") @IsActive("Parties", "BankDetails") @IsActive("AssetRegister")" data-bs-toggle="collapse" data-bs-target="#menuMasters" href="javascript:void(0);" role="button" aria-expanded="false">
-                                <span class="nav-icon"><i data-lucide="database"></i></span>
+                            <a class="nav-link nav-dropdown-trigger @IsActive("Customer360") @IsActive("Parties", "BankDetails")" data-bs-toggle="collapse" data-bs-target="#menuMasters" href="javascript:void(0);" role="button" aria-expanded="false">
+                                <span class="nav-icon"><i data-lucide="database" class="icon-masters"></i></span>
                                 <span class="nav-label">Masters</span>
                                 <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                             </a>
@@ -235,17 +241,22 @@
                                     {
                                         <a class="nav-link @IsActive("Parties", "BankDetails")" asp-controller="Parties" asp-action="BankDetails">Bank Accounts</a>
                                     }
-                                    <a class="nav-link @IsActive("AssetRegister")" asp-controller="AssetRegister" asp-action="Index">Asset Management</a>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- SETTINGS & SECURITY -->
+                        @if (User.IsInRole("Super Admin") || IsModuleAllowed("Helpdesk", "Access"))
+                        {
+                            <div class="nav-section-title">Settings & Mapping</div>
+                        }
 
                         <!-- User Management -->
                         @if (User.IsInRole("Super Admin"))
                         {
                             <div class="nav-dropdown-wrapper">
                                 <a class="nav-link nav-dropdown-trigger @IsActive("Users")" data-bs-toggle="collapse" data-bs-target="#menuUsers" href="javascript:void(0);" role="button" aria-expanded="false">
-                                    <span class="nav-icon"><i data-lucide="users"></i></span>
+                                    <span class="nav-icon"><i data-lucide="users" class="icon-users"></i></span>
                                     <span class="nav-label">User Management</span>
                                     <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                                 </a>
@@ -262,7 +273,7 @@
                         {
                             <div class="nav-dropdown-wrapper">
                                 <a class="nav-link nav-dropdown-trigger @IsActive("Branches")" data-bs-toggle="collapse" data-bs-target="#menuBranches" href="javascript:void(0);" role="button" aria-expanded="false">
-                                    <span class="nav-icon"><i data-lucide="git-branch"></i></span>
+                                    <span class="nav-icon"><i data-lucide="git-branch" class="icon-branches"></i></span>
                                     <span class="nav-label">Multi-Branch</span>
                                     <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                                 </a>
@@ -279,7 +290,7 @@
                         {
                             <div class="nav-dropdown-wrapper">
                                 <a class="nav-link nav-dropdown-trigger" data-bs-toggle="collapse" data-bs-target="#menuSettings" href="javascript:void(0);" role="button" aria-expanded="false">
-                                    <span class="nav-icon"><i data-lucide="settings"></i></span>
+                                    <span class="nav-icon"><i data-lucide="settings" class="icon-settings"></i></span>
                                     <span class="nav-label">Settings</span>
                                     <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
                                 </a>
@@ -291,36 +302,78 @@
                             </div>
                         }
 
-                        <!-- Helpdesk / Audit Trail -->
-                        <a class="nav-link @IsActive("Helpdesk")" asp-controller="Helpdesk" asp-action="Index">
-                            <span class="nav-icon"><i data-lucide="life-buoy"></i></span>
-                            <span class="nav-label">Helpdesk & Support</span>
+                        <!-- IT OPERATIONS PORTAL -->
+                        <div class="nav-section-title">IT Operations</div>
+
+                        <!-- IT Dashboard -->
+                        <a class="nav-link @IsActive("ItPortal", "Dashboard")" href="/ItPortal/Dashboard">
+                            <span class="nav-icon"><i data-lucide="layout-dashboard" class="icon-overview"></i></span>
+                            <span class="nav-label">IT Dashboard</span>
                         </a>
+
+                        <!-- Asset Register -->
+                        <a class="nav-link @IsActive("AssetRegister", "Index")" href="/AssetRegister">
+                            <span class="nav-icon"><i data-lucide="database" class="icon-masters"></i></span>
+                            <span class="nav-label">Asset Register</span>
+                        </a>
+
+                        <!-- Software Licenses -->
+                        <a class="nav-link @IsActive("ItPortal", "SoftwareLicenses")" href="/ItPortal/SoftwareLicenses">
+                            <span class="nav-icon"><i data-lucide="file-spreadsheet" class="icon-upload"></i></span>
+                            <span class="nav-label">Software Licenses</span>
+                        </a>
+
+                        <!-- Help Desk Tickets -->
+                        <a class="nav-link @IsActive("Helpdesk", "Index")" href="/Helpdesk">
+                            <span class="nav-icon"><i data-lucide="life-buoy" class="icon-helpdesk"></i></span>
+                            <span class="nav-label">Help Desk Tickets</span>
+                        </a>
+
+                        <!-- Maintenance & SLA -->
+                        <a class="nav-link @IsActive("ItPortal", "Maintenance")" href="/ItPortal/Maintenance">
+                            <span class="nav-icon"><i data-lucide="wallet" class="icon-cash"></i></span>
+                            <span class="nav-label">Maintenance & SLA</span>
+                        </a>
+
+                        <!-- Knowledge Base -->
+                        <a class="nav-link @IsActive("ItPortal", "Kb")" href="/ItPortal/Kb">
+                            <span class="nav-icon"><i data-lucide="award" class="icon-incentive"></i></span>
+                            <span class="nav-label">Knowledge Base</span>
+                        </a>
+
+                        <!-- IT Config Masters -->
+                        @if (User.IsInRole("Super Admin"))
+                        {
+                            <a class="nav-link @IsActive("ItPortal", "Masters")" href="/ItPortal/Masters">
+                                <span class="nav-icon"><i data-lucide="settings" class="icon-settings"></i></span>
+                                <span class="nav-label">IT Config Masters</span>
+                            </a>
+                        }
                     </div>
                 </div>
 
                 <!-- Support Card -->
-                <div class="sidebar-help-card mx-3 my-3 p-3 text-white rounded" style="position: relative;">
+                <div class="sidebar-help-card mx-3 my-3 p-3 rounded" style="position: relative;">
                     <div style="position: absolute; top: 16px; right: 16px; font-size: 1.4rem; opacity: 0.85;">
-                        <i data-lucide="headphones" style="width:20px; height:20px; color:#ffffff;"></i>
+                        <i data-lucide="headphones" style="width:20px; height:20px; color:#0059bb;"></i>
                     </div>
-                    <div class="help-card-title" style="font-weight:700; font-size:13.5px; margin-bottom:4px; color:#ffffff !important;">Need Help?</div>
-                    <div class="help-card-subtext" style="font-size:11px; opacity:0.85; line-height:1.4; margin-bottom:12px; color:#cbd5e1 !important;">Our support team is available 24/7</div>
+                    <div class="help-card-title" style="font-weight:700; font-size:13.5px; margin-bottom:4px; color:#0b1c30 !important;">Need Help?</div>
+                    <div class="help-card-subtext" style="font-size:11px; opacity:0.85; line-height:1.4; margin-bottom:12px; color:#44474e !important;">Our support team is available 24/7</div>
                     <button class="help-card-btn" onclick="toggleFloatingChat()">Contact Support</button>
                 </div>
 
                 <!-- User Profile bottom panel -->
-                <div class="sidebar-user-profile" style="border-top:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); padding:12px 16px; display:flex; align-items:center; gap:10px;">
-                    <div class="user-avatar bg-primary text-white" style="width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; background:rgba(255,255,255,0.18) !important; color:#ffffff !important;">
+                <div class="sidebar-user-profile" style="padding:12px 16px; display:flex; align-items:center; gap:10px;">
+                    <div class="user-avatar bg-primary text-white" style="width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; background:#0059bb !important; color:#ffffff !important;">
                         @((User.Identity?.Name ?? "U")[0])
                     </div>
                     <div class="user-info" style="flex:1; line-height:1.2;">
-                        <div class="user-name" style="font-size:12.5px; font-weight:700; color:#ffffff !important;">@User.Identity?.Name</div>
-                        <div class="user-role" style="font-size:10.5px; color:#cbd5e1 !important; opacity:0.8;">
+                        <div class="user-name" style="font-size:12.5px; font-weight:700; color:#0b1c30 !important;">@User.Identity?.Name</div>
+                        <div class="user-role" style="font-size:10.5px; color:#74777f !important; opacity:0.8;">
                             @(User.IsInRole("Super Admin") ? "Super Admin" : User.IsInRole("HO Finance") ? "HO Finance" : User.IsInRole("Branch Manager") ? "Branch Manager" : User.IsInRole("Sales Executive") ? "Sales Executive" : "Representative")
                         </div>
                     </div>
-                    <button class="profile-actions-btn" onclick="location.href='/Account/Logout'" title="Logout" style="background:transparent; border:none; color:#cbd5e1; transition:all 0.2s ease; cursor:pointer;">
+                    <button class="profile-actions-btn" onclick="location.href='/Account/Logout'" title="Logout" style="background:transparent; border:none; color:#74777f; transition:all 0.2s ease; cursor:pointer;">
                         <i data-lucide="log-out" style="width:16px; height:16px;"></i>
                 </div>
             </aside>
@@ -328,14 +381,15 @@
             <!-- Content Wrapper -->
             <main class="content-wrapper">
                 <header class="topbar">
-                    <div class="topbar-left">
-                        <button class="sidebar-toggle-btn" id="sidebarToggle" title="Toggle sidebar">
-                            <i class="fa-solid fa-bars" id="sidebarToggleIcon"></i>
+                    <div class="topbar-left" style="display:flex; align-items:center; gap:16px;">
+                        <button class="sidebar-toggle-btn" id="sidebarToggle" title="Toggle sidebar" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center;">
+                            <svg id="sidebarToggleIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                         </button>
                         <div class="topbar-page-info">
                             <div class="breadcrumb-lite">Dealer Incentive Management <i class="fa-solid fa-chevron-right" style="font-size:0.5rem; margin: 0 4px; opacity: 0.5;"></i> @ViewData["Title"]</div>
                             <h1 class="page-title-text">@ViewData["Title"]</h1>
                         </div>
+                        @await RenderSectionAsync("TopbarActions", required: false)
                     </div>
                     
                     <div class="topbar-right">

@@ -566,8 +566,197 @@ public sealed class ReportsController(
     {
         var result = await reportBuilder.GetDealerSalesAsync(targetYear, quarters, months, partyTypes, categories, locations, dealerSubTypes, search, limit, cancellationToken);
         return Json(result);
-    }
+    }    /// <summary>
+    /// AJAX provider for Location Performance analysis reports following daily cutoff limits.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> GetLocationSales(
+        int targetYear,
+        string? quarters,
+        string? months,
+        string? partyTypes,
+        string? categories,
+        string? locations,
+        string? dealerSubTypes,
+        CancellationToken cancellationToken)
+    {
+        var query = db.Raws.AsNoTracking().Where(x => !x.IsDeleted && x.ImportLogId > 0);
 
+        if (currentUser.BranchId.HasValue && !currentUser.IsInRole("Super Admin") && !currentUser.IsInRole("HO Finance") && !currentUser.IsInRole("Auditor"))
+        {
+            query = query.Where(x => db.Parties.Any(p => p.PartyCode == x.OriginalCode && p.BranchId == currentUser.BranchId.Value));
+        }
+
+        if (!string.IsNullOrEmpty(quarters))
+        {
+            var qList = quarters.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(q => q.Trim()).ToList();
+            query = query.Where(x => x.Quarter != null && qList.Contains(x.Quarter));
+        }
+
+        if (!string.IsNullOrEmpty(months))
+        {
+            var mList = months.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(m => m.Trim()).ToList();
+            var monthNames = new[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+            var mNums = mList.Select(m => Array.IndexOf(monthNames, m) + 1).Where(n => n > 0).ToList();
+            if (mNums.Count > 0)
+            {
+                query = query.Where(x => x.MonthNumber.HasValue && mNums.Contains(x.MonthNumber.Value));
+            }
+        }
+
+        if (!string.IsNullOrEmpty(partyTypes))
+        {
+            var pList = partyTypes.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim().ToUpper()).ToList();
+            query = query.Where(x => x.PartyType != null && pList.Contains(x.PartyType.ToUpper()));
+        }
+
+        if (!string.IsNullOrEmpty(categories))
+        {
+            var cList = categories.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(c => c.Trim().ToUpper()).ToList();
+            query = query.Where(x => x.PartCategoryCode != null && cList.Contains(x.PartCategoryCode.ToUpper()));
+        }
+
+        if (!string.IsNullOrEmpty(locations))
+        {
+            var lList = locations.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim().ToUpper()).ToList();
+            query = query.Where(x => x.Loc != null && lList.Contains(x.Loc.ToUpper()));
+        }
+
+        if (!string.IsNullOrEmpty(dealerSubTypes))
+        {
+            var dList = dealerSubTypes.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(d => d.Trim().ToUpper()).ToList();
+            query = query.Where(x => x.DealerSubType != null && dList.Contains(x.DealerSubType.ToUpper()));
+        }
+
+        int compYear = targetYear - 1;
+
+        var groupedSales = await query
+            .Where(x => 
+                (x.YearNumber == targetYear || x.YearNumber == targetYear + 1 || x.YearNumber == compYear || x.YearNumber == compYear + 1) &&
+                !string.IsNullOrEmpty(x.Loc)
+            )
+            .GroupBy(x => new {
+                x.YearNumber,
+                x.MonthNumber,
+                x.Day,
+                x.Loc
+            })
+            .Select(g => new {
+                g.Key.YearNumber,
+                g.Key.MonthNumber,
+                Day = g.Key.Day ?? 1,
+                g.Key.Loc,
+                Sales = (double)g.Sum(x => x.NetRetailSelling)
+            })
+            .ToListAsync(cancellationToken);
+
+        var branches = await db.Branches.AsNoTracking().Where(x => !x.IsDeleted).ToListAsync(cancellationToken);
+        var branchNamesMap = branches.ToDictionary(x => x.Code, x => x.Name, StringComparer.OrdinalIgnoreCase);
+
+        var activeMonths = new List<int>();
+        if (!string.IsNullOrEmpty(months))
+        {
+            var mList = months.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(m => m.Trim()).ToList();
+            var monthNames = new[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+            activeMonths = mList.Select(m => Array.IndexOf(monthNames, m) + 1).Where(n => n > 0).ToList();
+        }
+        else
+        {
+            var latestMonthOpt = groupedSales
+                .Where(x => (x.YearNumber == targetYear && x.MonthNumber >= 4) || (x.YearNumber == targetYear + 1 && x.MonthNumber <= 3))
+                .Select(x => x.MonthNumber ?? 0)
+                .OrderByDescending(m => m >= 4 ? m - 3 : m + 9)
+                .FirstOrDefault();
+            if (latestMonthOpt > 0)
+            {
+                activeMonths.Add(latestMonthOpt);
+            }
+            else
+            {
+                activeMonths.Add(DateTime.UtcNow.Month);
+            }
+        }
+
+        int FiscalOrder(int m) => m >= 4 ? m - 3 : m + 9;
+        int GetCalendarYear(int fy, int m) => m >= 4 ? fy : fy + 1;
+
+        var latestMonth = activeMonths.OrderByDescending(m => FiscalOrder(m)).First();
+
+        var maxDay = groupedSales
+            .Where(x => x.MonthNumber == latestMonth && x.YearNumber == GetCalendarYear(targetYear, latestMonth))
+            .Select(x => x.Day)
+            .OrderByDescending(d => d)
+            .FirstOrDefault();
+        if (maxDay == 0) maxDay = 31;
+
+        var targetMonthList = activeMonths;
+        var prevMonthList = activeMonths.Select(m => m == 1 ? 12 : m - 1).ToList();
+
+        var ytdMonths = new List<int>();
+        int curM = 4;
+        while (true)
+        {
+            ytdMonths.Add(curM);
+            if (curM == latestMonth) break;
+            curM = curM == 12 ? 1 : curM + 1;
+            if (ytdMonths.Count > 12) break;
+        }
+
+        var uniqueLocs = groupedSales.Select(x => x.Loc).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var rows = new List<object>();
+
+        foreach (var loc in uniqueLocs)
+        {
+            var branchName = branchNamesMap.TryGetValue(loc, out var name) ? name : loc;
+
+            // MTD Sales: current selected latestMonth up to maxDay
+            double mtd = groupedSales
+                .Where(x => x.Loc.Equals(loc, StringComparison.OrdinalIgnoreCase) && 
+                            x.MonthNumber == latestMonth &&
+                            x.YearNumber == GetCalendarYear(targetYear, latestMonth) &&
+                            x.Day <= maxDay)
+                .Sum(x => x.Sales);
+
+            // LMTD Sales: same month previous year same range (up to maxDay)
+            double lmtd = groupedSales
+                .Where(x => x.Loc.Equals(loc, StringComparison.OrdinalIgnoreCase) && 
+                            x.MonthNumber == latestMonth &&
+                            x.YearNumber == GetCalendarYear(compYear, latestMonth) &&
+                            x.Day <= maxDay)
+                .Sum(x => x.Sales);
+            // YTD: April to selected latestMonth (with latestMonth up to maxDay)
+            double ytd = groupedSales
+                .Where(x => x.Loc.Equals(loc, StringComparison.OrdinalIgnoreCase) && (
+                            (FiscalOrder(x.MonthNumber ?? 0) < FiscalOrder(latestMonth) &&
+                             (((x.YearNumber == targetYear && x.MonthNumber >= 4) || (x.YearNumber == targetYear + 1 && x.MonthNumber <= 3))))
+                            ||
+                            (x.MonthNumber == latestMonth && x.YearNumber == GetCalendarYear(targetYear, latestMonth) && x.Day <= maxDay)
+                        )
+                )
+                .Sum(x => x.Sales);
+
+            // LYTD: same range previous year
+            double lytd = groupedSales
+                .Where(x => x.Loc.Equals(loc, StringComparison.OrdinalIgnoreCase) && (
+                            (FiscalOrder(x.MonthNumber ?? 0) < FiscalOrder(latestMonth) &&
+                             (((x.YearNumber == compYear && x.MonthNumber >= 4) || (x.YearNumber == compYear + 1 && x.MonthNumber <= 3))))
+                            ||
+                            (x.MonthNumber == latestMonth && x.YearNumber == GetCalendarYear(compYear, latestMonth) && x.Day <= maxDay)
+                        )
+                )
+                .Sum(x => x.Sales);
+            rows.Add(new {
+                LocCode = loc,
+                LocName = branchName,
+                Mtd = mtd,
+                Lmtd = lmtd,
+                Ytd = ytd,
+                Lytd = lytd
+            });
+        }
+
+        return Json(rows.OrderByDescending(r => ((dynamic)r).Ytd));
+    }
     /// <summary>
     /// Renders the Target vs Achievement comparison report for dealers.
     /// </summary>
@@ -577,8 +766,8 @@ public sealed class ReportsController(
     {
         if (!month.HasValue || !year.HasValue)
         {
-            month = 7;
-            year = 2026;
+            month = DateTime.UtcNow.Month;
+            year = DateTime.UtcNow.Year;
         }
 
         ViewBag.SelectedMonth = month.Value;

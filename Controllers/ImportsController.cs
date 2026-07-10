@@ -183,11 +183,22 @@ public sealed class ImportsController(
         try
         {
             var (locations, categories, partyTypes) = await importsAppService.GetCalcMetadataAsync(month, year, cancellationToken);
+            var (branches, alternateMappings) = await importsAppService.GetMonthlySalesDataAsync(cancellationToken);
+            
+            var seededBranches = branches.ToDictionary(
+                x => x.Code, 
+                x => new { allowedCategories = x.AllowedCategories, allowedPartyTypes = x.AllowedPartyTypes }, 
+                StringComparer.OrdinalIgnoreCase);
+            
+            var seededPartyMappings = alternateMappings;
+
             return Json(new
             {
                 locations,
                 categories,
-                partyTypes
+                partyTypes,
+                seededBranches,
+                seededPartyMappings
             });
         }
         catch (Exception ex)
@@ -206,12 +217,13 @@ public sealed class ImportsController(
         bool forceRecalculate = true,
         [FromForm] string? branchRulesJson = null,
         [FromForm] string? partyMappingsJson = null,
+        [FromForm] string? governorFiltersJson = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var jobId = await importsAppService.RunCalculationJobAsync(
-                month, year, forceRecalculate, branchRulesJson, partyMappingsJson, currentUser, cancellationToken);
+                month, year, forceRecalculate, branchRulesJson, partyMappingsJson, governorFiltersJson, currentUser, cancellationToken);
 
             return Json(new
             {
@@ -238,12 +250,13 @@ public sealed class ImportsController(
         bool forceRecalculate = true,
         [FromForm] string? branchRulesJson = null,
         [FromForm] string? partyMappingsJson = null,
+        [FromForm] string? governorFiltersJson = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var previewRows = await importsAppService.PreviewCalculationAsync(
-                month, year, forceRecalculate, branchRulesJson, partyMappingsJson, currentUser, cancellationToken);
+                month, year, forceRecalculate, branchRulesJson, partyMappingsJson, governorFiltersJson, currentUser, cancellationToken);
             return Json(previewRows);
         }
         catch (Exception ex)
@@ -373,6 +386,16 @@ public sealed class ImportsController(
     // =========================================================
     // APPROVE CALCULATION FOR MONTH
     // =========================================================
+    [AllowAnonymous]
+    [HttpGet]
+    [Route("/RunCalculationTest")]
+    public async Task<IActionResult> RunCalculationTest(int month, int year, CancellationToken ct)
+    {
+        var jobId = await importsAppService.RunCalculationJobAsync(
+            month, year, true, null, null, null, currentUser, ct);
+        return Ok(new { jobId = jobId, status = "Started calculation" });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ApproveCalculation(int month, int year, CancellationToken ct)

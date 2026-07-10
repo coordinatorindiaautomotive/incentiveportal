@@ -1,115 +1,199 @@
 using IncentivePortal.Data;
+using IncentivePortal.Helpers;
 using IncentivePortal.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
-using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace IncentivePortal.Controllers;
 
 [Authorize]
-public sealed class HelpdeskController(IncentiveDbContext db) : Controller
+public sealed class HelpdeskController(
+    IncentiveDbContext db,
+    ICurrentUser currentUser
+) : Controller
 {
-    public async Task<IActionResult> Index(string? status, string? priority, string? search)
+    private bool IsHO() =>
+        currentUser.IsInRole(AppRoles.SuperAdmin) ||
+        currentUser.IsInRole(AppRoles.HOFinance) ||
+        currentUser.IsInRole(AppRoles.Auditor);
+
+    private bool IsEngineer() =>
+        currentUser.IsInRole(AppRoles.SuperAdmin) ||
+        currentUser.IsInRole(AppRoles.HOFinance) ||
+        currentUser.IsInRole(AppRoles.BranchManager);
+
+    private IQueryable<ItTicket> ScopedTickets() =>
+        IsHO()
+            ? db.ItTickets.Include(x => x.Branch)
+            : db.ItTickets.Include(x => x.Branch)
+                           .Where(x => x.BranchId == currentUser.BranchId || x.Requester == currentUser.UserName);
+
+    public IActionResult Index() => View();
+
+    [HttpGet]
+    public async Task<IActionResult> GetMasterOptions(CancellationToken ct)
     {
-        var query = db.HelpdeskTickets.Where(t => !t.IsDeleted);
+        var allMasters = await db.ItMasterDatas
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.SortOrder).ThenBy(x => x.Name)
+            .Select(x => new { x.Id, x.Type, x.Name, x.Code })
+            .ToListAsync(ct);
 
-        if (!string.IsNullOrEmpty(status))
-            query = query.Where(t => t.Status == status);
-        if (!string.IsNullOrEmpty(priority))
-            query = query.Where(t => t.Priority == priority);
-        if (!string.IsNullOrEmpty(search))
-            query = query.Where(t => t.Title.Contains(search) || t.Description.Contains(search) || (t.AssociatedPartyCode != null && t.AssociatedPartyCode.Contains(search)));
-
-        var tickets = await query
-            .OrderByDescending(t => t.CreatedAt)
-            .ToListAsync();
-
-        ViewBag.StatusFilter = status;
-        ViewBag.PriorityFilter = priority;
-        ViewBag.SearchFilter = search;
-
-        // Fetch dealers for the Ticket creation dropdown
-        ViewBag.Parties = await db.Parties
-            .Where(p => !p.IsDeleted)
-            .OrderBy(p => p.PartyName)
-            .Select(p => new { p.PartyCode, p.PartyName })
-            .ToListAsync();
-
-        // Fetch users for assignments
-        ViewBag.Users = await db.Users
-            .Where(u => !u.IsDeleted)
-            .OrderBy(u => u.UserName)
-            .Select(u => u.UserName)
-            .ToListAsync();
-
-        // Count totals
-        ViewBag.TotalCount = await db.HelpdeskTickets.CountAsync(t => !t.IsDeleted);
-        ViewBag.NewCount = await db.HelpdeskTickets.CountAsync(t => t.Status == "New" && !t.IsDeleted);
-        ViewBag.InprogressCount = await db.HelpdeskTickets.CountAsync(t => (t.Status == "InProgress" || t.Status == "Assigned") && !t.IsDeleted);
-        ViewBag.ResolvedCount = await db.HelpdeskTickets.CountAsync(t => (t.Status == "Resolved" || t.Status == "Closed") && !t.IsDeleted);
-
-        // Prepopulate Knowledge Base Articles
-        ViewBag.KBArticles = await db.KnowledgeBaseArticles
-            .Where(a => !a.IsDeleted)
-            .OrderByDescending(a => a.ViewsCount)
-            .Take(5)
-            .ToListAsync();
-
-        return View(tickets);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Save(HelpdeskTicket ticket)
-    {
-        ticket.Remarks = ticket.Remarks ?? string.Empty;
-        ticket.AssociatedPartyCode = ticket.AssociatedPartyCode ?? string.Empty;
-        ticket.AssignedTo = ticket.AssignedTo ?? string.Empty;
-        ticket.AttachmentPath = ticket.AttachmentPath ?? string.Empty;
-
-        if (ticket.Id == 0)
-        {
-            ticket.CreatedAt = DateTime.UtcNow;
-            ticket.CreatedBy = User.Identity?.Name ?? "system";
-            ticket.Status = string.IsNullOrEmpty(ticket.AssignedTo) ? "New" : "Assigned";
-            ticket.SlaExpiry = DateTime.UtcNow.AddHours(48); // Standard SLA is 48 hours
-            db.HelpdeskTickets.Add(ticket);
-        }
-        else
-        {
-            var existing = await db.HelpdeskTickets.FindAsync(ticket.Id);
-            if (existing == null || existing.IsDeleted)
-                return NotFound("Ticket not found.");
-
-            existing.Title = ticket.Title;
-            existing.Description = ticket.Description;
-            existing.Priority = ticket.Priority;
-            existing.Status = ticket.Status;
-            existing.AssignedTo = ticket.AssignedTo;
-            existing.Category = ticket.Category;
-            existing.Remarks = ticket.Remarks;
-            existing.AssociatedPartyCode = ticket.AssociatedPartyCode;
-            existing.UpdatedAt = DateTime.UtcNow;
-            existing.UpdatedBy = User.Identity?.Name ?? "system";
-        }
-
-        await db.SaveChangesAsync();
-        return Json(new { ok = true, message = "Helpdesk Ticket saved successfully." });
+        return Json(new {
+            categories = allMasters.Where(x => x.Type == "TicketCategory").ToList(),
+            subCategories = allMasters.Where(x => x.Type == "TicketSubCategory").ToList(),
+            priorities = allMasters.Where(x => x.Type == "Priority").ToList(),
+            severities = allMasters.Where(x => x.Type == "Severity").ToList(),
+            impacts = allMasters.Where(x => x.Type == "Impact").ToList(),
+            rootCauses = allMasters.Where(x => x.Type == "RootCause").ToList(),
+            resolutionTypes = allMasters.Where(x => x.Type == "ResolutionType").ToList(),
+            departments = allMasters.Where(x => x.Type == "Department").ToList(),
+            statuses = allMasters.Where(x => x.Type == "Status").ToList()
+        });
     }
 
     [HttpGet]
-    public async Task<IActionResult> Details(int id)
+    public async Task<IActionResult> GetTickets(
+        string? status, int? priorityId, int? categoryId, string? search,
+        int page = 1, int pageSize = 15, CancellationToken ct = default)
     {
-        var ticket = await db.HelpdeskTickets
-            .Include(t => t.Comments)
-            .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
+        var q = ScopedTickets();
+        if (!string.IsNullOrWhiteSpace(status)) q = q.Where(x => x.Status == status);
+        if (priorityId.HasValue && priorityId > 0) q = q.Where(x => x.PriorityId == priorityId);
+        if (categoryId.HasValue && categoryId > 0) q = q.Where(x => x.CategoryId == categoryId);
+        
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            q = q.Where(x => x.Subject.Contains(search) || x.TicketNumber.Contains(search) ||
+                              x.Description.Contains(search) || x.Requester.Contains(search));
+        }
 
-        if (ticket == null)
-            return NotFound("Ticket not found.");
+        var total = await q.CountAsync(ct);
+        var rawItems = await q.OrderByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .ToListAsync(ct);
+
+        // Map lookup details
+        var masterIds = rawItems.SelectMany(x => new[] {
+            x.DepartmentId, x.CategoryId, x.SubCategoryId, x.PriorityId, x.SeverityId, x.ImpactId
+        }).Distinct().ToList();
+
+        var masterMap = await db.ItMasterDatas
+            .Where(x => masterIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
+
+        var items = rawItems.Select(x => new {
+            x.Id, x.TicketNumber, x.Requester, x.Subject, x.Status, x.AssignedEngineer,
+            department = masterMap.TryGetValue(x.DepartmentId, out var dept) ? dept : "Other",
+            category = masterMap.TryGetValue(x.CategoryId, out var cat) ? cat : "Other",
+            subCategory = masterMap.TryGetValue(x.SubCategoryId, out var sub) ? sub : "Other",
+            priority = masterMap.TryGetValue(x.PriorityId, out var pri) ? pri : "Medium",
+            severity = masterMap.TryGetValue(x.SeverityId, out var sev) ? sev : "Medium",
+            impact = masterMap.TryGetValue(x.ImpactId, out var imp) ? imp : "Low",
+            x.DepartmentId, x.CategoryId, x.SubCategoryId, x.PriorityId, x.SeverityId, x.ImpactId,
+            x.Description, x.AttachmentPath, x.SlaBreached,
+            createdAt = x.CreatedAt.ToString("dd MMM yyyy HH:mm"),
+            slaDeadline = x.SlaDeadline.ToString("yyyy-MM-dd HH:mm"),
+            branchName = x.Branch.Name
+        }).ToList();
+
+        return Json(new { total, page, pageSize, items });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Save([FromBody] ItTicket model, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(model.Subject)) return BadRequest(new { message = "Subject is required." });
+        if (string.IsNullOrWhiteSpace(model.Description)) return BadRequest(new { message = "Description is required." });
+
+        if (model.Id == 0)
+        {
+            var count = await db.ItTickets.CountAsync(ct);
+            model.TicketNumber = $"TKT-{(count + 1):D6}";
+            model.Requester = currentUser.UserName;
+            model.BranchId = currentUser.BranchId ?? 1;
+            model.Status = "New";
+            model.CreatedAt = DateTime.UtcNow;
+            model.CreatedBy = currentUser.UserName;
+
+            // Calculate SLA Deadline
+            var slaPolicy = await db.ItSlaPolicies
+                .FirstOrDefaultAsync(x => x.PriorityId == model.PriorityId && x.IsActive && !x.IsDeleted, ct);
+            var resolutionHours = slaPolicy?.ResolutionTimeHours ?? 48; // fallback 48h
+            model.SlaDeadline = DateTime.UtcNow.AddHours(resolutionHours);
+
+            db.ItTickets.Add(model);
+        }
+        else
+        {
+            var existing = await db.ItTickets.FindAsync(new object[] { model.Id }, ct);
+            if (existing == null || existing.IsDeleted) return NotFound(new { message = "Ticket not found." });
+            
+            // Engineers can update status and assignment, Requesters can edit subject/desc if ticket is new
+            if (IsEngineer())
+            {
+                existing.Status = model.Status;
+                existing.AssignedEngineer = model.AssignedEngineer;
+                existing.PriorityId = model.PriorityId;
+                existing.SeverityId = model.SeverityId;
+                existing.ImpactId = model.ImpactId;
+                existing.RootCauseId = model.RootCauseId;
+                existing.ResolutionTypeId = model.ResolutionTypeId;
+                existing.ResolutionText = model.ResolutionText;
+
+                if (model.Status == "Resolved" || model.Status == "Closed")
+                {
+                    existing.ClosureDate = DateTime.UtcNow;
+                    if (DateTime.UtcNow > existing.SlaDeadline)
+                    {
+                        existing.SlaBreached = true;
+                    }
+                }
+            }
+            else if (existing.Requester == currentUser.UserName && existing.Status == "New")
+            {
+                existing.Subject = model.Subject;
+                existing.Description = model.Description;
+                existing.CategoryId = model.CategoryId;
+                existing.SubCategoryId = model.SubCategoryId;
+            }
+            else
+            {
+                return Forbid();
+            }
+
+            existing.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedBy = currentUser.UserName;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Json(new { ok = true, message = "Help Desk Ticket saved successfully.", ticketNumber = model.TicketNumber });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Details(int id, CancellationToken ct)
+    {
+        var ticket = await db.ItTickets
+            .Include(t => t.Branch)
+            .Include(t => t.Comments)
+            .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted, ct);
+
+        if (ticket == null) return NotFound(new { message = "Ticket not found." });
+
+        var masterIds = new[] {
+            ticket.DepartmentId, ticket.CategoryId, ticket.SubCategoryId, ticket.PriorityId,
+            ticket.SeverityId, ticket.ImpactId, ticket.RootCauseId ?? 0, ticket.ResolutionTypeId ?? 0
+        }.Distinct().ToList();
+
+        var masterMap = await db.ItMasterDatas
+            .Where(x => masterIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
 
         var comments = ticket.Comments
             .Where(c => !c.IsDeleted)
@@ -121,66 +205,99 @@ public sealed class HelpdeskController(IncentiveDbContext db) : Controller
                 createdBy = c.CreatedBy
             }).ToList();
 
-        return Json(new {
+        var ticketData = new {
             ticket.Id,
-            ticket.Title,
+            ticket.TicketNumber,
+            ticket.Requester,
+            ticket.Subject,
             ticket.Description,
-            ticket.Priority,
             ticket.Status,
-            ticket.AssignedTo,
-            ticket.Category,
-            ticket.Remarks,
-            ticket.AssociatedPartyCode,
-            slaExpiry = ticket.SlaExpiry?.ToString("yyyy-MM-dd HH:mm"),
+            ticket.AssignedEngineer,
+            ticket.AttachmentPath,
+            ticket.ResolutionText,
+            ticket.UserFeedbackScore,
+            ticket.UserFeedbackText,
+            ticket.SlaBreached,
+            branchName = ticket.Branch.Name,
+            department = masterMap.TryGetValue(ticket.DepartmentId, out var dept) ? dept : "Other",
+            category = masterMap.TryGetValue(ticket.CategoryId, out var cat) ? cat : "Other",
+            subCategory = masterMap.TryGetValue(ticket.SubCategoryId, out var sub) ? sub : "Other",
+            priority = masterMap.TryGetValue(ticket.PriorityId, out var pri) ? pri : "Medium",
+            severity = masterMap.TryGetValue(ticket.SeverityId, out var sev) ? sev : "Medium",
+            impact = masterMap.TryGetValue(ticket.ImpactId, out var imp) ? imp : "Low",
+            rootCause = ticket.RootCauseId.HasValue && masterMap.TryGetValue(ticket.RootCauseId.Value, out var rc) ? rc : string.Empty,
+            resolutionType = ticket.ResolutionTypeId.HasValue && masterMap.TryGetValue(ticket.ResolutionTypeId.Value, out var rt) ? rt : string.Empty,
+            ticket.DepartmentId, ticket.CategoryId, ticket.SubCategoryId, ticket.PriorityId, ticket.SeverityId, ticket.ImpactId, ticket.RootCauseId, ticket.ResolutionTypeId,
+            createdAt = ticket.CreatedAt.ToString("dd MMM yyyy HH:mm"),
+            slaDeadline = ticket.SlaDeadline.ToString("yyyy-MM-dd HH:mm"),
+            closureDate = ticket.ClosureDate?.ToString("dd MMM yyyy HH:mm") ?? string.Empty,
             comments
-        });
+        };
+
+        return Json(ticketData);
     }
 
     [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddComment(int ticketId, string commentText, bool isInternal)
+    public async Task<IActionResult> AddComment(int ticketId, string commentText, bool isInternal, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(commentText))
-            return BadRequest("Comment text cannot be empty.");
+        if (string.IsNullOrWhiteSpace(commentText)) return BadRequest(new { message = "Comment text cannot be empty." });
 
-        var ticket = await db.HelpdeskTickets.FindAsync(ticketId);
-        if (ticket == null || ticket.IsDeleted)
-            return NotFound("Ticket not found.");
+        var ticket = await db.ItTickets.FindAsync(new object[] { ticketId }, ct);
+        if (ticket == null || ticket.IsDeleted) return NotFound(new { message = "Ticket not found." });
 
-        var comment = new TicketComment
-        {
+        var comment = new ItTicketComment {
             TicketId = ticketId,
             CommentText = commentText,
             IsInternal = isInternal,
             CreatedAt = DateTime.UtcNow,
-            CreatedBy = User.Identity?.Name ?? "system"
+            CreatedBy = currentUser.UserName
         };
 
-        db.TicketComments.Add(comment);
+        db.ItTicketComments.Add(comment);
 
-        // Auto-progress ticket status on first comment if it was 'New' or 'Assigned'
+        // Auto-progress status from New/Assigned to In Progress on comment add
         if (ticket.Status == "New" || ticket.Status == "Assigned")
         {
             ticket.Status = "InProgress";
             ticket.UpdatedAt = DateTime.UtcNow;
-            ticket.UpdatedBy = User.Identity?.Name ?? "system";
+            ticket.UpdatedBy = currentUser.UserName;
         }
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return Json(new { ok = true, message = "Comment added successfully." });
     }
 
     [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> CloseTicket(int ticketId, int score, string feedback, CancellationToken ct)
     {
-        var ticket = await db.HelpdeskTickets.FindAsync(id);
-        if (ticket == null) return NotFound("Ticket not found.");
+        var ticket = await db.ItTickets.FindAsync(new object[] { ticketId }, ct);
+        if (ticket == null || ticket.IsDeleted) return NotFound(new { message = "Ticket not found." });
+
+        if (ticket.Requester != currentUser.UserName && !IsHO()) return Forbid();
+
+        ticket.Status = "Closed";
+        ticket.UserFeedbackScore = score;
+        ticket.UserFeedbackText = feedback;
+        ticket.ClosureDate = DateTime.UtcNow;
+        ticket.UpdatedAt = DateTime.UtcNow;
+        ticket.UpdatedBy = currentUser.UserName;
+
+        await db.SaveChangesAsync(ct);
+        return Json(new { ok = true, message = "Ticket closed successfully with feedback." });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        if (!IsHO()) return Forbid();
+        var ticket = await db.ItTickets.FindAsync(new object[] { id }, ct);
+        if (ticket == null) return NotFound(new { message = "Ticket not found." });
 
         ticket.IsDeleted = true;
         ticket.UpdatedAt = DateTime.UtcNow;
-        ticket.UpdatedBy = User.Identity?.Name ?? "system";
-        await db.SaveChangesAsync();
+        ticket.UpdatedBy = currentUser.UserName;
+
+        await db.SaveChangesAsync(ct);
         return Json(new { ok = true, message = "Ticket deleted successfully." });
     }
 }

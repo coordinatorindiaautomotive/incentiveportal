@@ -617,6 +617,10 @@ public sealed class ImportPreviewService(
             var loc = ReaderStr(rdr, colLoc);
             var cat = hasCatCode ? ReaderStr(rdr, colCat) : string.Empty;
             var type = hasPartyType ? ReaderStr(rdr, colType) : string.Empty;
+            if (!string.IsNullOrEmpty(type) && (type.Equals("Others", StringComparison.OrdinalIgnoreCase) || type.Equals("Other", StringComparison.OrdinalIgnoreCase)))
+            {
+                type = "WALK-IN CUSTOMER";
+            }
 
             var rowMonth = period.Month;
             var rowYear = period.Year;

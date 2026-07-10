@@ -1012,25 +1012,17 @@ window.Dashboard = (function() {
             clearTimeout(debounceTimer);
         }
 
-        const yrSel = document.getElementById('yrSel');
-        const yr = yrSel ? yrSel.value : 'current';
-        const activeLabel = (yr === 'current') ? 'FY ' + window.ANCHOR_YEAR : 'FY ' + (window.ANCHOR_YEAR - 1);
-        const compLabel = (yr === 'current') ? 'FY ' + (window.ANCHOR_YEAR - 1) : 'FY ' + window.ANCHOR_YEAR;
-
-        const dsh = document.getElementById('dealerSalesHeader');
-        if (dsh) dsh.textContent = 'Sales (' + activeLabel + ')';
-        const dch = document.getElementById('dealerCompHeader');
-        if (dch) dch.textContent = 'Sales (' + compLabel + ')';
-
         const tbody = document.getElementById('dealerSalesBody');
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
-                    <td><div class="shimmer" style="width: 30px;"></div></td>
-                    <td><div class="shimmer" style="width: 80%;"></div></td>
-                    <td class="r"><div class="shimmer" style="width: 60px;"></div></td>
-                    <td class="r"><div class="shimmer" style="width: 60px;"></div></td>
-                    <td class="r"><div class="shimmer" style="width: 80px;"></div></td>
+                    <td><div class="shimmer" style="width: 120px;"></div></td>
+                    <td class="r"><div class="shimmer" style="width: 60px; margin-left: auto;"></div></td>
+                    <td class="r"><div class="shimmer" style="width: 60px; margin-left: auto;"></div></td>
+                    <td class="r"><div class="shimmer" style="width: 60px; margin-left: auto;"></div></td>
+                    <td class="r"><div class="shimmer" style="width: 60px; margin-left: auto;"></div></td>
+                    <td class="r"><div class="shimmer" style="width: 60px; margin-left: auto;"></div></td>
+                    <td class="r"><div class="shimmer" style="width: 60px; margin-left: auto;"></div></td>
                 </tr>
             `.repeat(5);
         }
@@ -1059,78 +1051,64 @@ window.Dashboard = (function() {
                 partyTypes: [...State.ps].join(','),
                 categories: [...State.cats].join(','),
                 locations: [...State.ls].join(','),
-                dealerSubTypes: [...State.ds].join(','),
-                search: document.getElementById('dealerSearchInput') ? document.getElementById('dealerSearchInput').value.trim() : '',
-                limit: document.getElementById('dealerLimitSel') ? document.getElementById('dealerLimitSel').value : '50'
+                dealerSubTypes: [...State.ds].join(',')
             });
 
-            const res = await fetchJson(`/Reports/GetDealerSales?${params.toString()}`, { signal });
+            const res = await fetchJson(`/Reports/GetLocationSales?${params.toString()}`, { signal });
             if (!res) return;
 
             const tbody = document.getElementById('dealerSalesBody');
             if (!tbody) return;
 
-            if (!res.rows || res.rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--t2);padding:20px;">No dealer records match active filters or search query</td></tr>`;
+            if (res.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--t2);padding:20px;">No location records match active filters</td></tr>`;
                 const dct = document.getElementById('dealerCountTag');
-                if (dct) dct.textContent = '0 DEALERS';
+                if (dct) dct.textContent = '0 LOCATIONS';
                 return;
             }
 
-            const limitVal = document.getElementById('dealerLimitSel') ? document.getElementById('dealerLimitSel').value : '50';
             const dct = document.getElementById('dealerCountTag');
             if (dct) {
-                if (limitVal !== 'all') {
-                    dct.textContent = `TOP ${res.rows.length} OF ${res.total}`;
-                } else {
-                    dct.textContent = `ALL ${res.total} DEALERS`;
-                }
+                dct.textContent = `${res.length} LOCATIONS`;
             }
 
-            tbody.innerHTML = res.rows.map((d, i) => {
-                const pctVal = d.pct;
-                const diffVal = d.diff;
-                const diffSign = diffVal >= 0 ? '+' : '';
-                const diffColor = diffVal >= 0 ? 'var(--success)' : 'var(--danger)';
+            tbody.innerHTML = res.map((d, i) => {
+                const mtdGrowth = d.lmtd > 0 ? ((d.mtd - d.lmtd) / d.lmtd) * 100 : (d.mtd > 0 ? 100 : 0);
+                const ytdGrowth = d.lytd > 0 ? ((d.ytd - d.lytd) / d.lytd) * 100 : (d.ytd > 0 ? 100 : 0);
 
-                let pctBadge = '';
-                if (pctVal !== null) {
-                    const isUp = pctVal >= 0;
-                    const badgeBg = isUp ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
-                    const badgeColor = isUp ? 'var(--success)' : 'var(--danger)';
-                    const arrow = isUp ? '&#x2197;' : '&#x2198;';
-                    pctBadge = `<span style="margin-left:8px;font-size:11px;padding:3px 8px;border-radius:12px;background:${badgeBg};color:${badgeColor};font-weight:700;">${arrow} ${Math.abs(pctVal).toFixed(1)}%</span>`;
-                } else if (d.activeSales > 0 && d.compSales === 0) {
-                    pctBadge = `<span style="margin-left:8px;font-size:11px;padding:3px 8px;border-radius:12px;background:rgba(16, 185, 129, 0.1);color:var(--success);font-weight:700;">NEW</span>`;
-                } else {
-                    pctBadge = `<span style="margin-left:8px;font-size:11px;padding:3px 8px;border-radius:12px;background:rgba(100, 116, 139, 0.1);color:var(--text-muted);font-weight:700;">&mdash;</span>`;
-                }
+                const mtdColor = mtdGrowth >= 0 ? 'var(--success)' : 'var(--danger)';
+                const mtdSign = mtdGrowth >= 0 ? '+' : '';
+                const mtdArrow = mtdGrowth >= 0 ? '▲' : '▼';
+
+                const ytdColor = ytdGrowth >= 0 ? 'var(--success)' : 'var(--danger)';
+                const ytdSign = ytdGrowth >= 0 ? '+' : '';
+                const ytdArrow = ytdGrowth >= 0 ? '▲' : '▼';
 
                 return `
-                    <tr>
-                        <td style="font-weight:700;color:var(--text-secondary)">#${i + 1}</td>
-                        <td class="nm" style="max-width:300px;white-space:normal;">
-                            <span class="party-code-pill" style="display:inline-block;font-size:10px;padding:2px 6px;background:rgba(30,64,175,0.06);border:1px solid rgba(30,64,175,0.15);border-radius:4px;color:var(--primary);font-weight:700;margin-right:8px;margin-bottom:4px;">${d.partyCode}</span>
-                            <span style="font-weight:600;color:var(--text-primary);">${d.partyName}</span>
+                    <tr style="border-bottom: 1px solid var(--border-subtle);">
+                        <td class="nm" style="padding: 12px 16px; font-weight:600; color:var(--text-primary);">
+                            ${d.locName} <span style="font-size:10px; color:var(--text-muted);">(${d.locCode})</span>
                         </td>
-                        <td class="r" style="font-weight:700;color:var(--text-primary)">${fmt(d.activeSales)}</td>
-                        <td class="r" style="color:var(--text-secondary);font-weight:500;">${fmt(d.compSales)}</td>
-                        <td class="r" style="font-weight:600;color:${diffColor}">
-                            ${diffSign}${fmt(diffVal)}
-                            ${pctBadge}
+                        <td class="r font-mono" style="padding: 12px 16px; font-weight:600; color:var(--text-primary); text-align: right;">${fmt(d.mtd)}</td>
+                        <td class="r font-mono" style="padding: 12px 16px; color:var(--text-secondary); text-align: right;">${fmt(d.lmtd)}</td>
+                        <td class="r font-mono" style="padding: 12px 16px; font-weight:700; color:${mtdColor}; text-align: right;">
+                            <span style="font-size:11px; margin-right:4px;">${mtdArrow}</span>${mtdSign}${mtdGrowth.toFixed(1)}%
+                        </td>
+                        <td class="r font-mono" style="padding: 12px 16px; font-weight:600; color:var(--text-primary); text-align: right;">${fmt(d.ytd)}</td>
+                        <td class="r font-mono" style="padding: 12px 16px; color:var(--text-secondary); text-align: right;">${fmt(d.lytd)}</td>
+                        <td class="r font-mono" style="padding: 12px 16px; font-weight:700; color:${ytdColor}; text-align: right;">
+                            <span style="font-size:11px; margin-right:4px;">${ytdArrow}</span>${ytdSign}${ytdGrowth.toFixed(1)}%
                         </td>
                     </tr>
                 `;
             }).join('');
-
-            // Also load Dealer Sub-Type Split Donut
 
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error('Failed to load dealer sales:', err);
                 const tbody = document.getElementById('dealerSalesBody');
                 if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--rose);padding:20px;">Error loading dealer records: ${err.message}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--rose);padding:20px;">Error loading location records: ${err.message}</td></tr>`;
                 }
             }
         }
@@ -1223,13 +1201,12 @@ window.Dashboard = (function() {
         const r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16);
         return `rgba(${r},${g},${b},${a})`;
     }
-
     function fmt(v) {
         if (v == null || isNaN(v)) return '—';
         const a = Math.abs(v);
-        if (a >= 1e7) return '₹' + (v / 1e7).toFixed(2) + 'Cr';
-        if (a >= 1e5) return '₹' + (v / 1e5).toFixed(2) + 'L';
-        return '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+        if (a >= 1e7) return (v / 1e7).toFixed(2) + 'Cr';
+        if (a >= 1e5) return (v / 1e5).toFixed(2) + 'L';
+        return v.toLocaleString('en-IN', { maximumFractionDigits: 0 });
     }
 
     function fts(v) {

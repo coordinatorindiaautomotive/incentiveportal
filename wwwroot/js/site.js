@@ -480,6 +480,7 @@ $(document).ready(function() {
         const nextTheme = isDark ? 'light' : 'dark';
         localStorage.setItem('theme', nextTheme);
         applyTheme(nextTheme);
+        window.dispatchEvent(new CustomEvent('globalThemeChanged', { detail: { isDark: nextTheme === 'dark' } }));
         portalToast('Theme updated to ' + nextTheme + ' mode', 'success');
     });
 
