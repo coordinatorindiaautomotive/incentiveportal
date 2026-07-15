@@ -1,4 +1,4 @@
-﻿@model IReadOnlyList<IncentivePortal.Models.SsIncentive>
+@model IReadOnlyList<IncentivePortal.Models.SsIncentive>
 @inject IncentivePortal.Data.IncentiveDbContext Db
 @{
     ViewData["Title"] = "Corporate Transfer Reconciliation Control";
@@ -183,6 +183,47 @@
         </div>
     </div>
 </div>
+
+@if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+{
+<!-- Run Reconciliation Action Card -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm p-4" style="border-radius: 16px; background: linear-gradient(135deg, rgba(6,182,212,0.04) 0%, rgba(13,82,214,0.04) 100%); border: 1px solid rgba(13,82,214,0.10);">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center justify-content-center rounded-3 text-white" style="width:46px;height:46px;background:linear-gradient(135deg,#0d52d6,#06b6d4);flex-shrink:0;">
+                        <i class="fa-solid fa-rotate fa-lg"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold text-dark mb-0">Re-Run Reconciliation</h5>
+                        <p class="text-muted small mb-0">Re-applies status &amp; date from existing bank records. Marks outstanding parties without a match as <strong>Credit Party</strong>.</p>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small fw-semibold" id="run-recon-period-label">Period: —</span>
+                    <button type="button" id="btnRunReconciliation"
+                            class="btn btn-primary d-flex align-items-center gap-2"
+                            style="height:42px;border-radius:8px;font-weight:600;padding:0 20px;box-shadow:0 4px 12px rgba(13,82,214,0.2);">
+                        <i class="fa-solid fa-play" id="btnRunReconIcon"></i>
+                        <span id="btnRunReconText">Run Reconciliation</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Result display -->
+            <div id="run-recon-result" class="mt-3" style="display:none;">
+                <div id="run-recon-alert" class="alert mb-2" role="alert" style="border-radius:8px;font-size:0.88rem;"></div>
+                <div id="run-recon-logs-wrapper" style="display:none;">
+                    <button class="btn btn-sm btn-outline-secondary mb-2" onclick="$('#run-recon-logs').toggle();">
+                        <i class="fa-solid fa-terminal me-1"></i> Toggle Logs
+                    </button>
+                    <pre id="run-recon-logs" class="bg-dark text-light p-3 rounded" style="font-size:0.75rem;max-height:220px;overflow-y:auto;display:none;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+}
 
 <!-- Metrics & Quick Insights Cards -->
 <div class="row g-3 mb-4">
@@ -2127,8 +2168,76 @@ $(document).ready(function() {
                     $('#btnReconcileSubmit').prop('disabled', true);
                 }
             });
+
+            // ── Run Reconciliation button ─────────────────────────────────────────────
+            function updateRunReconPeriodLabel() {
+                var m = $('#reconcile-month').val();
+                var y = $('#reconcile-year').val();
+                var monthName = new Date(y, m - 1, 1).toLocaleString('default', { month: 'long' });
+                $('#run-recon-period-label').text('Period: ' + monthName + ' ' + y);
+            }
+
+            // Update label on dropdown changes
+            $('#reconcile-month, #reconcile-year').on('change', function () {
+                updateRunReconPeriodLabel();
+            });
+            updateRunReconPeriodLabel(); // Init on load
+
+            $('#btnRunReconciliation').on('click', function () {
+                var month = $('#reconcile-month').val();
+                var year  = $('#reconcile-year').val();
+                if (!month || !year) {
+                    alert('Please select a month and year first.');
+                    return;
+                }
+
+                var btn = $(this);
+                btn.prop('disabled', true);
+                $('#btnRunReconIcon').removeClass('fa-play').addClass('fa-spinner fa-spin');
+                $('#btnRunReconText').text('Running...');
+                $('#run-recon-result').hide();
+                $('#run-recon-logs-wrapper').hide();
+                $('#run-recon-logs').text('');
+
+                $.post('@Url.Action("RunReconciliation","Transfers")', {
+                    month: month,
+                    year: year,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').first().val()
+                })
+                .done(function (data) {
+                    var alertEl = $('#run-recon-alert');
+                    alertEl.removeClass('alert-success alert-danger alert-warning');
+                    if (data.ok) {
+                        alertEl.addClass('alert-success');
+                        alertEl.html('<i class="fa-solid fa-circle-check me-2"></i><strong>' + data.message + '</strong>');
+                    } else {
+                        alertEl.addClass('alert-warning');
+                        alertEl.html('<i class="fa-solid fa-triangle-exclamation me-2"></i>' + (data.message || 'Completed with warnings.'));
+                    }
+                    if (data.logs && data.logs.length > 0) {
+                        $('#run-recon-logs').text(data.logs.join('\n'));
+                        $('#run-recon-logs-wrapper').show();
+                    }
+                    $('#run-recon-result').show();
+                    // Reload table data
+                    if (typeof loadTransfersTable === 'function') loadTransfersTable();
+                })
+                .fail(function (xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Server error. Please try again.';
+                    var alertEl = $('#run-recon-alert');
+                    alertEl.removeClass('alert-success alert-warning').addClass('alert-danger');
+                    alertEl.html('<i class="fa-solid fa-circle-xmark me-2"></i>' + msg);
+                    $('#run-recon-result').show();
+                })
+                .always(function () {
+                    btn.prop('disabled', false);
+                    $('#btnRunReconIcon').removeClass('fa-spinner fa-spin').addClass('fa-play');
+                    $('#btnRunReconText').text('Run Reconciliation');
+                });
+            });
         });
 </script>
+
 }
 
 

@@ -318,6 +318,19 @@ public sealed class DataManagementController(
                 totalDeleted += ssDelList.Count;
             }
 
+            // ── 6.5. Raws (Transactional Raw Records) ──
+            var rawDelQ = db.Raws.IgnoreQueryFilters()
+                .Where(r => r.YearNumber == year);
+            if (month > 0) rawDelQ = rawDelQ.Where(r => r.MonthNumber == month);
+            if (loc != null) rawDelQ = rawDelQ.Where(r => r.Loc == loc);
+            if (pc != null) rawDelQ = rawDelQ.Where(r => r.ConsPartyCode == pc);
+            var rawDelList = await rawDelQ.ToListAsync(ct);
+            if (rawDelList.Count > 0)
+            {
+                db.Raws.RemoveRange(rawDelList);
+                totalDeleted += rawDelList.Count;
+            }
+
             // ── 7. ImportLogs (Delete logs when doing a full period purge) ──
             if (loc == null && pc == null)
             {

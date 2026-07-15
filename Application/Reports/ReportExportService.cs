@@ -43,15 +43,15 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
             new() { ColumnKey = "SaleValue", DisplayName = "Sale Value", SortOrder = 6, Format = "C" },
             new() { ColumnKey = "OnBillDiscount", DisplayName = "On Bill Discount", SortOrder = 7, Format = "C" },
             new() { ColumnKey = "AchievementPercent", DisplayName = "Achievement %", SortOrder = 8, Format = "P" },
-            new() { ColumnKey = "GrossIncentive", DisplayName = "Incentive Value", SortOrder = 9, Format = "C" },
-            new() { ColumnKey = "NetTransferAmount", DisplayName = "Eligible for Incentive", SortOrder = 10, Format = "C" },
-            new() { ColumnKey = "TransferredAmount", DisplayName = "Transferred Amount", SortOrder = 11, Format = "C" },
-            new() { ColumnKey = "PaymentStatus", DisplayName = "Status", SortOrder = 12 },
-            new() { ColumnKey = "UTRNumber", DisplayName = "UTR", SortOrder = 13 },
-            new() { ColumnKey = "PaymentDate", DisplayName = "Date", SortOrder = 14 },
-            new() { ColumnKey = "BeneficiaryName", DisplayName = "Name", SortOrder = 15 },
-            new() { ColumnKey = "BankAccountNumber", DisplayName = "Account", SortOrder = 16 },
-            new() { ColumnKey = "IFSC", DisplayName = "IFSC", SortOrder = 17 }
+            new() { ColumnKey = "TdsAmount", DisplayName = "TDS Amount", SortOrder = 9, Format = "C" },
+            new() { ColumnKey = "NetTransferAmount", DisplayName = "Net Payout", SortOrder = 10, Format = "C" },
+            new() { ColumnKey = "PaymentStatus", DisplayName = "Payment Status", SortOrder = 11 },
+            new() { ColumnKey = "UTRNumber", DisplayName = "UTR Number", SortOrder = 12 },
+            new() { ColumnKey = "PaymentDate", DisplayName = "Payment Date", SortOrder = 13 },
+            new() { ColumnKey = "BeneficiaryName", DisplayName = "Beneficiary Name", SortOrder = 14 },
+            new() { ColumnKey = "BankAccountNumber", DisplayName = "Beneficiary Account No", SortOrder = 15 },
+            new() { ColumnKey = "IFSC", DisplayName = "Bene_IFSC_Code", SortOrder = 16 },
+            new() { ColumnKey = "PanNo", DisplayName = "PAN No", SortOrder = 17 }
         };
 
         for (var i = 0; i < visibleColumns.Count; i++)
@@ -90,7 +90,7 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
                         break;
                     case "SaleValue":
                         cell.Value = item.SaleValue;
-                        cell.Style.NumberFormat.Format = "₹#,##0";
+                        cell.Style.NumberFormat.Format = "#,##0";
                         break;
                     case "SlabPercent":
                         cell.Value = item.SlabPercent / 100.0m;
@@ -98,7 +98,7 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
                         break;
                     case "OnBillDiscount":
                         cell.Value = item.OnBillDiscount;
-                        cell.Style.NumberFormat.Format = "₹#,##0";
+                        cell.Style.NumberFormat.Format = "#,##0";
                         break;
                     case "AchievementPercent":
                         cell.Value = item.AchievementPercent / 100.0m;
@@ -106,25 +106,25 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
                         break;
                     case "GrossIncentive":
                         cell.Value = item.GrossIncentive;
-                        cell.Style.NumberFormat.Format = "₹#,##0";
+                        cell.Style.NumberFormat.Format = "#,##0";
                         break;
                     case "TdsAmount":
                         cell.Value = item.TdsAmount;
-                        cell.Style.NumberFormat.Format = "₹#,##0";
+                        cell.Style.NumberFormat.Format = "#,##0";
                         break;
                     case "AdjustedAmount":
                         var adjusted = item.GrossIncentive - item.TdsAmount - (item.NetTransferAmount ?? 0);
                         cell.Value = adjusted;
-                        cell.Style.NumberFormat.Format = "₹#,##0";
+                        cell.Style.NumberFormat.Format = "#,##0";
                         break;
                     case "TransferAmount":
                     case "NetTransferAmount":
                         cell.Value = item.NetTransferAmount ?? 0;
-                        cell.Style.NumberFormat.Format = "₹#,##0";
+                        cell.Style.NumberFormat.Format = "#,##0";
                         break;
                     case "TransferredAmount":
                         cell.Value = item.TransferredAmount;
-                        cell.Style.NumberFormat.Format = "₹#,##0";
+                        cell.Style.NumberFormat.Format = "#,##0";
                         break;
                     case "ProcessingDate":
                         cell.Value = item.ProcessingDate.HasValue ? item.ProcessingDate.Value.ToString("dd-MMM-yyyy") : "-";
@@ -146,6 +146,9 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
                         break;
                     case "BeneficiaryName":
                         cell.Value = item.BeneficiaryName;
+                        break;
+                    case "PanNo":
+                        cell.Value = item.PanNo;
                         break;
                     case "BankDetails":
                         cell.Value = $"{item.BeneficiaryName} | A/c: {item.BankAccountNumber} | IFSC: {item.IFSC}";
@@ -205,11 +208,11 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
             sheet.Cell(row, 13).Value = item.DocumentNum ?? string.Empty;
             sheet.Cell(row, 14).Value = item.Remarks ?? string.Empty;
             sheet.Cell(row, 15).Value = item.NetRetailSelling;
-            sheet.Cell(row, 15).Style.NumberFormat.Format = "₹#,##0.00";
+            sheet.Cell(row, 15).Style.NumberFormat.Format = "#,##0.00";
             sheet.Cell(row, 16).Value = item.DiscountAmount;
-            sheet.Cell(row, 16).Style.NumberFormat.Format = "₹#,##0.00";
+            sheet.Cell(row, 16).Style.NumberFormat.Format = "#,##0.00";
             sheet.Cell(row, 17).Value = item.NetRetailDdl;
-            sheet.Cell(row, 17).Style.NumberFormat.Format = "₹#,##0.00";
+            sheet.Cell(row, 17).Style.NumberFormat.Format = "#,##0.00";
             sheet.Cell(row, 18).Value = item.OriginalCode ?? string.Empty;
             row++;
         }
@@ -432,3 +435,4 @@ public sealed class ReportExportService(IncentiveDbContext db) : IReportExportSe
         return ms.ToArray();
     }
 }
+

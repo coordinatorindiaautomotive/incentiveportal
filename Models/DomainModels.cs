@@ -64,6 +64,7 @@ public sealed class Branch : AuditableEntity
     [MaxLength(200)] public string AllowedPartyTypes { get; set; } = "INDEPENDENT WORKSHOP";
     [MaxLength(20)] public string TallyOutletCode { get; set; } = string.Empty;
 
+    [InverseProperty("Branch")]
     public ICollection<Party> Parties { get; set; } = new List<Party>();
 }
 
@@ -78,8 +79,20 @@ public sealed class Party : AuditableEntity
     [Column(TypeName = "decimal(9,4)")] public decimal FixedIncentivePercent { get; set; }
     [MaxLength(40)] public string OriginalPartyCode { get; set; } = string.Empty;
     [MaxLength(20)] public string Status { get; set; } = "Active";
+    
+    // Effective/Manual Location
     public int BranchId { get; set; }
+    [ForeignKey("BranchId")]
     public Branch Branch { get; set; } = default!;
+    
+    // Auto-Detected Base Location (calculated from history)
+    public int? AutoBaseBranchId { get; set; }
+    [ForeignKey("AutoBaseBranchId")]
+    public Branch? AutoBaseBranch { get; set; }
+    
+    // Flag to override Auto-Detection
+    public bool IsManuallyMapped { get; set; }
+
     public ICollection<BankDetail> BankDetails { get; set; } = new List<BankDetail>();
 }
 
@@ -495,7 +508,7 @@ public sealed class IncentivePeriod : AuditableEntity
 }
 
 [Table("ssincentives")]
-public sealed class SsIncentive : AuditableEntity
+public sealed class SsIncentive : AuditableEntity, IBranchIsolated
 {
     public int Month { get; set; }
     public int Year { get; set; }
@@ -545,6 +558,9 @@ public sealed class SsIncentive : AuditableEntity
 
     [MaxLength(50)] public string? IncentiveType { get; set; }
     [MaxLength(100)] public string? ApplicableSlab { get; set; }
+
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
 }
 
 [Table("BankStatementRecords")]

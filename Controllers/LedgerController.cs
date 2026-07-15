@@ -62,8 +62,11 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                             from p in pGroup.DefaultIfEmpty()
                             join b in db.Branches.AsNoTracking() on (p != null ? p.BranchId : 0) equals b.Id into bGroup
                             from b in bGroup.DefaultIfEmpty()
+                            join bd in db.BankDetails.AsNoTracking().Where(bd => bd.ApprovalStatus == "Approved" && !bd.IsDeleted) 
+                                on (p != null ? p.Id : 0) equals bd.PartyId into bdGroup
+                            from bd in bdGroup.DefaultIfEmpty()
                             where !inc.IsDeleted && inc.Status == "Posted"
-                            select new { s = inc, p, b };
+                            select new { s = inc, p, b, bd };
 
             // Sales Executive isolation filter
             if (currentUser.IsInRole(AppRoles.SalesExecutive))
@@ -75,6 +78,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                     .ToListAsync(cancellationToken);
                 baseQuery = baseQuery.Where(x => mappedPartyCodes.Contains(x.s.PartyCode));
             }
+
 
             // Period filter
             if (!string.IsNullOrEmpty(filterPeriod) && filterPeriod != "all")
@@ -111,6 +115,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                     .ToListAsync(cancellationToken);
                 recordsTotal = await db.SsIncentives.CountAsync(x => !x.IsDeleted && x.Status == "Posted" && mappedPartyCodes.Contains(x.PartyCode), cancellationToken);
             }
+
             else
             {
                 recordsTotal = await db.SsIncentives.CountAsync(x => !x.IsDeleted && x.Status == "Posted", cancellationToken);
@@ -171,7 +176,8 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
             var data = dataList.Select(x => {
                 var empCode = x.b == null ? "EMP-CORP" : (string.IsNullOrEmpty(x.b.Incharge) ? "EMP-CORP" : "EMP-" + x.b.Code);
                 var empName = x.b == null ? "HO Executive" : (string.IsNullOrEmpty(x.b.Incharge) ? "HO Executive" : x.b.Incharge);
-                var tdsPercent = x.s.GrossIncentive > 0 ? Math.Round((x.s.TdsAmount / x.s.GrossIncentive) * 100m, 2) : 0m;
+                var netIncentive = Math.Max(0m, x.s.GrossIncentive - x.s.OnBillDiscount);
+                var tdsPercent = netIncentive > 0 ? Math.Round((x.s.TdsAmount / netIncentive) * 100m, 2) : 0m;
 
                 return new {
                     x.s.Id,
@@ -193,11 +199,16 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                     x.s.TdsAmount,
                     x.s.NetTransferAmount,
                     x.s.PaymentStatus,
-                    x.s.UTRNumber,
-                    CreatedDate = x.s.CreatedAt.ToString("dd-MMM-yyyy"),
-                    PaymentDate = x.s.PaymentDate.HasValue ? x.s.PaymentDate.Value.ToString("dd-MMM-yyyy") : "-",
+                    utrNumber = x.s.UTRNumber,
+                    createdDate = x.s.CreatedAt.ToString("dd-MMM-yyyy"),
+                    paymentDate = x.s.PaymentDate.HasValue ? x.s.PaymentDate.Value.ToString("dd-MMM-yyyy") : "-",
                     x.s.Remarks,
-                    VersionNumber = 1
+                    VersionNumber = 1,
+                    locationCode = !string.IsNullOrEmpty(x.s.SourceLocation) ? x.s.SourceLocation : (x.b != null ? x.b.Code : "-"),
+                    bankAccountNumber = !string.IsNullOrEmpty(x.s.BankAccountNumber) ? x.s.BankAccountNumber : "-",
+                    ifsc = !string.IsNullOrEmpty(x.s.IFSC) ? x.s.IFSC : "-",
+                    beneficiaryName = !string.IsNullOrEmpty(x.s.BeneficiaryName) ? x.s.BeneficiaryName : "-",
+                    panNo = x.bd != null ? x.bd.PAN : "-"
                 };
             }).ToList();
 
@@ -235,6 +246,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
             if (!isMapped) return Forbid();
         }
 
+
         // 3-Date description string requested by user
         var monthNames = new[] { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
         var monthStr = ledger.Month > 0 && ledger.Month <= 12 ? monthNames[ledger.Month - 1] : "Historical";
@@ -265,6 +277,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                 .AnyAsync(x => x.ExecutiveCode == currentUser.UserName && x.PartyCode == partyCode, cancellationToken);
             if (!isMapped) return Forbid();
         }
+
 
         var history = await db.SsIncentives
             .AsNoTracking()
@@ -306,9 +319,10 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
         {
             var isMapped = await db.PartyExecutiveMappings
                 .AsNoTracking()
-                .AnyAsync(x => x.ExecutiveCode == currentUser.UserName && x.PartyCode == current.PartyCode, cancellationToken);
+                .AnyAsync(x => x.ExecutiveCode == currentUser.UserName && (x.PartyCode == current.PartyCode || x.PartyCode == compare.PartyCode), cancellationToken);
             if (!isMapped) return Forbid();
         }
+
 
         return Json(new {
             current = new {
@@ -360,6 +374,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
             baseQuery = baseQuery.Where(x => mappedPartyCodes.Contains(x.s.PartyCode));
         }
 
+
         if (!string.IsNullOrEmpty(filterPeriod) && filterPeriod != "all")
         {
             var parts = filterPeriod.Split('-');
@@ -382,9 +397,30 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                                              (x.b != null && x.b.Code.Contains(search)));
         }
 
-        var dataList = await baseQuery
-            .OrderByDescending(x => x.s.Year)
-            .ThenByDescending(x => x.s.Month)
+        var projectedQuery = baseQuery.Select(x => new 
+        {
+            x.s.Year,
+            x.s.Month,
+            x.s.PartyCode,
+            x.s.PartyName,
+            x.s.SaleValue,
+            x.s.OnBillDiscount,
+            x.s.AchievementPercent,
+            x.s.SlabPercent,
+            x.s.GrossIncentive,
+            x.s.TdsAmount,
+            x.s.NetTransferAmount,
+            x.s.PaymentStatus,
+            x.s.UTRNumber,
+            x.s.CreatedAt,
+            x.s.PaymentDate,
+            BranchCode = x.b != null ? x.b.Code : null,
+            BranchIncharge = x.b != null ? x.b.Incharge : null
+        });
+
+        var dataList = await projectedQuery
+            .OrderByDescending(x => x.Year)
+            .ThenByDescending(x => x.Month)
             .ToListAsync(cancellationToken);
 
         using var workbook = new ClosedXML.Excel.XLWorkbook();
@@ -410,37 +446,37 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
         var row = 2;
         foreach (var item in dataList)
         {
-            var empCode = item.b == null ? "EMP-CORP" : (string.IsNullOrEmpty(item.b.Incharge) ? "EMP-CORP" : "EMP-" + item.b.Code);
-            var empName = item.b == null ? "HO Executive" : (string.IsNullOrEmpty(item.b.Incharge) ? "HO Executive" : item.b.Incharge);
-            var tdsPercent = item.s.GrossIncentive > 0 ? Math.Round((item.s.TdsAmount / item.s.GrossIncentive) * 100m, 2) : 0m;
+            var empCode = string.IsNullOrEmpty(item.BranchCode) ? "EMP-CORP" : "EMP-" + item.BranchCode;
+            var empName = string.IsNullOrEmpty(item.BranchIncharge) ? "HO Executive" : item.BranchIncharge;
+            var tdsPercent = item.GrossIncentive > 0 ? Math.Round((item.TdsAmount / item.GrossIncentive) * 100m, 2) : 0m;
 
-            sheet.Cell(row, 1).Value = $"IL-{item.s.Year}-{item.s.Month:D2}-{item.s.PartyCode}";
-            sheet.Cell(row, 2).Value = item.s.Year;
-            sheet.Cell(row, 3).Value = item.s.Month;
+            sheet.Cell(row, 1).Value = $"IL-{item.Year}-{item.Month:D2}-{item.PartyCode}";
+            sheet.Cell(row, 2).Value = item.Year;
+            sheet.Cell(row, 3).Value = item.Month;
             sheet.Cell(row, 4).Value = empCode;
             sheet.Cell(row, 5).Value = empName;
-            sheet.Cell(row, 6).Value = item.s.PartyCode;
-            sheet.Cell(row, 7).Value = item.s.PartyName;
-            sheet.Cell(row, 8).Value = (double)item.s.SaleValue;
-            sheet.Cell(row, 8).Style.NumberFormat.Format = "₹#,##0";
-            sheet.Cell(row, 9).Value = (double)item.s.OnBillDiscount;
-            sheet.Cell(row, 9).Style.NumberFormat.Format = "₹#,##0";
-            sheet.Cell(row, 10).Value = (double)item.s.AchievementPercent;
+            sheet.Cell(row, 6).Value = item.PartyCode;
+            sheet.Cell(row, 7).Value = item.PartyName;
+            sheet.Cell(row, 8).Value = (double)item.SaleValue;
+            sheet.Cell(row, 8).Style.NumberFormat.Format = "#,##0";
+            sheet.Cell(row, 9).Value = (double)item.OnBillDiscount;
+            sheet.Cell(row, 9).Style.NumberFormat.Format = "#,##0";
+            sheet.Cell(row, 10).Value = (double)item.AchievementPercent;
             sheet.Cell(row, 10).Style.NumberFormat.Format = "0.00\"\\%\"";
-            sheet.Cell(row, 11).Value = $"{(item.s.SlabPercent * 100):0.##}%";
+            sheet.Cell(row, 11).Value = $"{(item.SlabPercent * 100):0.##}%";
             sheet.Cell(row, 12).Value = 1;
-            sheet.Cell(row, 13).Value = (double)item.s.GrossIncentive;
-            sheet.Cell(row, 13).Style.NumberFormat.Format = "₹#,##0";
+            sheet.Cell(row, 13).Value = (double)item.GrossIncentive;
+            sheet.Cell(row, 13).Style.NumberFormat.Format = "#,##0";
             sheet.Cell(row, 14).Value = (double)tdsPercent / 100.0;
             sheet.Cell(row, 14).Style.NumberFormat.Format = "0.0%";
-            sheet.Cell(row, 15).Value = (double)item.s.TdsAmount;
-            sheet.Cell(row, 15).Style.NumberFormat.Format = "₹#,##0";
-            sheet.Cell(row, 16).Value = (double)item.s.NetTransferAmount;
-            sheet.Cell(row, 16).Style.NumberFormat.Format = "₹#,##0";
-            sheet.Cell(row, 17).Value = item.s.PaymentStatus;
-            sheet.Cell(row, 18).Value = item.s.UTRNumber;
-            sheet.Cell(row, 19).Value = item.s.CreatedAt.ToString("dd-MMM-yyyy");
-            sheet.Cell(row, 20).Value = item.s.PaymentDate.HasValue ? item.s.PaymentDate.Value.ToString("dd-MMM-yyyy") : "-";
+            sheet.Cell(row, 15).Value = (double)item.TdsAmount;
+            sheet.Cell(row, 15).Style.NumberFormat.Format = "#,##0";
+            sheet.Cell(row, 16).Value = (double)item.NetTransferAmount;
+            sheet.Cell(row, 16).Style.NumberFormat.Format = "#,##0";
+            sheet.Cell(row, 17).Value = item.PaymentStatus;
+            sheet.Cell(row, 18).Value = item.UTRNumber;
+            sheet.Cell(row, 19).Value = item.CreatedAt.ToString("dd-MMM-yyyy");
+            sheet.Cell(row, 20).Value = item.PaymentDate.HasValue ? item.PaymentDate.Value.ToString("dd-MMM-yyyy") : "-";
             row++;
         }
 
@@ -471,6 +507,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
             baseQuery = baseQuery.Where(x => mappedPartyCodes.Contains(x.s.PartyCode));
         }
 
+
         if (!string.IsNullOrEmpty(filterPeriod) && filterPeriod != "all")
         {
             var parts = filterPeriod.Split('-');
@@ -493,9 +530,30 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
                                              (x.b != null && x.b.Code.Contains(search)));
         }
 
-        var dataList = await baseQuery
-            .OrderByDescending(x => x.s.Year)
-            .ThenByDescending(x => x.s.Month)
+        var projectedQuery = baseQuery.Select(x => new 
+        {
+            x.s.Year,
+            x.s.Month,
+            x.s.PartyCode,
+            x.s.PartyName,
+            x.s.SaleValue,
+            x.s.OnBillDiscount,
+            x.s.AchievementPercent,
+            x.s.SlabPercent,
+            x.s.GrossIncentive,
+            x.s.TdsAmount,
+            x.s.NetTransferAmount,
+            x.s.PaymentStatus,
+            x.s.UTRNumber,
+            x.s.CreatedAt,
+            x.s.PaymentDate,
+            BranchCode = x.b != null ? x.b.Code : null,
+            BranchIncharge = x.b != null ? x.b.Incharge : null
+        });
+
+        var dataList = await projectedQuery
+            .OrderByDescending(x => x.Year)
+            .ThenByDescending(x => x.Month)
             .ToListAsync(cancellationToken);
 
         var builder = new System.Text.StringBuilder();
@@ -503,12 +561,12 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
 
         foreach (var item in dataList)
         {
-            var empCode = item.b == null ? "EMP-CORP" : (string.IsNullOrEmpty(item.b.Incharge) ? "EMP-CORP" : "EMP-" + item.b.Code);
-            var empName = item.b == null ? "HO Executive" : (string.IsNullOrEmpty(item.b.Incharge) ? "HO Executive" : item.b.Incharge);
-            var tdsPercent = item.s.GrossIncentive > 0 ? Math.Round((item.s.TdsAmount / item.s.GrossIncentive) * 100m, 2) : 0m;
-            var ledgerRef = $"IL-{item.s.Year}-{item.s.Month:D2}-{item.s.PartyCode}";
+            var empCode = string.IsNullOrEmpty(item.BranchCode) ? "EMP-CORP" : "EMP-" + item.BranchCode;
+            var empName = string.IsNullOrEmpty(item.BranchIncharge) ? "HO Executive" : item.BranchIncharge;
+            var tdsPercent = item.GrossIncentive > 0 ? Math.Round((item.TdsAmount / item.GrossIncentive) * 100m, 2) : 0m;
+            var ledgerRef = $"IL-{item.Year}-{item.Month:D2}-{item.PartyCode}";
 
-            builder.AppendLine($"\"{ledgerRef}\",{item.s.Year},{item.s.Month},\"{empCode}\",\"{empName}\",\"{item.s.PartyCode}\",\"{item.s.PartyName}\",{item.s.SaleValue},{item.s.OnBillDiscount},{item.s.AchievementPercent},\"{(item.s.SlabPercent * 100):0.##}%\",1,{item.s.GrossIncentive},{tdsPercent},{item.s.TdsAmount},{item.s.NetTransferAmount},\"{item.s.PaymentStatus}\",\"{item.s.UTRNumber}\",\"{item.s.CreatedAt:yyyy-MM-dd}\",\"{(item.s.PaymentDate.HasValue ? item.s.PaymentDate.Value.ToString("yyyy-MM-dd") : "-")}\"");
+            builder.AppendLine($"\"{ledgerRef}\",{item.Year},{item.Month},\"{empCode}\",\"{empName}\",\"{item.PartyCode}\",\"{item.PartyName}\",{item.SaleValue},{item.OnBillDiscount},{item.AchievementPercent},\"{(item.SlabPercent * 100):0.##}%\",1,{item.GrossIncentive},{tdsPercent},{item.TdsAmount},{item.NetTransferAmount},\"{item.PaymentStatus}\",\"{item.UTRNumber}\",\"{item.CreatedAt:yyyy-MM-dd}\",\"{(item.PaymentDate.HasValue ? item.PaymentDate.Value.ToString("yyyy-MM-dd") : "-")}\"");
         }
 
         return File(System.Text.Encoding.UTF8.GetBytes(builder.ToString()), "text/csv", $"Incentive_Ledger_{DateTime.Now:yyyyMMddHHmm}.csv");
@@ -581,7 +639,7 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
         decimal adjusted = Math.Max(0m, Math.Min(netEligible, outstanding));
         decimal transfer = Math.Max(0, netEligible - adjusted);
 
-        // Update SsIncentive непосредственно
+        // Update SsIncentive Ð½ÐµÐ¿Ð¾ÑÑ€ÐµÐ´ÑÑ‚Ð²ÐµÐ½Ð½Ð¾
         ssIncentive.GrossIncentive = gross;
         ssIncentive.TdsAmount = tds;
         ssIncentive.NetTransferAmount = transfer;
@@ -597,3 +655,4 @@ public sealed class LedgerController(IncentiveDbContext db, IncentivePortal.Help
         return Json(new { ok = true, message = "Incentive calculation overridden successfully.", newLedgerId = ssIncentive.Id });
     }
 }
+

@@ -121,7 +121,6 @@
             padding: 40px;
             border: 1px solid rgba(196, 198, 207, 0.3);
             box-shadow: 0 10px 25px -5px rgba(11, 28, 48, 0.08), 0 8px 10px -6px rgba(11, 28, 48, 0.05);
-            transition: transform 0.05s linear;
             position: relative;
         }
 
@@ -509,14 +508,6 @@
             const isPassword = pwInput.type === 'password';
             pwInput.type       = isPassword ? 'text' : 'password';
             toggleIcon.textContent = isPassword ? 'visibility_off' : 'visibility';
-        });
-
-        // ── Parallax card on mouse move ──
-        const card = document.getElementById('loginCard');
-        document.addEventListener('mousemove', (e) => {
-            const moveX = (e.clientX - window.innerWidth  / 2) / 100;
-            const moveY = (e.clientY - window.innerHeight / 2) / 100;
-            card.style.transform = `translate(${moveX}px, ${moveY}px)`;
         });
 
         // ── Show loader on submit ──

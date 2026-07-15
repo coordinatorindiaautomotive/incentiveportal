@@ -11,6 +11,8 @@ using IncentivePortal.Services;
 using IncentivePortal.Helpers;
 using IncentivePortal.DTOs;
 using IncentivePortal.Data;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Net.Http.Headers;
 
 using Microsoft.Extensions.Caching.Memory;
 
@@ -85,6 +87,50 @@ public sealed class ImportsController(
     }
 
     // =========================================================
+    // DOWNLOAD PRE-CALCULATED TEMPLATE
+    // =========================================================
+    [HttpGet]
+    public IActionResult DownloadPreCalculatedTemplate()
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("PreCalculated Payouts");
+
+        var currentMonthStr = DateTime.Today.ToString("MMM", System.Globalization.CultureInfo.InvariantCulture);
+        var currentYearStr = DateTime.Today.Year.ToString();
+
+        // Exact 8-column format required for Pre-Calculated imports:
+        // Month | Cons Party Code | Cons Party Name | Location |
+        // Net Retail Selling | Discount Amount | Slab | Incentive
+        string[] headers =
+        {
+            "Month", "Cons Party Code", "Cons Party Name", "Location",
+            "Net Retail Selling", "Discount Amount", "Slab", "Incentive"
+        };
+
+        for (var i = 0; i < headers.Length; i++)
+        {
+            ws.Cell(1, i + 1).Value = headers[i];
+            ws.Cell(1, i + 1).Style.Font.Bold = true;
+        }
+
+        // Add dummy instruction row
+        ws.Cell(2, 1).Value = DateTime.Today.Month;
+        ws.Cell(2, 2).Value = "WRJ0100124";
+        ws.Cell(2, 3).Value = "APEX AUTOMOBILES";
+        ws.Cell(2, 4).Value = "WRJ";
+        ws.Cell(2, 5).Value = 150000;
+        ws.Cell(2, 6).Value = 5000;
+        ws.Cell(2, 7).Value = "3.5%";
+        ws.Cell(2, 8).Value = 5250;
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"PreCalculated_Payouts_Template_{currentMonthStr}_{currentYearStr}.xlsx");
+    }
+
+    // =========================================================
     // PARSE EXCEL METADATA
     // =========================================================
     [HttpPost]
@@ -108,22 +154,26 @@ public sealed class ImportsController(
     // PREVIEW IMPORT
     // =========================================================
     [HttpPost]
+    [DisableFormValueModelBinding]
     [DisableRequestSizeLimit]
     [RequestFormLimits(MultipartBodyLengthLimit = 262144000)]
-    public async Task<IActionResult> Preview(
-        IFormFile file,
-        [FromForm] string uploadMode,
-        [FromForm] string? branchRulesJson,
-        [FromForm] string? alternateCodesJson,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Preview(CancellationToken cancellationToken)
     {
+        string? tempFilePath = null;
         try
         {
+            var (path, file, form) = await ParseMultipartRequestAsync(cancellationToken);
+            tempFilePath = path;
+
             if (file == null || file.Length == 0)
                 return BadRequest(new { message = "Please select a valid Excel file." });
 
+            form.TryGetValue("uploadMode", out var uploadMode);
+            form.TryGetValue("branchRulesJson", out var branchRulesJson);
+            form.TryGetValue("alternateCodesJson", out var alternateCodesJson);
+
             var (previewToken, displayRows) = await importsAppService.PreviewAsync(
-                file, uploadMode, branchRulesJson, alternateCodesJson, currentUser, cancellationToken);
+                file, uploadMode ?? "", branchRulesJson, alternateCodesJson, currentUser, cancellationToken);
 
             return Json(new { previewToken, rows = displayRows });
         }
@@ -131,32 +181,49 @@ public sealed class ImportsController(
         {
             return BadRequest(new { message = ex.Message });
         }
+        finally
+        {
+            if (tempFilePath != null && System.IO.File.Exists(tempFilePath))
+            {
+                try { System.IO.File.Delete(tempFilePath); } catch { }
+            }
+        }
     }
 
     // =========================================================
     // COMMIT IMPORT
     // =========================================================
     [HttpPost]
+    [DisableFormValueModelBinding]
     [DisableRequestSizeLimit]
     [RequestFormLimits(MultipartBodyLengthLimit = 262144000)]
-    public async Task<IActionResult> Commit(
-        IFormFile file,
-        [FromForm] string uploadMode,
-        [FromForm] string? branchRulesJson,
-        [FromForm] string? alternateCodesJson,
-        [FromForm] string? changeReason,
-        [FromForm] int? previousImportLogId,
-        [FromForm] string? previewToken,
-        [FromForm] bool rewriteSales = true,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Commit(CancellationToken cancellationToken = default)
     {
+        string? tempFilePath = null;
         try
         {
+            var (path, file, form) = await ParseMultipartRequestAsync(cancellationToken);
+            tempFilePath = path;
+
             if (file == null || file.Length == 0)
                 return BadRequest(new { message = "Please select a valid Excel file." });
 
+            form.TryGetValue("uploadMode", out var uploadMode);
+            form.TryGetValue("branchRulesJson", out var branchRulesJson);
+            form.TryGetValue("alternateCodesJson", out var alternateCodesJson);
+            form.TryGetValue("changeReason", out var changeReason);
+            form.TryGetValue("previewToken", out var previewToken);
+            
+            int? previousImportLogId = null;
+            if (form.TryGetValue("previousImportLogId", out var prevIdStr) && int.TryParse(prevIdStr, out var prevId))
+                previousImportLogId = prevId;
+
+            bool rewriteSales = true;
+            if (form.TryGetValue("rewriteSales", out var rewriteStr) && bool.TryParse(rewriteStr, out var rewriteVal))
+                rewriteSales = rewriteVal;
+
             var jobId = await importsAppService.CommitAsync(
-                file, uploadMode, branchRulesJson, alternateCodesJson, changeReason,
+                file, uploadMode ?? "", branchRulesJson, alternateCodesJson, changeReason,
                 previousImportLogId, previewToken, rewriteSales, currentUser, cancellationToken);
 
             return Json(new
@@ -171,6 +238,13 @@ public sealed class ImportsController(
             var fullMsg = ex.Message;
             if (ex.InnerException != null) fullMsg += " | Inner: " + ex.InnerException.Message;
             return BadRequest(new { message = fullMsg });
+        }
+        finally
+        {
+            if (tempFilePath != null && System.IO.File.Exists(tempFilePath))
+            {
+                try { System.IO.File.Delete(tempFilePath); } catch { }
+            }
         }
     }
 
@@ -359,7 +433,7 @@ public sealed class ImportsController(
     // =========================================================
     // EXPORT CALCULATION PREVIEW TO EXCEL
     // =========================================================
-    [HttpGet]
+    [HttpPost]
     public async Task<IActionResult> ExportCalculationPreview(
         int month,
         int year,
@@ -428,5 +502,51 @@ public sealed class ImportsController(
             return Json(state);
         }
         return NotFound(new { message = "Job not found." });
+    }
+
+    private async Task<(string? TempPath, IFormFile? File, Dictionary<string, string> Form)> ParseMultipartRequestAsync(CancellationToken cancellationToken)
+    {
+        if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
+            throw new Exception("Not a multipart request.");
+
+        var boundary = MultipartRequestHelper.GetBoundary(MediaTypeHeaderValue.Parse(Request.ContentType), 200);
+        var reader = new MultipartReader(boundary, Request.Body);
+        var section = await reader.ReadNextSectionAsync(cancellationToken);
+
+        string? tempFilePath = null;
+        IFormFile? resultFile = null;
+        var form = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        while (section != null)
+        {
+            var hasContentDispositionHeader = ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition);
+
+            if (hasContentDispositionHeader && contentDisposition != null)
+            {
+                if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition))
+                {
+                    tempFilePath = Path.GetTempFileName();
+                    using (var targetStream = System.IO.File.Create(tempFilePath))
+                    {
+                        await section.Body.CopyToAsync(targetStream, 81920, cancellationToken);
+                    }
+                    var fileName = HeaderUtilities.RemoveQuotes(contentDisposition.FileName).Value;
+                    resultFile = new FileSystemFormFile(tempFilePath, fileName);
+                }
+                else if (MultipartRequestHelper.HasFormDataContentDisposition(contentDisposition))
+                {
+                    var key = HeaderUtilities.RemoveQuotes(contentDisposition.Name).Value;
+                    using (var streamReader = new StreamReader(section.Body, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true))
+                    {
+                        var value = await streamReader.ReadToEndAsync();
+                        if (string.Equals(value, "undefined", StringComparison.OrdinalIgnoreCase)) value = string.Empty;
+                        form[key] = value;
+                    }
+                }
+            }
+            section = await reader.ReadNextSectionAsync(cancellationToken);
+        }
+
+        return (tempFilePath, resultFile, form);
     }
 }

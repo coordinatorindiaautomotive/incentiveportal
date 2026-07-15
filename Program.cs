@@ -22,11 +22,30 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 {
     options.MultipartBodyLengthLimit = 250_000_000; // 250 MB
 });
+builder.Services.Configure<IISServerOptions>(options =>
+{
+    options.MaxRequestBodySize = 250_000_000; // 250 MB
+});
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Limits.MaxRequestBodySize = 250_000_000; // 250 MB
 });
 builder.Services.AddMemoryCache();
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = "IncentivePortal_";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
+builder.Services.AddScoped<IncentivePortal.Infrastructure.Cache.ILookupCacheService, IncentivePortal.Infrastructure.Cache.RedisLookupCacheService>();
 builder.Services.AddHttpClient();
 
 // ── Response Compression (Brotli + Gzip) ─────────────────────────
@@ -40,14 +59,20 @@ builder.Services.AddResponseCompression(opts =>
 });
 builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
 builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
-builder.Services.AddDbContextFactory<IncentiveDbContext>(options =>
+builder.Services.AddSingleton<IncentivePortal.Data.AuditSaveChangesInterceptor>();
+
+builder.Services.AddDbContextFactory<IncentiveDbContext>((sp, options) =>
+{
+    var auditInterceptor = sp.GetRequiredService<IncentivePortal.Data.AuditSaveChangesInterceptor>();
+    options.AddInterceptors(auditInterceptor);
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlOptions =>
         {
             sqlOptions.CommandTimeout(300);
             sqlOptions.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null);
-        }));
+        });
+});
 
 builder.Services.AddScoped(p => p.GetRequiredService<IDbContextFactory<IncentiveDbContext>>().CreateDbContext());
 
@@ -127,6 +152,7 @@ builder.Services.AddScoped<IImportsAppService, ImportsAppService>();
 builder.Services.AddScoped<ITransferService, TransferService>();
 builder.Services.AddScoped<IControlTowerService, ControlTowerService>();
 builder.Services.AddScoped<IImportMappingService, ImportMappingService>();
+builder.Services.AddScoped<IDistributedLockService, SqlServerDistributedLockService>();
 builder.Services.AddScoped<IImportValidationService, ImportValidationService>();
 builder.Services.AddScoped<IImportDuplicateCheckService, ImportDuplicateCheckService>();
 builder.Services.AddScoped<IImportCommitService, ImportCommitService>();
@@ -149,6 +175,8 @@ builder.Services.AddScoped<IReportBuilderService, ReportBuilderService>();
 builder.Services.AddScoped<ICustomer360Service, Customer360Service>();
 builder.Services.AddScoped<IReportExportService, ReportExportService>();
 builder.Services.AddScoped<ICashManagementService, CashManagementService>();
+builder.Services.AddScoped<IncentivePortal.Application.CashManagement.Services.IBankPaymentImportService,
+                            IncentivePortal.Application.CashManagement.Services.BankPaymentImportService>();
 builder.Services.AddScoped<IBackgroundJobExecutor, BackgroundJobExecutor>();
 builder.Services.AddScoped<IDynamicReportService, DynamicReportService>();
 
@@ -236,6 +264,8 @@ app.UseStaticFiles(new StaticFileOptions
             headers["Cache-Control"] = "public, max-age=3600";
     }
 });
+
+app.UseMiddleware<IncentivePortal.Middleware.GlobalExceptionMiddleware>();
 
 if (!app.Environment.IsDevelopment())
 {

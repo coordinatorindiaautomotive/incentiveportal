@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using IncentivePortal.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace IncentivePortal.Data;
 
@@ -13,6 +14,14 @@ public sealed class IncentiveDbContext : DbContext
     {
         _httpContextAccessor = httpContextAccessor;
     }
+
+    public bool IsGlobalAdmin => _httpContextAccessor?.HttpContext?.User.IsInRole(AppRoles.SuperAdmin) == true || 
+                                 _httpContextAccessor?.HttpContext?.User.IsInRole(AppRoles.HOFinance) == true || 
+                                 _httpContextAccessor?.HttpContext?.User.IsInRole(AppRoles.Auditor) == true;
+
+    public int? CurrentUserBranchId => _httpContextAccessor?.HttpContext?.User.FindFirstValue("branchId") != null 
+        ? int.Parse(_httpContextAccessor.HttpContext.User.FindFirstValue("branchId")!) 
+        : null;
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
@@ -104,11 +113,29 @@ public sealed class IncentiveDbContext : DbContext
     public DbSet<CashMasterItem>     CashMasterItems     => Set<CashMasterItem>();
     public DbSet<CostCenterCash>     CostCenterCashes    => Set<CostCenterCash>();
 
+    // ── Bank Payment SSOT (Sprint 20) ────────────────────────────────────────────
+    // RawBankPaymentRecords is INSERT-ONLY — never updated or deleted after upload.
+    public DbSet<BankPaymentImportBatch>  BankPaymentImportBatches  => Set<BankPaymentImportBatch>();
+    public DbSet<RawBankPaymentRecord>    RawBankPaymentRecords     => Set<RawBankPaymentRecord>();
+
     // ── Governor Engine ──────────────────────────────────────────────────────────
     public DbSet<ProductCodeMapping> ProductCodeMappings => Set<ProductCodeMapping>();
 
     // ── Branch Mapping Analytics Cache ───────────────────────────────────────────
     public DbSet<PartyPrimaryBranch> PartyPrimaryBranches => Set<PartyPrimaryBranch>();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseSqlServer("Name=DefaultConnection")
+                          .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+        }
+        else
+        {
+            optionsBuilder.ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -197,15 +224,59 @@ public sealed class IncentiveDbContext : DbContext
         modelBuilder.Entity<SsIncentive>().HasIndex(x => new { x.Year, x.Month, x.PartyCode, x.PartCategoryCode }).IsUnique().HasFilter("[IsDeleted] = 0");
         modelBuilder.Entity<SsIncentive>().HasIndex(x => x.Status);
 
+        // Covering Index for Ledger and Dashboard
+        modelBuilder.Entity<SsIncentive>()
+            .HasIndex(x => new { x.Status, x.Year, x.Month, x.SourceLocation })
+            .HasDatabaseName("IX_SsIncentives_Ledger_Covering")
+            .HasFilter("[IsDeleted] = 0");
+
         // DealerOutstanding Mappings
         modelBuilder.Entity<DealerOutstanding>().HasIndex(x => new { x.Year, x.Month, x.PartyCode }).IsUnique().HasFilter("[IsDeleted] = 0");
 
         // CostCenterCash Mappings
         modelBuilder.Entity<CostCenterCash>().HasIndex(x => new { x.Year, x.Month, x.CostCenterName }).IsUnique().HasFilter("[IsDeleted] = 0");
 
+        // ── Bank Payment SSOT — RawBankPaymentRecords ────────────────────────────────
+        // Relationship: one batch → many raw records
+        modelBuilder.Entity<RawBankPaymentRecord>()
+            .HasOne(r => r.Batch)
+            .WithMany(b => b.Records)
+            .HasForeignKey(r => r.BatchId)
+            .OnDelete(DeleteBehavior.Restrict); // Never cascade-delete SSOT records
+
+        // Deduplication index — fast lookup for (FileSequenceNum, UtrNo) per batch
+        modelBuilder.Entity<RawBankPaymentRecord>()
+            .HasIndex(x => new { x.FileSequenceNum, x.UtrNo })
+            .HasDatabaseName("IX_RawBankPayment_SeqNum_Utr")
+            .HasFilter("[IsDeleted] = 0");
+
+        // Batch FK index — fast drill-down into batch records
+        modelBuilder.Entity<RawBankPaymentRecord>()
+            .HasIndex(x => x.BatchId)
+            .HasDatabaseName("IX_RawBankPayment_BatchId")
+            .HasFilter("[IsDeleted] = 0");
+
+        // Batch deduplication — fast check for re-uploaded file names
+        modelBuilder.Entity<BankPaymentImportBatch>()
+            .HasIndex(x => x.OriginalFileName)
+            .HasDatabaseName("IX_BankPaymentBatch_FileName")
+            .HasFilter("[IsDeleted] = 0");
+
+        // Unique batch reference
+        modelBuilder.Entity<BankPaymentImportBatch>()
+            .HasIndex(x => x.BatchRef)
+            .IsUnique()
+            .HasDatabaseName("IX_BankPaymentBatch_BatchRef");
 
 
-        foreach (var entity in modelBuilder.Model.GetEntityTypes().Where(t => typeof(AuditableEntity).IsAssignableFrom(t.ClrType)))
+
+        // Apply Branch Isolation Filter for SsIncentive
+        modelBuilder.Entity<SsIncentive>().HasQueryFilter(e => 
+            !e.IsDeleted && 
+            (IsGlobalAdmin || CurrentUserBranchId == null || e.SourceLocation == Branches.FirstOrDefault(b => b.Id == CurrentUserBranchId)!.Code));
+
+        // Apply Soft Delete Filter for other AuditableEntities
+        foreach (var entity in modelBuilder.Model.GetEntityTypes().Where(t => typeof(AuditableEntity).IsAssignableFrom(t.ClrType) && !typeof(IBranchIsolated).IsAssignableFrom(t.ClrType)))
         {
             modelBuilder.Entity(entity.ClrType).HasQueryFilter(CreateSoftDeleteFilter(entity.ClrType));
         }
@@ -213,132 +284,8 @@ public sealed class IncentiveDbContext : DbContext
         modelBuilder.Seed();
     }
 
-    private static readonly HashSet<string> ExcludedFromAudit = new(StringComparer.OrdinalIgnoreCase)
-    {
-        nameof(AuditLog),
-        nameof(DealerMonthlyPerformance),
-        nameof(IncentiveSummary),
-        nameof(DealerSlabProgress),
-        nameof(DealerGrowthAnalytics),
-        nameof(CategorySalesAggregate)
-    };
 
     public bool DisableAuditLogs { get; set; }
-
-    private class DbAuditEntry(Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
-    {
-        public Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry Entry { get; } = entry;
-        public string EntityName { get; set; } = string.Empty;
-        public string Action { get; set; } = string.Empty;
-        public Dictionary<string, object?> OldValues { get; } = [];
-        public Dictionary<string, object?> NewValues { get; } = [];
-
-        public AuditLog ToAuditLog(string user, DateTime now, string? ip)
-        {
-            var auditLog = new AuditLog
-            {
-                EntityName = EntityName,
-                Action = Action,
-                ChangedBy = user,
-                ChangedAt = now,
-                IpAddress = ip,
-                OldValue = JsonSerializer.Serialize(OldValues),
-                NewValue = JsonSerializer.Serialize(NewValues)
-            };
-
-            var primaryKey = Entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey());
-            auditLog.EntityId = primaryKey?.CurrentValue?.ToString() ?? "0";
-
-            return auditLog;
-        }
-    }
-
-    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        var now = DateTime.UtcNow;
-        var user = _httpContextAccessor?.HttpContext?.User?.Identity?.Name ?? "system";
-        var ip = _httpContextAccessor?.HttpContext?.Connection.RemoteIpAddress?.ToString();
-
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.Entity.CreatedAt = now;
-                entry.Entity.CreatedBy = user;
-            }
-
-            if (entry.State == EntityState.Modified)
-            {
-                entry.Entity.UpdatedAt = now;
-                entry.Entity.UpdatedBy = user;
-            }
-        }
-
-        if (DisableAuditLogs)
-        {
-            return await base.SaveChangesAsync(cancellationToken);
-        }
-
-        var auditEntries = new List<DbAuditEntry>();
-        var entries = ChangeTracker.Entries()
-            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-            .Where(e => !ExcludedFromAudit.Contains(e.Metadata.ClrType.Name))
-            .ToList();
-
-        foreach (var entry in entries)
-        {
-            var auditEntry = new DbAuditEntry(entry)
-            {
-                EntityName = entry.Metadata.ClrType.Name,
-                Action = entry.State.ToString()
-            };
-            auditEntries.Add(auditEntry);
-
-            foreach (var property in entry.Properties)
-            {
-                string propertyName = property.Metadata.Name;
-
-                switch (entry.State)
-                {
-                    case EntityState.Added:
-                        auditEntry.NewValues[propertyName] = property.CurrentValue;
-                        break;
-
-                    case EntityState.Deleted:
-                        auditEntry.OldValues[propertyName] = property.OriginalValue;
-                        break;
-
-                    case EntityState.Modified:
-                        if (property.IsModified)
-                        {
-                            auditEntry.OldValues[propertyName] = property.OriginalValue;
-                            auditEntry.NewValues[propertyName] = property.CurrentValue;
-                        }
-                        break;
-                }
-            }
-        }
-
-        var result = await base.SaveChangesAsync(cancellationToken);
-
-        if (auditEntries.Count > 0)
-        {
-            var auditLogs = auditEntries.Select(ae => ae.ToAuditLog(user, now, ip)).ToList();
-            AuditLogs.AddRange(auditLogs);
-            
-            DisableAuditLogs = true;
-            try
-            {
-                await base.SaveChangesAsync(cancellationToken);
-            }
-            finally
-            {
-                DisableAuditLogs = false;
-            }
-        }
-
-        return result;
-    }
 
     private static System.Linq.Expressions.LambdaExpression CreateSoftDeleteFilter(Type type)
     {
@@ -372,8 +319,8 @@ public static class ModelBuilderSeedExtensions
             SchemeMonth = 5,
             SchemeYear = 2026,
             Version = 1,
-            EffectiveFrom = new DateTime(2026, 5, 1),
-            EffectiveTo = new DateTime(2026, 5, 31)
+            EffectiveFrom = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc),
+            EffectiveTo = new DateTime(2026, 5, 31, 23, 59, 59, DateTimeKind.Utc)
         });
 
         modelBuilder.Entity<IncentiveSchemeDetail>().HasData(

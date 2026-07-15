@@ -56,14 +56,17 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
                 .ToListAsync(cancellationToken);
             query = query.Where(x => mappedPartyCodes.Contains(x.PartyCode));
         }
-        else if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
+        if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
         {
-            var userBranchId = currentUser.BranchId.Value;
-            var allowedPartyCodes = await db.Parties
-                .Where(p => p.BranchId == userBranchId && !p.IsDeleted)
-                .Select(p => p.PartyCode)
-                .ToListAsync(cancellationToken);
-            query = query.Where(x => allowedPartyCodes.Contains(x.PartyCode));
+            var branch = await db.Branches.FirstOrDefaultAsync(b => b.Id == currentUser.BranchId.Value, cancellationToken);
+            if (branch != null)
+            {
+                query = query.Where(x => x.SourceLocation == branch.Code);
+            }
+        }
+        else if (!string.IsNullOrEmpty(filter.BranchCode))
+        {
+            query = query.Where(x => x.SourceLocation == filter.BranchCode);
         }
 
         if (filter.SelectedPartyCodes != null && filter.SelectedPartyCodes.Count > 0)
@@ -227,11 +230,8 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
             var partyNameResolved = origParty != null ? origParty.PartyName : x.PartyName;
             var execName = execMapping != null ? execMapping.ExecutiveName : "-";
 
-            // Use primary branch from analytics cache (real business code like VBZ, UTD)
-            // if not found, fall back to Party master branch code
-            if (!primaryBranchMap.TryGetValue(resolvedCode, out var displayBranchCode) || string.IsNullOrEmpty(displayBranchCode))
-                primaryBranchMap.TryGetValue(x.PartyCode, out displayBranchCode);
-            branchCode = !string.IsNullOrEmpty(displayBranchCode) ? displayBranchCode : branchCode;
+            // Resolve branch from Raw table via SourceLocation
+            branchCode = !string.IsNullOrEmpty(x.SourceLocation) ? x.SourceLocation : branchCode;
 
             return new IncentiveRegisterRow(
                 new DateTime(x.Year, x.Month, 1).ToString("MMMM yyyy"),
@@ -251,25 +251,43 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
                 x.PaymentDate,
                 x.PaymentStatus,
                 x.UTRNumber,
-                bank?.AccountNumber ?? "-",
-                bank?.IFSC ?? "-",
-                bank?.AccountHolder ?? "-",
+                !string.IsNullOrEmpty(x.BankAccountNumber) && x.BankAccountNumber != "-" ? x.BankAccountNumber : (bank?.AccountNumber ?? "-"),
+                !string.IsNullOrEmpty(x.IFSC) && x.IFSC != "-" ? x.IFSC : (bank?.IFSC ?? "-"),
+                !string.IsNullOrEmpty(x.BeneficiaryName) && x.BeneficiaryName != "-" ? x.BeneficiaryName : (bank?.AccountHolder ?? "-"),
                 BranchCode: branchCode,
                 OriginalPartyCode: resolvedCode,
-                SalesExecutive: execName
+                SalesExecutive: execName,
+                PanNo: bank?.PAN ?? "-"
             );
         }).ToList();
 
         // Populate metadata options from the SsIncentives query
         var activePartyQuery = db.SsIncentives.AsNoTracking().Where(x => !x.IsDeleted).AsQueryable();
+        var allBranches = new List<string>();
+
         if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
         {
-            var userBranchId = currentUser.BranchId.Value;
-            var allowedCodes = await db.Parties
-                .Where(p => p.BranchId == userBranchId && !p.IsDeleted)
-                .Select(p => p.PartyCode)
+            var branch = await db.Branches.FirstOrDefaultAsync(b => b.Id == currentUser.BranchId.Value, cancellationToken);
+            if (branch != null)
+            {
+                activePartyQuery = activePartyQuery.Where(x => x.SourceLocation == branch.Code);
+                allBranches.Add(branch.Code);
+            }
+        }
+        else
+        {
+            allBranches = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).Select(b => b.Code).OrderBy(c => c).ToListAsync(cancellationToken);
+            var rawLocCodes = await db.PartyPrimaryBranches.AsNoTracking()
+                .Where(p => !p.IsDeleted && p.PrimaryBranchCode != null && p.PrimaryBranchCode != "")
+                .Select(p => p.PrimaryBranchCode!)
+                .Distinct()
                 .ToListAsync(cancellationToken);
-            activePartyQuery = activePartyQuery.Where(x => allowedCodes.Contains(x.PartyCode));
+            allBranches = allBranches.Union(rawLocCodes, StringComparer.OrdinalIgnoreCase).OrderBy(c => c).ToList();
+
+            if (!string.IsNullOrEmpty(filter.BranchCode))
+            {
+                activePartyQuery = activePartyQuery.Where(x => x.SourceLocation == filter.BranchCode);
+            }
         }
 
         var activePartyCodes = await activePartyQuery
@@ -278,18 +296,21 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
             .OrderBy(code => code)
             .ToListAsync(cancellationToken);
 
-        // Branch isolated Party query
-        var allParties = await db.Parties
-            .AsNoTracking()
-            .Where(x => !x.IsDeleted)
-            .Select(x => new PartyLookupItem(x.Id, x.PartyCode, x.PartyName, x.OriginalPartyCode))
-            .ToListAsync(cancellationToken);
+        // Only include parties that have actually generated incentives at this branch location
+        var combinedPartyCodes = activePartyCodes;
 
         // Fetch partyIds with approved bank details to filter them out of updates list
         var partiesWithBank = await db.BankDetails
             .Where(x => x.ApprovalStatus == "Approved" && !x.IsDeleted)
             .Select(x => x.PartyId)
             .Distinct()
+            .ToListAsync(cancellationToken);
+
+        // Branch isolated Party query for bank updates
+        var allParties = await db.Parties
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .Select(x => new PartyLookupItem(x.Id, x.PartyCode, x.PartyName, x.OriginalPartyCode))
             .ToListAsync(cancellationToken);
 
         var partiesWithoutBank = allParties
@@ -299,12 +320,15 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
         var periodsQuery = db.SsIncentives.AsNoTracking().Where(x => !x.IsDeleted).AsQueryable();
         if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
         {
-            var userBranchId = currentUser.BranchId.Value;
-            var allowedCodes = await db.Parties
-                .Where(p => p.BranchId == userBranchId && !p.IsDeleted)
-                .Select(p => p.PartyCode)
-                .ToListAsync(cancellationToken);
-            periodsQuery = periodsQuery.Where(x => allowedCodes.Contains(x.PartyCode));
+            var branch = await db.Branches.FirstOrDefaultAsync(b => b.Id == currentUser.BranchId.Value, cancellationToken);
+            if (branch != null)
+            {
+                periodsQuery = periodsQuery.Where(x => x.SourceLocation == branch.Code);
+            }
+        }
+        else if (!string.IsNullOrEmpty(filter.BranchCode))
+        {
+            periodsQuery = periodsQuery.Where(x => x.SourceLocation == filter.BranchCode);
         }
 
         var periods = await periodsQuery
@@ -317,12 +341,15 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
         var paymentPeriodsQuery = db.SsIncentives.AsNoTracking().Where(x => !x.IsDeleted && x.PaymentDate != null).AsQueryable();
         if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
         {
-            var userBranchId = currentUser.BranchId.Value;
-            var allowedCodes = await db.Parties
-                .Where(p => p.BranchId == userBranchId && !p.IsDeleted)
-                .Select(p => p.PartyCode)
-                .ToListAsync(cancellationToken);
-            paymentPeriodsQuery = paymentPeriodsQuery.Where(x => allowedCodes.Contains(x.PartyCode));
+            var branch = await db.Branches.FirstOrDefaultAsync(b => b.Id == currentUser.BranchId.Value, cancellationToken);
+            if (branch != null)
+            {
+                paymentPeriodsQuery = paymentPeriodsQuery.Where(x => x.SourceLocation == branch.Code);
+            }
+        }
+        else if (!string.IsNullOrEmpty(filter.BranchCode))
+        {
+            paymentPeriodsQuery = paymentPeriodsQuery.Where(x => x.SourceLocation == filter.BranchCode);
         }
 
         var paymentPeriods = await paymentPeriodsQuery
@@ -340,10 +367,11 @@ public sealed class ReportBuilderService(IncentiveDbContext db, ICurrentUser cur
         return new IncentiveRegisterViewModel
         {
             Filter = filter,
-            PartyCodes = activePartyCodes,
+            PartyCodes = combinedPartyCodes,
             Parties = partiesWithoutBank,
             Periods = periods.Select(x => (x.Item1, x.Item2, new DateTime(x.Item2, x.Item1, 1).ToString("MMM yyyy"))).ToList(),
             PaymentPeriods = paymentPeriods.Select(x => (x.Item1, x.Item2, new DateTime(x.Item2, x.Item1, 1).ToString("MMM yyyy"))).ToList(),
+            AvailableBranches = allBranches,
             Rows = rows,
             ColumnConfigs = colConfigs
         };

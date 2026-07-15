@@ -134,6 +134,7 @@ public sealed class ApprovalEngineController(IncentiveDbContext db, IWorkflowEng
         var assignment = await db.WorkflowAssignments
             .Include(a => a.WorkflowDefinition)
             .Include(a => a.Histories)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(a => a.Id == assignmentId && !a.IsDeleted);
 
         if (assignment == null) return NotFound("Assignment not found.");

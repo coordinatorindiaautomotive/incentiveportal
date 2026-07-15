@@ -11,6 +11,8 @@ using IncentivePortal.Data;
 using IncentivePortal.Models;
 using Microsoft.EntityFrameworkCore;
 
+using IncentivePortal.Infrastructure.Cache;
+
 namespace IncentivePortal.Services;
 
 public record UploadRowError(int RowNumber, string ColumnName, string ErrorMessage);
@@ -38,7 +40,7 @@ public interface IUploadEngineService
     Task<UploadCommitResult> CommitAsync(Stream fileStream, string templateCode, string username, CancellationToken cancellationToken);
 }
 
-public sealed class UploadEngineService(IncentiveDbContext db) : IUploadEngineService
+public sealed class UploadEngineService(IncentiveDbContext db, ILookupCacheService cache) : IUploadEngineService
 {
     public async Task<UploadPreviewResult> PreviewAsync(Stream fileStream, string templateCode, CancellationToken cancellationToken)
     {
@@ -94,8 +96,8 @@ public sealed class UploadEngineService(IncentiveDbContext db) : IUploadEngineSe
         }
 
         // 4. Cache database lookups for validation (e.g. Party codes, Branch codes)
-        var validParties = await db.Parties.IgnoreQueryFilters().Select(p => p.PartyCode).ToHashSetAsync(StringComparer.OrdinalIgnoreCase, cancellationToken);
-        var validBranches = await db.Branches.IgnoreQueryFilters().Select(b => b.Code).ToHashSetAsync(StringComparer.OrdinalIgnoreCase, cancellationToken);
+        var validParties = await cache.GetValidPartyCodesAsync(cancellationToken);
+        var validBranches = await cache.GetValidBranchCodesAsync(cancellationToken);
 
         // 5. Parse and validate each row
         for (int rIndex = 1; rIndex < rows.Count; rIndex++)

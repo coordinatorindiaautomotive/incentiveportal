@@ -1422,8 +1422,6 @@ function addMappingRow(alt, orig) {
     `);
 }
 
-});
-
 function toggleBulkMappingArea() {
     $('#bulkMappingContainer').toggleClass('d-none');
     $('#bulkMappingInput').val('');
@@ -1732,7 +1730,7 @@ function runCalculationPreview(month, year, force, branchRules, partyMappings) {
                     <td class="text-end fw-bold">${Number(r.grossIncentive).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
                     <td class="text-end">${Number(r.tdsPercent)}%</td>
                     <td class="text-end text-danger fw-semibold">${Number(r.tdsAmount).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
-                    <td class="text-end text-warning">${r.adjustedAmount > 0 ? 'âˆ’' + Number(r.adjustedAmount).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—'}</td>
+                    <td class="text-end text-warning">${r.adjustedAmount > 0 ? '-' + Number(r.adjustedAmount).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—'}</td>
                     <td class="text-end text-success fw-bold">${Number(r.netTransfer).toLocaleString('en-IN', {maximumFractionDigits:0})}</td>
                     <td>${badge}</td>
                     <td class="text-center">${actions}</td>
@@ -1920,10 +1918,10 @@ $(document).on('click', '#downloadCalcPreviewBtn', function() {
     const rulesJson = pendingCalcBranchRules.length > 0 ? JSON.stringify(pendingCalcBranchRules) : '';
     const mappingsJson = pendingCalcPartyMappings.length > 0 ? JSON.stringify(pendingCalcPartyMappings) : '';
 
-    // Create a dynamic form to submit as a GET request so that it triggers a file download
+    // Create a dynamic form to submit as a POST request so that it triggers a file download without URL length limits
     const form = $('<form>', {
         action: '@Url.Action("ExportCalculationPreview", "Imports")',
-        method: 'GET',
+        method: 'POST',
         target: '_blank'
     });
 
@@ -1932,6 +1930,7 @@ $(document).on('click', '#downloadCalcPreviewBtn', function() {
     form.append($('<input>', { type: 'hidden', name: 'forceRecalculate', value: force }));
     form.append($('<input>', { type: 'hidden', name: 'branchRulesJson', value: rulesJson }));
     form.append($('<input>', { type: 'hidden', name: 'partyMappingsJson', value: mappingsJson }));
+    form.append($('<input>', { type: 'hidden', name: '__RequestVerificationToken', value: $('input[name="__RequestVerificationToken"]').val() }));
 
     $('body').append(form);
     form.submit();

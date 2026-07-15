@@ -331,6 +331,16 @@
 <div class="panel" style="margin-bottom: 24px;">
     <form method="get" class="corp-filter-band">
         <div class="filter-controls">
+            <div class="filter-group" style="min-width: auto;">
+                <label for="branchFilter" class="filter-label">Branch</label>
+                <select id="branchFilter" name="BranchCode" class="form-select" style="min-width: 140px;">
+                    <option value="">All Branches</option>
+                    @foreach (var br in Model.AvailableBranches)
+                    {
+                        <option value="@br" selected="@(Model.Filter.BranchCode == br)">@br</option>
+                    }
+                </select>
+            </div>
             <div class="filter-group">
                 <label class="filter-label">Party Code</label>
                 <div class="custom-multiselect dropdown" id="partyCodeMultiselect">
@@ -566,6 +576,9 @@
                                 break;
                             case "BeneficiaryName":
                                 <td>@row.BeneficiaryName</td>
+                                break;
+                            case "PanNo":
+                                <td><span class="badge bg-secondary">@row.PanNo</span></td>
                                 break;
                             case "BankDetails":
                                 <td>

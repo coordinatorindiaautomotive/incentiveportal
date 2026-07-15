@@ -28,6 +28,7 @@ public interface IIncentiveCalculationService
 
 public sealed class IncentiveCalculationService(
     IncentiveDbContext db,
+    IDistributedLockService lockService,
     IAnalyticsRefreshService analyticsService,
     ILogger<IncentiveCalculationService> logger
 ) : IIncentiveCalculationService
@@ -52,8 +53,14 @@ public sealed class IncentiveCalculationService(
         CancellationToken cancellationToken = default)
     {
         db.DisableAuditLogs = true;
+        
+        var lockResource = $"IncentiveCalc_{year}_{month}";
+        await using var distributedLock = await lockService.AcquireLockAsync(lockResource, cancellationToken);
+
+        using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+
             var isLocked = await db.MonthLocks.AnyAsync(x => x.LockYear == year && (x.LockMonth == month || x.LockMonth == 0) && x.IsLocked, cancellationToken);
             if (isLocked)
                 throw new InvalidOperationException("Locked month cannot be recalculated.");
@@ -89,6 +96,22 @@ public sealed class IncentiveCalculationService(
             var existingIncentives = await db.SsIncentives
                 .Where(x => x.Month == month && x.Year == year && !x.IsDeleted)
                 .ToListAsync(cancellationToken);
+
+            if (forceRecalculate)
+            {
+                var drafts = existingIncentives.Where(x => x.Status == "Draft").ToList();
+                if (drafts.Count > 0)
+                {
+                    db.SsIncentives.RemoveRange(drafts);
+                    await db.SaveChangesAsync(cancellationToken);
+                    
+                    // Remove them from our in-memory list
+                    foreach(var d in drafts)
+                    {
+                        existingIncentives.Remove(d);
+                    }
+                }
+            }
 
             var existingMap = existingIncentives
                 .GroupBy(x => $"{x.PartyCode}_{x.PartCategoryCode}", StringComparer.OrdinalIgnoreCase)
@@ -130,8 +153,35 @@ public sealed class IncentiveCalculationService(
                 }
             }
 
-            var rawRecords = await rawQuery.ToListAsync(cancellationToken);
-            if (rawRecords.Count == 0)
+            // Step 1: SQL Pushdown Aggregation
+            var aggregatedData = await (from r in rawQuery
+                let rawCode = r.OriginalCode ?? r.ConsPartyCode ?? ""
+                join m in db.PartyCodeMappings.Where(x => x.IsActive && !x.IsDeleted) on rawCode equals m.AlternativeCode into mGroup
+                from m in mGroup.DefaultIfEmpty()
+                let mappedCode = m != null ? m.OriginalCode : rawCode
+                
+                join p in db.Parties on mappedCode equals p.PartyCode into pGroup
+                from p in pGroup.DefaultIfEmpty()
+                let resolvedCode = (p != null && p.OriginalPartyCode != null && p.OriginalPartyCode != "") ? p.OriginalPartyCode : mappedCode
+                
+                group r by new {
+                   ResolvedCode = resolvedCode,
+                   SaleLoc = r.Loc,
+                   Category = r.PartCategoryCode,
+                   PartyType = p != null ? p.DealerType : (r.PartyType ?? "INDEPENDENT WORKSHOP")
+                } into g
+                select new {
+                   ResolvedCode = g.Key.ResolvedCode,
+                   SaleLoc = g.Key.SaleLoc,
+                   Category = g.Key.Category,
+                   PartyType = g.Key.PartyType,
+                   NetRetailSelling = g.Sum(x => x.NetRetailSelling),
+                   DiscountAmount = g.Sum(x => x.DiscountAmount),
+                   NetRetailQty = g.Sum(x => x.NetRetailQty ?? 0),
+                   UniqueInvoices = g.Select(x => x.DocumentNum).Distinct().Count()
+                }).ToListAsync(cancellationToken);
+
+            if (aggregatedData.Count == 0)
             {
                 return Array.Empty<CalculationResult>();
             }
@@ -142,8 +192,8 @@ public sealed class IncentiveCalculationService(
 
             if (activePeriodLocks.Count > 0)
             {
-                var processedPeriods = rawRecords
-                    .Select(r => new { Loc = r.Loc ?? "", Category = r.PartCategoryCode ?? "Other" })
+                var processedPeriods = aggregatedData
+                    .Select(r => new { Loc = r.SaleLoc ?? "", Category = r.Category ?? "Other" })
                     .Distinct()
                     .ToList();
 
@@ -167,51 +217,72 @@ public sealed class IncentiveCalculationService(
                 }
             }
 
-            // Load Parties and Mappings
-            var parties = await db.Parties.IgnoreQueryFilters().Include(x => x.Branch).ToListAsync(cancellationToken);
-            var partiesDict = parties.GroupBy(x => x.PartyCode, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            // Load ONLY the subset of Parties involved this month
+            var resolvedCodes = aggregatedData.Select(x => x.ResolvedCode).Distinct().ToList();
+            var parties = await db.Parties
+                .IgnoreQueryFilters()
+                .Include(x => x.Branch)
+                .Where(x => resolvedCodes.Contains(x.PartyCode))
+                .ToListAsync(cancellationToken);
+            var partiesDict = parties.ToDictionary(p => p.PartyCode, StringComparer.OrdinalIgnoreCase);
 
-            var mappings = await db.PartyCodeMappings.Where(m => m.IsActive && !m.IsDeleted).ToListAsync(cancellationToken);
-            var mappingsDict = mappings.GroupBy(m => m.AlternativeCode, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().OriginalCode, StringComparer.OrdinalIgnoreCase);
+            var ruleDict = branchRules != null 
+                ? branchRules.ToDictionary(x => x.Location, StringComparer.OrdinalIgnoreCase) 
+                : new Dictionary<string, IncentivePortal.DTOs.BranchCalcRule>(StringComparer.OrdinalIgnoreCase);
 
-            // Grouping Logic: PartyCode + PartCategoryCode
-            var grouped = rawRecords
-                .GroupBy(r => {
-                    var rawPartyCode = r.OriginalCode ?? r.ConsPartyCode ?? string.Empty;
-                    if (mappingsDict.TryGetValue(rawPartyCode, out var mc)) rawPartyCode = mc;
-                    if (partiesDict.TryGetValue(rawPartyCode, out var po) && !string.IsNullOrEmpty(po.OriginalPartyCode))
-                    {
-                        if (partiesDict.TryGetValue(po.OriginalPartyCode, out var pp)) rawPartyCode = pp.PartyCode;
-                    }
-                    return new {
-                        PartyCode = rawPartyCode,
-                        PartCategoryCode = r.PartCategoryCode ?? "Other"
-                    };
-                })
+            // In-Memory Rule Application & Final Aggregation
+            var grouped = aggregatedData
+                .GroupBy(x => x.ResolvedCode)
                 .Select(g => {
-                    var first = g.First();
-                    var partyCode = g.Key.PartyCode;
+                    var partyCode = g.Key;
                     partiesDict.TryGetValue(partyCode, out var pObj);
-                    var partyName = pObj?.PartyName ?? first.ConsPartyName ?? "Unknown Party";
+                    var partyName = pObj?.PartyName ?? "Unknown Party";
                     var branchName = pObj?.Branch?.Name ?? "";
-                    var loc = pObj?.Branch?.Code ?? first.Loc ?? "";
-                    var partyType = pObj?.DealerType ?? first.PartyType ?? "INDEPENDENT WORKSHOP";
+                    var loc = pObj?.Branch?.Code ?? "";
+                    var partyType = pObj?.DealerType ?? "INDEPENDENT WORKSHOP";
+                    
+                    var validItemList = g.Where(x => {
+                        var saleLoc = x.SaleLoc ?? "";
+                        
+                        // If branchRules were provided, and this sale's location is NOT in the rules, exclude the sale
+                        if (branchRules != null && branchRules.Count > 0 && !ruleDict.ContainsKey(saleLoc))
+                            return false;
+                            
+                        if (ruleDict.TryGetValue(saleLoc, out var rule))
+                        {
+                            // Enforce Category Rule
+                            if (!string.IsNullOrEmpty(rule.AllowedCategories))
+                            {
+                                var allowedCats = rule.AllowedCategories.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(c => c.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                                if (!allowedCats.Contains(x.Category ?? "Other")) return false;
+                            }
+                            // Enforce PartyType Rule
+                            if (!string.IsNullOrEmpty(rule.AllowedPartyTypes))
+                            {
+                                var allowedTypes = rule.AllowedPartyTypes.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(pt => pt.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                                if (!allowedTypes.Contains(x.PartyType)) return false;
+                            }
+                        }
+                        
+                        return true;
+                    }).ToList();
                     
                     return new {
                         FiscalYear = $"{year}-{((year + 1) % 100):D2}",
                         MonthNumber = month,
                         PartyCode = partyCode,
                         PartyName = partyName,
-                        PartCategoryCode = g.Key.PartCategoryCode,
+                        PartCategoryCode = "COMBINED",
                         PartyType = partyType,
                         Loc = loc,
                         BranchName = branchName,
-                        TotalNetRetailSelling = g.Sum(x => x.NetRetailSelling),
-                        TotalDiscountAmount = g.Sum(x => x.DiscountAmount),
-                        TotalQuantity = g.Sum(x => x.NetRetailQty ?? 0),
-                        TotalInvoiceCount = g.Select(x => x.DocumentNum).Distinct().Count()
+                        TotalNetRetailSelling = validItemList.Sum(x => x.NetRetailSelling),
+                        TotalDiscountAmount = validItemList.Sum(x => x.DiscountAmount),
+                        TotalQuantity = validItemList.Sum(x => x.NetRetailQty),
+                        TotalInvoiceCount = validItemList.Sum(x => x.UniqueInvoices)
                     };
                 })
+                .Where(x => x.TotalNetRetailSelling > 0 || x.TotalQuantity > 0)
                 .ToList();
 
             var activeScheme = await db.IncentiveSchemes.Include(x => x.Details)
@@ -307,16 +378,7 @@ public sealed class IncentiveCalculationService(
                 var bankDetails = await db.BankDetails.FirstOrDefaultAsync(b => b.PartyId == targetParty.Id && b.ApprovalStatus == "Approved" && !b.IsDeleted, cancellationToken);
                 var hasPan = bankDetails != null && !string.IsNullOrWhiteSpace(bankDetails.PAN);
                 
-                TdsRule? matchedTdsRule = null;
-                foreach (var rule in activeTdsRules)
-                {
-                    if (netIncentive >= rule.AnnualThreshold)
-                    {
-                        matchedTdsRule = rule;
-                        break;
-                    }
-                }
-                decimal tdsRate = matchedTdsRule != null ? (hasPan ? matchedTdsRule.RateWithPan : matchedTdsRule.RateNoPan) : 0.05m; // fallback 5%
+                decimal tdsRate = hasPan ? 0.10m : 0.20m;
                 decimal tdsAmount = Math.Round(netIncentive * tdsRate, 2);
 
                 // Outstanding balance
@@ -405,6 +467,7 @@ public sealed class IncentiveCalculationService(
             await db.SaveChangesAsync(cancellationToken);
             await analyticsService.RefreshAsync(month, year, cancellationToken);
 
+            await transaction.CommitAsync(cancellationToken);
             return results;
         }
         finally

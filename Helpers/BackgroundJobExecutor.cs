@@ -257,9 +257,9 @@ public sealed class FileSystemFormFile : IFormFile
         stream.CopyTo(target);
     }
 
-    public Task CopyToAsync(Stream target, CancellationToken cancellationToken = default)
+    public async Task CopyToAsync(Stream target, CancellationToken cancellationToken = default)
     {
         using var stream = OpenReadStream();
-        return stream.CopyToAsync(target, cancellationToken);
+        await stream.CopyToAsync(target, cancellationToken);
     }
 }

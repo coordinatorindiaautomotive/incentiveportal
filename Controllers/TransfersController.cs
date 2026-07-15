@@ -243,6 +243,27 @@ public sealed class TransfersController(ITransferService transferService) : Cont
     }
 
     /// <summary>
+    /// Re-runs the reconciliation matching pass for the given month/year without requiring a
+    /// new file upload. Uses existing BankStatementRecords to update PaymentStatus and PaymentDate,
+    /// and marks outstanding parties without a bank match as "Credit Party".
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = "Super Admin,HO Finance")]
+    public async Task<IActionResult> RunReconciliation(int month, int year, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var username = User.Identity?.Name ?? "system";
+            var result = await transferService.RunReconciliationAsync(month, year, username, cancellationToken);
+            return Json(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.InnerException?.Message ?? ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Reconciles an unmatched statement record manually by assigning it to a dealer.
     /// Updates or creates the dealer's SsIncentive payout for the target month/year.
     /// </summary>

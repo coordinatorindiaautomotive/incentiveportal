@@ -147,10 +147,13 @@
                                 <span class="nav-icon"><i data-lucide="layout-dashboard" class="icon-overview"></i></span>
                                 <span class="nav-label">Dashboard</span>
                             </a>
-                            <a class="nav-link @IsActive("Customer360")" asp-controller="Customer360" asp-action="Index">
-                                <span class="nav-icon"><i data-lucide="users" class="icon-customer"></i></span>
-                                <span class="nav-label">Customer 360&deg; Hub</span>
-                            </a>
+                            @if (IsModuleAllowed("Parties", "Access") || IsModuleAllowed("Customer360", "Access"))
+                            {
+                                <a class="nav-link @IsActive("Customer360")" asp-controller="Customer360" asp-action="Index">
+                                    <span class="nav-icon"><i data-lucide="users" class="icon-customer"></i></span>
+                                    <span class="nav-label">Customer 360&deg; Hub</span>
+                                </a>
+                            }
                         }
 
                         <!-- OPERATIONS -->
@@ -169,6 +172,12 @@
                                     {
                                         <a class="nav-link @IsActive("UploadManagement")" asp-controller="UploadManagement" asp-action="Index">Upload Sales</a>
                                     }
+                                    @if (User.IsInRole("Super Admin") || User.IsInRole("HO Finance"))
+                                    {
+                                        <a class="nav-link @IsActive("BankPaymentImports")" asp-controller="BankPaymentImports" asp-action="Index">
+                                            <i data-lucide="shield-check" style="width:11px;height:11px;margin-right:4px;color:#2563eb;"></i>Bank Payments (SSOT)
+                                        </a>
+                                    }
                                     @if (IsModuleAllowed("CashManagement", "View"))
                                     {
                                         <a class="nav-link @IsActive("CashManagement", "Reconciliation")" asp-controller="CashManagement" asp-action="Reconciliation">Collections</a>
@@ -179,20 +188,36 @@
                         </div>
 
                         <!-- Incentive Engine -->
-                        <div class="nav-dropdown-wrapper">
-                            <a class="nav-link nav-dropdown-trigger @IsActive("Schemes") @IsActive("AiCenter") @IsActive("Incentives", "Verification")" data-bs-toggle="collapse" data-bs-target="#menuIncentive" href="javascript:void(0);" role="button" aria-expanded="false">
-                                <span class="nav-icon"><i data-lucide="award" class="icon-incentive"></i></span>
-                                <span class="nav-label">Incentive Engine</span>
-                                <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
-                            </a>
-                            <div class="collapse" id="menuIncentive">
-                                <div class="nav-dropdown-content">
-                                    <a class="nav-link" href="/Schemes">Incentive Schemes</a>
-                                    <a class="nav-link @IsActive("Incentives", "Verification")" href="/Incentives/Verification">Verification Workspace</a>
-                                    <a class="nav-link" href="/AiCenter/Index">AI Command Center</a>
+                        @if (IsModuleAllowed("Schemes", "Access") || IsModuleAllowed("Ledger", "Access") || IsModuleAllowed("Imports", "Access"))
+                        {
+                            <div class="nav-dropdown-wrapper">
+                                <a class="nav-link nav-dropdown-trigger @IsActive("Schemes") @IsActive("AiCenter") @IsActive("Incentives", "Verification")" data-bs-toggle="collapse" data-bs-target="#menuIncentive" href="javascript:void(0);" role="button" aria-expanded="false">
+                                    <span class="nav-icon"><i data-lucide="award" class="icon-incentive"></i></span>
+                                    <span class="nav-label">Incentive Engine</span>
+                                    <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
+                                </a>
+                                <div class="collapse" id="menuIncentive">
+                                    <div class="nav-dropdown-content">
+                                        @if (IsModuleAllowed("Schemes", "Access"))
+                                        {
+                                            <a class="nav-link" href="/Schemes">Incentive Schemes</a>
+                                        }
+                                        @if (IsModuleAllowed("Imports", "Access"))
+                                        {
+                                            <a class="nav-link @IsActive("Incentives", "Verification")" href="/Incentives/Verification">Verification Workspace</a>
+                                        }
+                                        @if (IsModuleAllowed("Ledger", "Access"))
+                                        {
+                                            <a class="nav-link @IsActive("Ledger")" href="/Ledger">Incentive Register</a>
+                                        }
+                                        @if (IsModuleAllowed("ControlTower", "Access"))
+                                        {
+                                            <a class="nav-link" href="/AiCenter/Index">AI Command Center</a>
+                                        }
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        }
 
                         <!-- Cash In / Cash Out -->
                         @if (IsModuleAllowed("CashManagement", "View"))
@@ -214,20 +239,23 @@
                         }
 
                         <!-- Reports -->
-                        <div class="nav-dropdown-wrapper">
-                            <a class="nav-link nav-dropdown-trigger @IsActive("ReportsCenter")" data-bs-toggle="collapse" data-bs-target="#menuReports" href="javascript:void(0);" role="button" aria-expanded="false">
-                                <span class="nav-icon"><i data-lucide="bar-chart-3" class="icon-reports"></i></span>
-                                <span class="nav-label">Reports</span>
-                                <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
-                            </a>
-                            <div class="collapse" id="menuReports">
-                                <div class="nav-dropdown-content">
-                                    <a class="nav-link @IsActive("ReportsCenter")" asp-controller="ReportsCenter" asp-action="Index">Reports Center</a>
-                                    <a class="nav-link" href="/Reports/TargetVsAchievement">Target vs Achievement</a>
-                                    <a class="nav-link @IsActive("ReportsCenter", "DynamicBuilder")" href="/ReportsCenter/DynamicBuilder">Dynamic Report Builder</a>
+                        @if (IsModuleAllowed("Reports", "Access"))
+                        {
+                            <div class="nav-dropdown-wrapper">
+                                <a class="nav-link nav-dropdown-trigger @IsActive("ReportsCenter")" data-bs-toggle="collapse" data-bs-target="#menuReports" href="javascript:void(0);" role="button" aria-expanded="false">
+                                    <span class="nav-icon"><i data-lucide="bar-chart-3" class="icon-reports"></i></span>
+                                    <span class="nav-label">Reports</span>
+                                    <i data-lucide="chevron-right" class="nav-caret ms-auto" style="width:12px; height:12px;"></i>
+                                </a>
+                                <div class="collapse" id="menuReports">
+                                    <div class="nav-dropdown-content">
+                                        <a class="nav-link @IsActive("ReportsCenter")" asp-controller="ReportsCenter" asp-action="Index">Reports Center</a>
+                                        <a class="nav-link" href="/Reports/TargetVsAchievement">Target vs Achievement</a>
+                                        <a class="nav-link @IsActive("ReportsCenter", "DynamicBuilder")" href="/ReportsCenter/DynamicBuilder">Dynamic Report Builder</a>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        }
 
                         <!-- Masters -->
                         <div class="nav-dropdown-wrapper">

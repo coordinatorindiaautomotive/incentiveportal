@@ -495,19 +495,27 @@ public sealed class ImportsAppService(
                 }
             }
 
+            var branchMap = await db.Branches.ToDictionaryAsync(b => b.Code, b => b.Name, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
             previewRows = ledgers.Select(l => {
                 var netEligible = Math.Max(0, l.GrossIncentive - l.TdsAmount);
                 var adjusted = Math.Max(0, netEligible - l.NetTransferAmount);
+                var locName = l.SourceLocation;
+                if (!string.IsNullOrEmpty(locName) && branchMap.TryGetValue(locName, out var bName) && !string.IsNullOrEmpty(bName))
+                {
+                    locName = bName;
+                }
+                
                 return new {
                     partyCode = l.PartyCode,
                     partyName = l.PartyName,
-                    location = l.SourceLocation,
+                    location = string.IsNullOrEmpty(locName) ? "-" : locName,
                     partCategory = l.PartCategoryCode,
                     saleValue = l.SaleValue,
                     discount = l.OnBillDiscount,
-                    slabApplied = l.ApplicableSlab ?? (l.SlabPercent * 100).ToString("F2") + "%",
+                    slabApplied = (l.SlabPercent * 100).ToString("0.##") + "%",
                     incentiveType = l.IncentiveType ?? "Slab",
-                    incentivePercent = (l.SlabPercent * 100).ToString("F2") + "%",
+                    incentivePercent = (l.SlabPercent * 100).ToString("0.##") + "%",
                     grossIncentive = l.GrossIncentive,
                     tdsPercent = l.GrossIncentive > 0 ? Math.Round((l.TdsAmount / l.GrossIncentive) * 100, 2) : 0m,
                     tdsAmount = l.TdsAmount,
@@ -717,7 +725,7 @@ public sealed class ImportsAppService(
     public async Task<int> ApproveCalculationAsync(int month, int year, CancellationToken ct)
     {
         var pendingRecords = await db.SsIncentives
-            .Where(x => x.Month == month && x.Year == year && x.Status == "Pending Approval")
+            .Where(x => x.Month == month && x.Year == year && x.Status == "Draft")
             .ToListAsync(ct);
 
         if (pendingRecords.Count == 0)

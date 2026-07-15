@@ -119,6 +119,7 @@ public sealed class IncentiveRegisterFilter
 {
     public string? PartyCode { get; set; }
     public List<string> SelectedPartyCodes { get; set; } = new();
+    public string? BranchCode { get; set; }
     public int? Month { get; set; }
     public int? Year { get; set; }
     public List<string> SelectedPeriods { get; set; } = new();
@@ -132,6 +133,7 @@ public sealed class IncentiveRegisterViewModel
     public IReadOnlyList<PartyLookupItem> Parties { get; set; } = [];
     public IReadOnlyList<(int Month, int Year, string Label)> Periods { get; set; } = [];
     public IReadOnlyList<(int Month, int Year, string Label)> PaymentPeriods { get; set; } = [];
+    public IReadOnlyList<string> AvailableBranches { get; set; } = [];
     public IReadOnlyList<IncentiveRegisterRow> Rows { get; set; } = [];
     public IReadOnlyList<IncentivePortal.Models.ReportColumnConfig> ColumnConfigs { get; set; } = [];
 }
@@ -161,7 +163,8 @@ public sealed record IncentiveRegisterRow(
     string BeneficiaryName,
     string BranchCode = "-",
     string OriginalPartyCode = "-",
-    string SalesExecutive = "-");
+    string SalesExecutive = "-",
+    string PanNo = "-");
 
 public sealed record BranchRankingDto(
     string BranchName,

@@ -1,0 +1,362 @@
+@model List<IncentivePortal.Models.BankPaymentImportBatch>
+@using IncentivePortal.Models
+@{
+    ViewBag.Title = "Bank Payment Imports";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<style>
+    /* ── Bank Payment Imports — Index ─────────────────────────────── */
+    .bpi-page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 14px;
+        padding-bottom: 20px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid var(--line, #e2e8f0);
+    }
+    .bpi-page-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text, #0f172a);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .bpi-page-title .icon-shield {
+        width: 30px;
+        height: 30px;
+        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        flex-shrink: 0;
+    }
+    .bpi-stat-card {
+        background: var(--panel, #fff);
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 12px;
+        padding: 18px 20px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    .bpi-stat-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .bpi-stat-icon.blue   { background: rgba(37,99,235,0.10); color: #2563eb; }
+    .bpi-stat-icon.green  { background: rgba(16,185,129,0.10); color: #10b981; }
+    .bpi-stat-icon.yellow { background: rgba(245,158,11,0.10);  color: #f59e0b; }
+    .bpi-stat-icon.red    { background: rgba(239,68,68,0.10);   color: #ef4444; }
+    .bpi-stat-value { font-size: 1.5rem; font-weight: 800; color: var(--text,#0f172a); line-height: 1; }
+    .bpi-stat-label { font-size: 0.78rem; color: var(--muted,#64748b); margin-top: 2px; }
+
+    /* Filter bar */
+    .filter-bar {
+        background: var(--panel,#fff);
+        border: 1px solid var(--line,#e2e8f0);
+        border-radius: 12px;
+        padding: 14px 18px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 14px;
+        margin-bottom: 20px;
+    }
+    .filter-bar .form-label { font-size: 0.76rem; font-weight: 600; color: var(--muted,#64748b); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .filter-bar .form-select,
+    .filter-bar .form-control { border-radius: 8px; border-color: var(--line,#e2e8f0); font-size: 0.88rem; }
+
+    /* Table */
+    .bpi-table-wrap {
+        background: var(--panel,#fff);
+        border: 1px solid var(--line,#e2e8f0);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .bpi-table { width: 100%; border-collapse: collapse; }
+    .bpi-table thead tr { background: #f8fafc; }
+    .bpi-table th {
+        padding: 11px 14px;
+        font-size: 0.73rem;
+        font-weight: 700;
+        color: var(--muted,#64748b);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border-bottom: 1px solid var(--line,#e2e8f0);
+        white-space: nowrap;
+    }
+    .bpi-table td {
+        padding: 13px 14px;
+        font-size: 0.875rem;
+        color: var(--text,#0f172a);
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: middle;
+    }
+    .bpi-table tbody tr:hover { background: #f8fafc; }
+    .bpi-table tbody tr:last-child td { border-bottom: none; }
+
+    /* Status badges */
+    .badge-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .badge-status.completed      { background: #dcfce7; color: #15803d; }
+    .badge-status.pending        { background: #fef3c7; color: #92400e; }
+    .badge-status.partial        { background: #dbeafe; color: #1e40af; }
+    .badge-status.failed         { background: #fee2e2; color: #991b1b; }
+
+    /* Import progress bar */
+    .import-bar { background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden; width: 100px; }
+    .import-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #2563eb, #06b6d4); }
+
+    .batch-ref { font-family: 'Courier New', monospace; font-size: 0.83rem; font-weight: 700; color: #2563eb; }
+    .forced-badge { font-size: 0.7rem; background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 6px; }
+
+    /* Empty state */
+    .bpi-empty {
+        text-align: center;
+        padding: 64px 20px;
+        color: var(--muted,#64748b);
+    }
+    .bpi-empty i { opacity: 0.25; margin-bottom: 14px; display: block; }
+    .bpi-empty h5 { font-weight: 700; color: var(--text,#0f172a); margin-bottom: 6px; }
+</style>
+
+<div class="container-fluid px-0">
+
+    @* Page Header *@
+    <div class="bpi-page-header">
+        <div class="bpi-page-title">
+            <div class="icon-shield">
+                <i data-lucide="shield-check" style="width:16px;height:16px;"></i>
+            </div>
+            <div>
+                Bank Payment Imports
+                <div style="font-size:0.78rem;font-weight:500;color:var(--muted,#64748b);margin-top:2px;">
+                    Protected SSOT — all rows are immutable after upload
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="@Url.Action("DownloadTemplate")" class="btn btn-outline-secondary btn-sm rounded-pill" style="font-size:0.82rem;">
+                <i data-lucide="download" style="width:13px;height:13px;margin-right:4px;"></i>Excel Template
+            </a>
+            <a href="@Url.Action("Upload")" class="btn btn-primary btn-sm rounded-pill px-4" style="font-size:0.82rem;background:linear-gradient(135deg,#2563eb,#06b6d4);border:none;">
+                <i data-lucide="upload-cloud" style="width:13px;height:13px;margin-right:5px;"></i>New Upload
+            </a>
+        </div>
+    </div>
+
+    @* Summary stats *@
+    @{
+        int totalBatches   = Model.Count;
+        int totalRecords   = Model.Sum(b => b.ImportedRecords);
+        int totalDups      = Model.Sum(b => b.DuplicateRecords);
+        int totalFailed    = Model.Sum(b => b.FailedRecords);
+    }
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="bpi-stat-card">
+                <div class="bpi-stat-icon blue"><i data-lucide="layers" style="width:20px;height:20px;"></i></div>
+                <div>
+                    <div class="bpi-stat-value">@totalBatches</div>
+                    <div class="bpi-stat-label">Total Batches</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="bpi-stat-card">
+                <div class="bpi-stat-icon green"><i data-lucide="database" style="width:20px;height:20px;"></i></div>
+                <div>
+                    <div class="bpi-stat-value">@totalRecords.ToString("N0")</div>
+                    <div class="bpi-stat-label">Records Imported</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="bpi-stat-card">
+                <div class="bpi-stat-icon yellow"><i data-lucide="copy" style="width:20px;height:20px;"></i></div>
+                <div>
+                    <div class="bpi-stat-value">@totalDups.ToString("N0")</div>
+                    <div class="bpi-stat-label">Duplicates Skipped</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="bpi-stat-card">
+                <div class="bpi-stat-icon red"><i data-lucide="alert-triangle" style="width:20px;height:20px;"></i></div>
+                <div>
+                    <div class="bpi-stat-value">@totalFailed.ToString("N0")</div>
+                    <div class="bpi-stat-label">Failed Rows</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Filter bar *@
+    <form method="get" class="filter-bar">
+        <div>
+            <div class="form-label">Status</div>
+            <select name="status" id="statusFilter" class="form-select form-select-sm" style="min-width:150px;">
+                <option value="">All Statuses</option>
+                @foreach (var s in (string[])ViewBag.Statuses)
+                {
+                    <option value="@s" selected="@(ViewBag.StatusFilter == s ? "selected" : null)">@s</option>
+                }
+            </select>
+        </div>
+        <div>
+            <div class="form-label">From</div>
+            <input type="date" name="from" id="filterFrom" class="form-control form-control-sm" value="@ViewBag.FromFilter" style="min-width:130px;" />
+        </div>
+        <div>
+            <div class="form-label">To</div>
+            <input type="date" name="to" id="filterTo" class="form-control form-control-sm" value="@ViewBag.ToFilter" style="min-width:130px;" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Apply</button>
+        <a href="@Url.Action("Index")" class="btn btn-outline-secondary btn-sm rounded-pill">Clear</a>
+    </form>
+
+    @* TempData feedback *@
+    @if (TempData["Error"] is string err)
+    {
+        <div class="alert alert-danger rounded-3 d-flex align-items-center gap-2 mb-3">
+            <i data-lucide="alert-circle" style="width:18px;height:18px;flex-shrink:0;"></i>@err
+        </div>
+    }
+    @if (TempData["Success"] is string succ)
+    {
+        <div class="alert alert-success rounded-3 d-flex align-items-center gap-2 mb-3">
+            <i data-lucide="check-circle" style="width:18px;height:18px;flex-shrink:0;"></i>@succ
+        </div>
+    }
+
+    @* Table *@
+    <div class="bpi-table-wrap">
+        @if (!Model.Any())
+        {
+            <div class="bpi-empty">
+                <i data-lucide="inbox" style="width:56px;height:56px;"></i>
+                <h5>No Import Batches Found</h5>
+                <p style="font-size:0.88rem;margin-bottom:20px;">Upload a bank payment Excel file to create the first batch.</p>
+                <a href="@Url.Action("Upload")" class="btn btn-primary rounded-pill px-4" style="background:linear-gradient(135deg,#2563eb,#06b6d4);border:none;">
+                    <i data-lucide="upload-cloud" style="width:14px;height:14px;margin-right:6px;"></i>Upload Now
+                </a>
+            </div>
+        }
+        else
+        {
+            <div style="overflow-x:auto;">
+                <table class="bpi-table">
+                    <thead>
+                        <tr>
+                            <th>Batch Ref</th>
+                            <th>Recon Period</th>
+                            <th>File Name</th>
+                            <th>Uploaded By</th>
+                            <th>Upload Date</th>
+                            <th style="text-align:center;">Total</th>
+                            <th style="text-align:center;">Imported</th>
+                            <th style="text-align:center;">Duplicates</th>
+                            <th style="text-align:center;">Failed</th>
+                            <th style="text-align:center;">Progress</th>
+                            <th>Status</th>
+                            <th style="text-align:center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var batch in Model)
+                        {
+                            int pct = batch.TotalRecords > 0
+                                ? (int)Math.Round(100.0 * batch.ImportedRecords / batch.TotalRecords)
+                                : 0;
+                            string badgeCls = batch.Status switch
+                            {
+                                BankPaymentImportStatus.Completed      => "completed",
+                                BankPaymentImportStatus.PartialSuccess => "partial",
+                                BankPaymentImportStatus.Failed         => "failed",
+                                _                                       => "pending"
+                            };
+                            <tr>
+                                <td>
+                                    <span class="batch-ref">@batch.BatchRef</span>
+                                    @if (batch.IsForcedReimport)
+                                    {
+                                        <span class="forced-badge ms-1">FORCED</span>
+                                    }
+                                <td>
+                                    @if (batch.ReconMonth.HasValue && batch.ReconYear.HasValue)
+                                    {
+                                        var mName = System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(batch.ReconMonth.Value).Substring(0, 3);
+                                        <span class="badge bg-light text-dark border px-2 py-1 rounded-2" style="font-size:0.77rem; font-weight:600; white-space:nowrap;">
+                                            <i data-lucide="calendar" style="width:11px; height:11px; color:#2563eb; margin-right:3px; vertical-align:middle;"></i>
+                                            @mName @batch.ReconYear.Value
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted" style="font-size:0.75rem; font-style:italic;">N/A</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@batch.OriginalFileName">
+                                        <i data-lucide="file-spreadsheet" style="width:13px;height:13px;color:#10b981;margin-right:4px;"></i>@batch.OriginalFileName
+                                    </div>
+                                </td>
+                                <td style="color:var(--muted,#64748b);">@batch.UploadedBy</td>
+                                <td style="white-space:nowrap;">
+                                    @batch.UploadedAt.ToLocalTime().ToString("dd-MMM-yyyy")<br />
+                                    <span style="font-size:0.77rem;color:var(--muted,#64748b);">@batch.UploadedAt.ToLocalTime().ToString("HH:mm")</span>
+                                </td>
+                                <td style="text-align:center;font-weight:600;">@batch.TotalRecords</td>
+                                <td style="text-align:center;color:#10b981;font-weight:700;">@batch.ImportedRecords</td>
+                                <td style="text-align:center;color:#f59e0b;font-weight:600;">@batch.DuplicateRecords</td>
+                                <td style="text-align:center;color:#ef4444;font-weight:600;">@batch.FailedRecords</td>
+                                <td style="text-align:center;">
+                                    <div class="import-bar mx-auto">
+                                        <div class="import-bar-fill" style="width:@pct%;"></div>
+                                    </div>
+                                    <div style="font-size:0.72rem;color:var(--muted,#64748b);margin-top:2px;">@pct%</div>
+                                </td>
+                                <td>
+                                    <span class="badge-status @badgeCls">
+                                        @(batch.Status == BankPaymentImportStatus.PartialSuccess ? "Partial" : batch.Status)
+                                    </span>
+                                </td>
+                                <td style="text-align:center;">
+                                    <a href="@Url.Action("BatchDetail", new { id = batch.Id })"
+                                       class="btn btn-outline-primary btn-sm rounded-pill" style="font-size:0.78rem;padding:3px 12px;">
+                                        <i data-lucide="eye" style="width:11px;height:11px;margin-right:3px;"></i>Detail
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @* Footer note *@
+    <div style="font-size:0.77rem;color:var(--muted,#64748b);margin-top:14px;display:flex;align-items:center;gap:6px;">
+        <i data-lucide="lock" style="width:12px;height:12px;"></i>
+        All records in this table are INSERT-ONLY. No modifications are permitted after upload.
+    </div>
+</div>

@@ -1,0 +1,533 @@
+@model IncentivePortal.Application.CashManagement.Services.BankPaymentBatchDetailViewModel
+@using IncentivePortal.Models
+@{
+    ViewBag.Title = "Batch Detail — " + Model.Batch.BatchRef;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var batch = Model.Batch;
+}
+
+<style>
+    /* ── Batch Detail ──────────────────────────────────────────── */
+    .bd-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 14px;
+        padding-bottom: 20px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid var(--line, #e2e8f0);
+    }
+    .bd-title {
+        font-size: 1.28rem;
+        font-weight: 700;
+        color: var(--text, #0f172a);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .bd-title .title-icon {
+        width: 30px;
+        height: 30px;
+        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        flex-shrink: 0;
+    }
+
+    /* Batch meta card */
+    .batch-meta-card {
+        background: var(--panel, #fff);
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 14px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+    }
+    .batch-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+    }
+    .batch-meta-item label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--muted, #64748b);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        display: block;
+        margin-bottom: 3px;
+    }
+    .batch-meta-item .value {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--text, #0f172a);
+    }
+    .batch-ref-big {
+        font-family: 'Courier New', monospace;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #2563eb;
+    }
+    .forced-pill {
+        background: #fef3c7;
+        color: #92400e;
+        border-radius: 20px;
+        padding: 2px 10px;
+        font-size: 0.73rem;
+        font-weight: 700;
+    }
+
+    /* Stat bar */
+    .stat-bar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .stat-bar-item {
+        flex: 1 1 120px;
+        background: var(--panel, #fff);
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 12px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .stat-bar-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .sb-blue   { background: rgba(37,99,235,0.10); color: #2563eb; }
+    .sb-green  { background: rgba(16,185,129,0.10); color: #10b981; }
+    .sb-yellow { background: rgba(245,158,11,0.10); color: #f59e0b; }
+    .sb-red    { background: rgba(239,68,68,0.10);  color: #ef4444; }
+    .stat-bar-val   { font-size: 1.3rem; font-weight: 800; color: var(--text,#0f172a); line-height: 1; }
+    .stat-bar-label { font-size: 0.75rem; color: var(--muted,#64748b); }
+
+    /* Records table */
+    .records-panel {
+        background: var(--panel, #fff);
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .records-panel-header {
+        background: #f8fafc;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line, #e2e8f0);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .records-panel-header h6 { margin: 0; font-weight: 700; font-size: 0.9rem; }
+    .records-scroll { overflow-x: auto; }
+    .records-table { width: 100%; border-collapse: collapse; }
+    .records-table th {
+        background: #f1f5f9;
+        padding: 9px 12px;
+        font-weight: 700;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted,#64748b);
+        white-space: nowrap;
+        border-bottom: 1px solid var(--line,#e2e8f0);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+    .records-table td {
+        padding: 9px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 0.82rem;
+        color: var(--text,#0f172a);
+        white-space: nowrap;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .records-table td.nowrap-td { white-space: nowrap; }
+    .records-table tbody tr:hover { background: #f8fafc; }
+    .records-table tbody tr:last-child td { border-bottom: none; }
+
+    /* Status badge */
+    .status-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+    .chip-success  { background: #dcfce7; color: #15803d; }
+    .chip-pending  { background: #fef3c7; color: #92400e; }
+    .chip-rejected { background: #fee2e2; color: #991b1b; }
+    .chip-default  { background: #f1f5f9; color: #475569; }
+
+    /* Pagination */
+    .bd-pager {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        border-top: 1px solid var(--line,#e2e8f0);
+    }
+    .bd-pager .page-info { font-size: 0.82rem; color: var(--muted,#64748b); flex: 1; }
+    .bd-pager a, .bd-pager span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid var(--line,#e2e8f0);
+        color: var(--text,#0f172a);
+        background: var(--panel,#fff);
+        transition: all 0.18s;
+    }
+    .bd-pager a:hover { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
+    .bd-pager span.current-page { background: linear-gradient(135deg,#2563eb,#06b6d4); color: #fff; border-color: transparent; }
+    .bd-pager span.ellipsis { border: none; background: transparent; }
+
+    /* Immutability lock */
+    .ssot-lock-notice {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.77rem;
+        color: var(--muted,#64748b);
+        margin-top: 12px;
+    }
+
+    /* Amount cell */
+    .amt-cell { font-family: 'Courier New', monospace; font-size: 0.82rem; text-align: right; }
+    .utr-cell { font-family: 'Courier New', monospace; font-size: 0.79rem; color: #2563eb; }
+</style>
+
+<div class="container-fluid px-0">
+
+    @* Page Header *@
+    <div class="bd-header">
+        <div class="bd-title">
+            <div class="title-icon">
+                <i data-lucide="database" style="width:16px;height:16px;"></i>
+            </div>
+            <div>
+                Batch Detail
+                <div style="font-size:0.78rem;font-weight:500;color:var(--muted,#64748b);margin-top:2px;">
+                    Protected Raw Bank Payment Records — READ ONLY
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            @if (User.IsInRole("Super Admin"))
+            {
+                <button type="button" class="btn btn-warning btn-sm rounded-pill"
+                        onclick="openForceReimport()" style="font-size:0.82rem;">
+                    <i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:4px;"></i>Force Re-import
+                </button>
+            }
+            <a href="@Url.Action("Index")" class="btn btn-outline-secondary btn-sm rounded-pill" style="font-size:0.82rem;">
+                <i data-lucide="arrow-left" style="width:13px;height:13px;margin-right:4px;"></i>Back to History
+            </a>
+        </div>
+    </div>
+
+    @* Batch metadata *@
+    <div class="batch-meta-card">
+        <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+            <div>
+                <span class="batch-ref-big">@batch.BatchRef</span>
+                @if (batch.IsForcedReimport)
+                {
+                    <span class="forced-pill ms-2">FORCED REIMPORT by @batch.ForcedBy</span>
+                }
+            </div>
+            @{
+                string badgeCls = batch.Status switch
+                {
+                    "Completed"      => "chip-success",
+                    "PartialSuccess" => "chip-pending",
+                    "Failed"         => "chip-rejected",
+                    _                => "chip-default"
+                };
+            }
+            <span class="status-chip @badgeCls" style="font-size:0.82rem;padding:5px 14px;">
+                @(batch.Status == "PartialSuccess" ? "Partial Success" : batch.Status)
+            </span>
+        </div>
+        <div class="batch-meta-grid">
+            <div class="batch-meta-item">
+                <label>File Name</label>
+                <div class="value" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;" title="@batch.OriginalFileName">
+                    <i data-lucide="file-spreadsheet" style="width:12px;height:12px;color:#10b981;margin-right:4px;"></i>@batch.OriginalFileName
+                </div>
+            </div>
+            <div class="batch-meta-item">
+                <label>Uploaded By</label>
+                <div class="value">@batch.UploadedBy</div>
+            </div>
+            <div class="batch-meta-item">
+                <label>Upload Date</label>
+                <div class="value">@batch.UploadedAt.ToLocalTime().ToString("dd-MMM-yyyy HH:mm")</div>
+            </div>
+            <div class="batch-meta-item">
+                <label>Recon Period</label>
+                <div class="value">
+                    @if (batch.ReconMonth.HasValue && batch.ReconYear.HasValue)
+                    {
+                        var mName = System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat.GetMonthName(batch.ReconMonth.Value);
+                        <span class="badge bg-light text-dark border p-2 rounded-3" style="font-size:0.8rem; font-weight:600;">
+                            <i data-lucide="calendar" style="width:12px; height:12px; color:#2563eb; margin-right:4px; vertical-align:middle;"></i>
+                            @mName @batch.ReconYear.Value
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="text-muted" style="font-size:0.8rem; font-style:italic;">Not Specified</span>
+                    }
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(batch.ImportRemarks))
+            {
+                <div class="batch-meta-item" style="grid-column:1/-1;">
+                    <label>Remarks</label>
+                    <div class="value" style="font-weight:500;color:var(--muted,#64748b);">@batch.ImportRemarks</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Stats bar *@
+    <div class="stat-bar">
+        <div class="stat-bar-item">
+            <div class="stat-bar-icon sb-blue"><i data-lucide="list" style="width:18px;height:18px;"></i></div>
+            <div><div class="stat-bar-val">@batch.TotalRecords</div><div class="stat-bar-label">Total Rows</div></div>
+        </div>
+        <div class="stat-bar-item">
+            <div class="stat-bar-icon sb-green"><i data-lucide="check-circle" style="width:18px;height:18px;"></i></div>
+            <div><div class="stat-bar-val" style="color:#10b981;">@batch.ImportedRecords</div><div class="stat-bar-label">Imported</div></div>
+        </div>
+        <div class="stat-bar-item">
+            <div class="stat-bar-icon sb-yellow"><i data-lucide="copy" style="width:18px;height:18px;"></i></div>
+            <div><div class="stat-bar-val" style="color:#f59e0b;">@batch.DuplicateRecords</div><div class="stat-bar-label">Duplicates Skipped</div></div>
+        </div>
+        <div class="stat-bar-item">
+            <div class="stat-bar-icon sb-red"><i data-lucide="alert-triangle" style="width:18px;height:18px;"></i></div>
+            <div><div class="stat-bar-val" style="color:#ef4444;">@batch.FailedRecords</div><div class="stat-bar-label">Failed</div></div>
+        </div>
+        <div class="stat-bar-item">
+            <div class="stat-bar-icon sb-blue"><i data-lucide="layers" style="width:18px;height:18px;"></i></div>
+            <div><div class="stat-bar-val">@Model.TotalCount</div><div class="stat-bar-label">Records Stored</div></div>
+        </div>
+    </div>
+
+    @* Records table *@
+    <div class="records-panel">
+        <div class="records-panel-header">
+            <h6>
+                <i data-lucide="lock" style="width:13px;height:13px;color:#2563eb;margin-right:5px;"></i>
+                Raw Payment Records (SSOT)
+            </h6>
+            <span style="font-size:0.8rem;color:var(--muted,#64748b);">
+                Page @(Model.PageIndex + 1) of @Model.PageCount — @Model.TotalCount total records
+            </span>
+        </div>
+        <div class="records-scroll" style="max-height:600px;overflow:auto;">
+            <table class="records-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Row</th>
+                        <th>File Seq Num</th>
+                        <th>UTR No</th>
+                        <th>Beneficiary Name</th>
+                        <th>Beneficiary Acct</th>
+                        <th>IFSC</th>
+                        <th>Amount</th>
+                        <th>Pymt Mode</th>
+                        <th>Pymt Date</th>
+                        <th>Bank Status</th>
+                        <th>Debit Narration</th>
+                        <th>Reference No</th>
+                        <th>Customer Ref</th>
+                        <th>Acct Debit Date</th>
+                        <th>Rejection Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Records.Any())
+                    {
+                        <tr>
+                            <td colspan="16" style="text-align:center;padding:40px;color:var(--muted,#64748b);">
+                                No records found for this batch.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        int idx = Model.PageIndex * Model.PageSize + 1;
+                        foreach (var r in Model.Records)
+                        {
+                            string statusCls = r.BankStatus?.ToUpperInvariant() switch
+                            {
+                                "SUCCESS" or "PROCESSED" => "chip-success",
+                                "REJECTED" or "FAILED"   => "chip-rejected",
+                                _                        => "chip-default"
+                            };
+                            <tr>
+                                <td style="color:var(--muted,#64748b);font-size:0.78rem;">@idx</td>
+                                <td style="color:var(--muted,#64748b);">@r.RowNumber</td>
+                                <td class="utr-cell">@(r.FileSequenceNum ?? "-")</td>
+                                <td class="utr-cell">@(r.UtrNo ?? "-")</td>
+                                <td title="@r.BeneficiaryName">@(r.BeneficiaryName ?? "-")</td>
+                                <td style="font-family:monospace;font-size:0.79rem;">@(r.BeneficiaryAccountNo ?? "-")</td>
+                                <td style="font-family:monospace;font-size:0.79rem;">@(r.BeneIfscCode ?? "-")</td>
+                                <td class="amt-cell">@(r.Amount?.ToString("N2") ?? "-")</td>
+                                <td>@(r.PymtMode ?? "-")</td>
+                                <td style="white-space:nowrap;">@(r.PymtDate?.ToString("dd-MMM-yyyy") ?? "-")</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(r.BankStatus))
+                                    {
+                                        <span class="status-chip @statusCls">@r.BankStatus</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:var(--muted,#64748b);">-</span>
+                                    }
+                                </td>
+                                <td title="@r.DebitNarration">@(r.DebitNarration?.Length > 40 ? r.DebitNarration[..40] + "…" : r.DebitNarration ?? "-")</td>
+                                <td>@(r.ReferenceNo ?? "-")</td>
+                                <td>@(r.CustomerRefNo ?? "-")</td>
+                                <td style="white-space:nowrap;">@(r.AcctDebitDate?.ToString("dd-MMM-yyyy") ?? "-")</td>
+                                <td title="@r.RejectionReason" style="color:@(!string.IsNullOrEmpty(r.RejectionReason) ? "#ef4444" : "inherit")">
+                                    @(r.RejectionReason?.Length > 35 ? r.RejectionReason[..35] + "…" : r.RejectionReason ?? "-")
+                                </td>
+                            </tr>
+                            idx++;
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* Pagination *@
+        @if (Model.PageCount > 1)
+        {
+            <div class="bd-pager">
+                <span class="page-info">
+                    Showing @(Model.PageIndex * Model.PageSize + 1)–@(Math.Min((Model.PageIndex + 1) * Model.PageSize, Model.TotalCount)) of @Model.TotalCount
+                </span>
+                @if (Model.PageIndex > 0)
+                {
+                    <a href="@Url.Action("BatchDetail", new { id = batch.Id, page = Model.PageIndex - 1 })" title="Previous">‹</a>
+                }
+                @for (int p = 0; p < Model.PageCount; p++)
+                {
+                    if (p == Model.PageIndex)
+                    {
+                        <span class="current-page">@(p + 1)</span>
+                    }
+                    else if (p == 0 || p == Model.PageCount - 1 || Math.Abs(p - Model.PageIndex) <= 2)
+                    {
+                        <a href="@Url.Action("BatchDetail", new { id = batch.Id, page = p })">@(p + 1)</a>
+                    }
+                    else if (Math.Abs(p - Model.PageIndex) == 3)
+                    {
+                        <span class="ellipsis">…</span>
+                    }
+                }
+                @if (Model.PageIndex < Model.PageCount - 1)
+                {
+                    <a href="@Url.Action("BatchDetail", new { id = batch.Id, page = Model.PageIndex + 1 })" title="Next">›</a>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="ssot-lock-notice">
+        <i data-lucide="lock" style="width:12px;height:12px;"></i>
+        These records are the Protected Single Source of Truth. No edits, updates, or deletions are permitted.
+    </div>
+
+</div>
+
+@* Force Reimport modal (SuperAdmin only) *@
+@if (User.IsInRole("Super Admin"))
+{
+    <div class="modal fade" id="forceReimportModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius:16px;">
+                <div class="modal-header" style="border-bottom:1px solid var(--line,#e2e8f0);">
+                    <h5 class="modal-title" style="font-size:1rem;font-weight:700;">
+                        <i data-lucide="alert-triangle" style="width:16px;height:16px;color:#f59e0b;margin-right:6px;"></i>
+                        Force Re-import — SuperAdmin
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning rounded-3" style="font-size:0.875rem;">
+                        This will re-upload a new file and insert rows that were previously skipped as duplicates.
+                        Existing records are <strong>never modified</strong>. A new batch will be created marked as a forced re-import.
+                    </div>
+                    <label class="form-label" style="font-size:0.82rem;font-weight:600;">Select file to force re-import</label>
+                    <input type="file" id="forceFileInput" accept=".xlsx,.xls" class="form-control rounded-3" />
+                </div>
+                <div class="modal-footer" style="border-top:1px solid var(--line,#e2e8f0);">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning rounded-pill px-4 fw-bold" onclick="doForceReimport()">
+                        <i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:4px;"></i>Force Re-import
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="frSpinner" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#fff;font-weight:600;">
+        <div style="width:48px;height:48px;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;"></div>
+        Processing forced re-import…
+    </div>
+
+    @section Scripts {
+    <script>
+    window.openForceReimport = function () {
+        new bootstrap.Modal(document.getElementById('forceReimportModal')).show();
+    };
+    window.doForceReimport = async function () {
+        const fi = document.getElementById('forceFileInput');
+        if (!fi.files.length) { alert('Please select a file.'); return; }
+        const spinner = document.getElementById('frSpinner');
+        spinner.style.display = 'flex';
+        const fd = new FormData();
+        fd.append('file', fi.files[0]);
+        fd.append('__RequestVerificationToken',
+            document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '');
+        try {
+            const res  = await fetch('/BankPaymentImports/ForceReimport', { method: 'POST', body: fd });
+            const data = await res.json();
+            spinner.style.display = 'none';
+            bootstrap.Modal.getInstance(document.getElementById('forceReimportModal'))?.hide();
+            alert(data.success ? `✅ Force re-import complete.\nBatch: ${data.batchRef}\nImported: ${data.importedRecords}` : `❌ ${data.message}`);
+            if (data.success && data.batchId) location.href = `/BankPaymentImports/BatchDetail/${data.batchId}`;
+        } catch (e) {
+            spinner.style.display = 'none';
+            alert('Error: ' + e.message);
+        }
+    };
+    </script>
+    }
+}

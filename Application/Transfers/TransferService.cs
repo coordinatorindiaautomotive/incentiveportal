@@ -68,6 +68,7 @@ public interface ITransferService
     Task CreateUnmatchedRecordAsync(BankStatementRecord model, string username, CancellationToken cancellationToken);
     Task<List<object>> GetPartiesListAsync(CancellationToken cancellationToken);
     Task ReconcileUnmatchedRecordAsync(int id, string partyCode, string username, CancellationToken cancellationToken);
+    Task<object> RunReconciliationAsync(int month, int year, string username, CancellationToken cancellationToken);
 }
 
 public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculationService calculationService) : ITransferService
@@ -369,7 +370,8 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
                 UTR = utr,
                 PaymentDate = paymentDate,
                 IsReconciled = false,
-                PartyCode = string.IsNullOrWhiteSpace(partyCodeFromExcel) ? null : partyCodeFromExcel,
+                // PartyCode stays null here; correctly assigned below after matching
+                PartyCode = null,
                 RawRowJson = rawJson,
                 ImportLogId = bankImportLog.Id,
                 CreatedBy = username,
@@ -381,23 +383,44 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
                 status = "Success";
 
             Party? matchedParty = null;
+            SsIncentive? matchedTransfer = null;
+            bool hasPartyCodeInExcel = false;
+
             if (!string.IsNullOrEmpty(partyCodeFromExcel))
             {
+                // Step 1: Try to extract a party-code-shaped token from the narration
+                // Matches 2–4 letter prefix followed by 6–13 digits (covers WRJ050318666, WR386100511, IN2024001234, etc.)
+                var codeMatch = Regex.Match(partyCodeFromExcel, @"\b([A-Z]{2,4}\d{6,13})\b", RegexOptions.IgnoreCase);
+                var resolvedSearchCode = codeMatch.Success ? codeMatch.Value.Trim() : partyCodeFromExcel.Trim();
+
+                // If a code-shaped token was extracted, flag it so account/name fallbacks are skipped
+                hasPartyCodeInExcel = codeMatch.Success;
+
+                // Step 2: Try exact match first using the extracted/full code
                 matchedParty = parties.FirstOrDefault(p =>
-                    partyCodeFromExcel.Equals(p.PartyCode, StringComparison.OrdinalIgnoreCase) ||
-                    partyCodeFromExcel.Contains(p.PartyCode, StringComparison.OrdinalIgnoreCase) ||
-                    p.PartyCode.Equals(partyCodeFromExcel, StringComparison.OrdinalIgnoreCase));
+                    resolvedSearchCode.Equals(p.PartyCode.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                // Step 3: If no exact match, scan narration for any known party code as a substring
+                if (matchedParty == null)
+                {
+                    matchedParty = parties.FirstOrDefault(p =>
+                        !string.IsNullOrEmpty(p.PartyCode) &&
+                        partyCodeFromExcel.IndexOf(p.PartyCode.Trim(), StringComparison.OrdinalIgnoreCase) >= 0);
+
+                    if (matchedParty != null)
+                        hasPartyCodeInExcel = true; // found an embedded party code
+                }
             }
 
-            SsIncentive? matchedTransfer = null;
             if (matchedParty != null)
             {
-                matchedTransfer = transfers.FirstOrDefault(t => t.PartyCode.Equals(matchedParty.PartyCode, StringComparison.OrdinalIgnoreCase)
+                matchedTransfer = transfers.FirstOrDefault(t => t.PartyCode.Trim().Equals(matchedParty.PartyCode.Trim(), StringComparison.OrdinalIgnoreCase)
                     && t.Month == targetMonth
                     && t.Year == targetYear);
             }
 
-            if (matchedTransfer == null && !string.IsNullOrEmpty(accountNo))
+            // Only run fallbacks if no party code is extracted from the Excel row narration
+            if (matchedTransfer == null && !hasPartyCodeInExcel && !string.IsNullOrEmpty(accountNo))
             {
                 var cleanAccountNo = accountNo.Trim().TrimStart('0');
                 matchedTransfer = transfers.FirstOrDefault(t =>
@@ -425,7 +448,7 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
                 }
             }
 
-            if (matchedTransfer == null && !string.IsNullOrEmpty(beneficiaryName) && rowAmount > 0)
+            if (matchedTransfer == null && !hasPartyCodeInExcel && !string.IsNullOrEmpty(beneficiaryName) && rowAmount > 0)
             {
                 var cleanExcelName = CleanName(beneficiaryName);
                 if (!string.IsNullOrEmpty(cleanExcelName))
@@ -477,7 +500,7 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
             {
                 matchedTransfer.UTRNumber = string.IsNullOrWhiteSpace(utr) ? null : utr;
                 matchedTransfer.PaymentStatus = normStatus;
-                matchedTransfer.PaymentDate = paymentDate ?? DateTime.UtcNow;
+                matchedTransfer.PaymentDate = paymentDate; // null if not present in bank file
 
                 matchedTransfer.BankAccountNumber = !string.IsNullOrWhiteSpace(accountNo) ? accountNo : matchedTransfer.BankAccountNumber;
                 matchedTransfer.IFSC = !string.IsNullOrWhiteSpace(beneficiaryIfsc) ? beneficiaryIfsc : matchedTransfer.IFSC;
@@ -515,7 +538,7 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
 
                     ssIncentive.PaymentStatus = normStatus;
                     ssIncentive.UTRNumber = utr;
-                    ssIncentive.PaymentDate = paymentDate ?? DateTime.UtcNow;
+                    ssIncentive.PaymentDate = paymentDate; // null if not present in bank file
 
                     ssIncentive.BankAccountNumber = !string.IsNullOrWhiteSpace(accountNo) ? accountNo : ssIncentive.BankAccountNumber;
                     ssIncentive.IFSC = !string.IsNullOrWhiteSpace(beneficiaryIfsc) ? beneficiaryIfsc : ssIncentive.IFSC;
@@ -575,6 +598,31 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
             }
         }
 
+        // ── Credit Party pass: mark any still-unmatched SsIncentives for this period
+        //    whose party exists in DealerOutstandings as "Credit Party"
+        if (transfers.Count > 0)
+        {
+            var outstandingPartyCodes = await db.DealerOutstandings
+                .AsNoTracking()
+                .Where(o => !o.IsDeleted)
+                .Select(o => o.PartyCode)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var outstandingSet = new HashSet<string>(outstandingPartyCodes, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var remaining in transfers)
+            {
+                if (remaining.Month == targetMonth && remaining.Year == targetYear && outstandingSet.Contains(remaining.PartyCode))
+                {
+                    remaining.PaymentStatus = "Credit Party";
+                    remaining.UpdatedAt = DateTime.UtcNow;
+                    db.Entry(remaining).State = EntityState.Modified;
+                    logs.Add($"Credit Party: {remaining.PartyCode} | Outstanding balance detected — no bank match found.");
+                }
+            }
+        }
+
         bankImportLog.TotalRows = rows.Count;
         bankImportLog.SuccessRows = reconciledCount;
         bankImportLog.FailedRows = failedCount;
@@ -590,6 +638,194 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
             autoCreated = autoCreatedList
         };
     }
+
+    /// <summary>
+    /// Re-runs the reconciliation matching pass for the given month/year without requiring a
+    /// new file upload. Uses existing BankStatementRecords to update PaymentStatus and PaymentDate
+    /// on SsIncentives, and marks outstanding parties without a bank match as "Credit Party".
+    /// </summary>
+    public async Task<object> RunReconciliationAsync(int month, int year, string username, CancellationToken cancellationToken)
+    {
+        int reconciledCount = 0;
+        int creditPartyCount = 0;
+        var logs = new List<string>();
+
+        // Load ALL bank records for the period (IsReconciled may be false if SsIncentive wasn't updated during upload)
+        var allBankRecords = await db.BankStatementRecords
+            .AsNoTracking()
+            .Where(r => r.Month == month && r.Year == year)
+            .ToListAsync(cancellationToken);
+
+        if (allBankRecords.Count == 0)
+        {
+            return new { ok = false, message = $"No bank statement records found for {month}/{year}. Please upload the bank statement first.", reconciledCount = 0, creditPartyCount = 0, logs };
+        }
+
+        // Load bank details for account-number fallback matching
+        var bankDetails = await db.BankDetails
+            .Include(b => b.Party)
+            .AsNoTracking()
+            .Where(b => b.ApprovalStatus == "Approved")
+            .ToListAsync(cancellationToken);
+
+        // Load parties list for narration-based party code scanning
+        var parties = await db.Parties
+            .AsNoTracking()
+            .Where(p => !p.IsDeleted && p.Status == "Active")
+            .ToListAsync(cancellationToken);
+
+        // Build a map: PartyCode → best bank record (highest amount or latest date)
+        // Resolution order: 1) stored PartyCode, 2) account number → BankDetails, 3) narration → party code substring
+        var partyToBankRecord = new Dictionary<string, BankStatementRecord>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var br in allBankRecords)
+        {
+            string? resolvedPartyCode = br.PartyCode;
+
+            // Fallback 1: account number lookup via BankDetails
+            if (string.IsNullOrEmpty(resolvedPartyCode) && !string.IsNullOrEmpty(br.AccountNumber))
+            {
+                var cleanAcct = br.AccountNumber.Trim().TrimStart('0');
+                var matchedBank = bankDetails.FirstOrDefault(b =>
+                    !string.IsNullOrEmpty(b.AccountNumber) &&
+                    b.AccountNumber.Trim().TrimStart('0') == cleanAcct);
+                resolvedPartyCode = matchedBank?.Party?.PartyCode;
+            }
+
+            // Fallback 2: scan RawRowJson / BeneficiaryName for any known party code as substring
+            if (string.IsNullOrEmpty(resolvedPartyCode))
+            {
+                // Collect all text fields that may contain a narration with the party code
+                var narrationTexts = new[] { br.RawRowJson ?? "", br.BeneficiaryName ?? "" };
+                foreach (var text in narrationTexts)
+                {
+                    if (string.IsNullOrEmpty(text)) continue;
+
+                    // Step A: try regex pattern [A-Z]{2,4}\d{6,13} to extract a code-shaped token (covers WRJ, WR, IN, etc.)
+                    var codeMatch = Regex.Match(text, @"\b([A-Z]{2,4}\d{6,13})\b", RegexOptions.IgnoreCase);
+                    if (codeMatch.Success)
+                    {
+                        var candidate = codeMatch.Value.Trim();
+                        var foundParty = parties.FirstOrDefault(p =>
+                            p.PartyCode.Equals(candidate, StringComparison.OrdinalIgnoreCase));
+                        if (foundParty != null)
+                        {
+                            resolvedPartyCode = foundParty.PartyCode;
+                            break;
+                        }
+                    }
+
+                    // Step B: scan narration for any known party code as a literal substring
+                    var substringMatch = parties.FirstOrDefault(p =>
+                        !string.IsNullOrEmpty(p.PartyCode) &&
+                        text.IndexOf(p.PartyCode, StringComparison.OrdinalIgnoreCase) >= 0);
+                    if (substringMatch != null)
+                    {
+                        resolvedPartyCode = substringMatch.PartyCode;
+                        break;
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(resolvedPartyCode)) continue;
+
+            // Keep the latest (or only) record per party
+            if (!partyToBankRecord.ContainsKey(resolvedPartyCode))
+                partyToBankRecord[resolvedPartyCode] = br;
+            else
+            {
+                // Prefer the record with a payment date, or the later date
+                var existing = partyToBankRecord[resolvedPartyCode];
+                if ((br.PaymentDate ?? DateTime.MinValue) > (existing.PaymentDate ?? DateTime.MinValue))
+                    partyToBankRecord[resolvedPartyCode] = br;
+            }
+
+            // Also update bank record PartyCode and mark as reconciled if not already
+            var tracked = await db.BankStatementRecords.FindAsync(new object[] { br.Id }, cancellationToken);
+            if (tracked != null && (tracked.PartyCode != resolvedPartyCode || !tracked.IsReconciled))
+            {
+                tracked.IsReconciled = true;
+                tracked.PartyCode = resolvedPartyCode;
+                tracked.UpdatedAt = DateTime.UtcNow;
+                tracked.UpdatedBy = username;
+                db.Entry(tracked).State = EntityState.Modified;
+            }
+        }
+
+
+        // Load all non-deleted incentives for this period (any status)
+        var incentives = await db.SsIncentives
+            .Where(x => !x.IsDeleted && x.Month == month && x.Year == year)
+            .ToListAsync(cancellationToken);
+
+        // Apply bank record status/date to matched incentives
+        foreach (var incentive in incentives)
+        {
+            if (partyToBankRecord.TryGetValue(incentive.PartyCode, out var matchedBankRecord))
+            {
+                var normStatus = NormalizeStatus(matchedBankRecord.Status ?? "Success");
+
+                // Skip if already reconciled to a final status
+                if (incentive.PaymentStatus == "Paid" || incentive.PaymentStatus == "Success" || incentive.PaymentStatus == "Reconciled")
+                {
+                    logs.Add($"Skipped (already locked): {incentive.PartyCode} | Status: {incentive.PaymentStatus}");
+                    continue;
+                }
+
+                incentive.PaymentStatus = normStatus;
+                incentive.PaymentDate = matchedBankRecord.PaymentDate;
+                if (!string.IsNullOrWhiteSpace(matchedBankRecord.UTR))
+                    incentive.UTRNumber = matchedBankRecord.UTR;
+                if (!string.IsNullOrWhiteSpace(matchedBankRecord.AccountNumber))
+                    incentive.BankAccountNumber = matchedBankRecord.AccountNumber;
+                incentive.TransferredAmount = (normStatus == "Paid") ? incentive.NetTransferAmount : 0;
+                incentive.UpdatedAt = DateTime.UtcNow;
+                incentive.UpdatedBy = username;
+                db.Entry(incentive).State = EntityState.Modified;
+                reconciledCount++;
+                logs.Add($"Updated: {incentive.PartyCode} | Status: {normStatus} | Date: {matchedBankRecord.PaymentDate?.ToString("dd-MM-yyyy") ?? "-"} | UTR: {matchedBankRecord.UTR ?? "-"}");
+            }
+        }
+
+        // Credit Party pass: mark still-unmatched incentives for this period as "Credit Party"
+        // if the party exists in DealerOutstandings
+        var outstandingPartyCodes = await db.DealerOutstandings
+            .AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .Select(o => o.PartyCode)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var outstandingSet = new HashSet<string>(outstandingPartyCodes, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var incentive in incentives)
+        {
+            if (!partyToBankRecord.ContainsKey(incentive.PartyCode) && outstandingSet.Contains(incentive.PartyCode))
+            {
+                if (incentive.PaymentStatus == "Paid" || incentive.PaymentStatus == "Success" || incentive.PaymentStatus == "Reconciled")
+                    continue;
+
+                incentive.PaymentStatus = "Credit Party";
+                incentive.UpdatedAt = DateTime.UtcNow;
+                incentive.UpdatedBy = username;
+                db.Entry(incentive).State = EntityState.Modified;
+                creditPartyCount++;
+                logs.Add($"Credit Party: {incentive.PartyCode} | Outstanding balance — no bank match.");
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return new
+        {
+            ok = true,
+            message = $"Reconciliation run complete. Updated: {reconciledCount}, Credit Party: {creditPartyCount}.",
+            reconciledCount,
+            creditPartyCount,
+            logs
+        };
+    }
+
 
     public async Task<List<object>> ParseHeadersAsync(IFormFile file, CancellationToken cancellationToken)
     {
@@ -903,7 +1139,7 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
 
     private static string NormalizeStatus(string excelStatus)
     {
-        if (string.IsNullOrEmpty(excelStatus)) return "Paid";
+        if (string.IsNullOrEmpty(excelStatus)) return "Success";
         var lower = excelStatus.ToLowerInvariant();
         if (lower.Contains("fail") || lower.Contains("reject") || lower.Contains("return"))
             return "Failed";
@@ -911,8 +1147,11 @@ public sealed class TransferService(IncentiveDbContext db, IIncentiveCalculation
             return "Reversed";
         if (lower.Contains("pend"))
             return "Pending";
-        if (lower.Contains("success") || lower.Contains("paid") || lower.Contains("reconcil") || lower.Contains("complete"))
+        if (lower.Contains("success") || lower.Contains("credit") || lower.Contains("complete"))
+            return "Success";
+        if (lower.Contains("paid") || lower.Contains("reconcil"))
             return "Paid";
+        // Return the original value if it doesn’t match any known keyword
         return excelStatus;
     }
 }

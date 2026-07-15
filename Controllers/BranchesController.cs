@@ -3,15 +3,25 @@ using IncentivePortal.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using IncentivePortal.Helpers;
+using IncentivePortal.Infrastructure.Cache;
 
 namespace IncentivePortal.Controllers;
 
 [Authorize(Roles = $"{AppRoles.SuperAdmin},{AppRoles.HOFinance}")]
-public sealed class BranchesController(IncentiveDbContext db) : Controller
+public sealed class BranchesController(IncentiveDbContext db, IDistributedCache cache, ILookupCacheService lookupCache) : Controller
 {
+    private const string CacheKey = "masterdata_branches";
+
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        var branches = await db.Branches.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var branches = await cache.GetRecordAsync<List<Branch>>(CacheKey, cancellationToken);
+        if (branches == null)
+        {
+            branches = await db.Branches.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+            await cache.SetRecordAsync(CacheKey, branches, TimeSpan.FromHours(2), null, cancellationToken);
+        }
         
         var distinctTypes = await db.Branches
             .Where(x => !string.IsNullOrEmpty(x.BranchType))
@@ -64,6 +74,8 @@ public sealed class BranchesController(IncentiveDbContext db) : Controller
             existing.UpdatedBy = "system";
         }
         await db.SaveChangesAsync(cancellationToken);
+        await lookupCache.InvalidateBranchesCacheAsync(cancellationToken);
+        await cache.RemoveAsync(CacheKey, cancellationToken);
         return Json(new { ok = true, message = "Branch saved successfully." });
     }
 
@@ -78,6 +90,8 @@ public sealed class BranchesController(IncentiveDbContext db) : Controller
         existing.UpdatedAt = DateTime.UtcNow;
         existing.UpdatedBy = User.Identity?.Name ?? "system";
         await db.SaveChangesAsync(cancellationToken);
+        await lookupCache.InvalidateBranchesCacheAsync(cancellationToken);
+        await cache.RemoveAsync(CacheKey, cancellationToken);
         return Json(new { ok = true, message = "Branch deleted successfully." });
     }
 

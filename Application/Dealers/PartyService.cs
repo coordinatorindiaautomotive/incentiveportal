@@ -23,6 +23,11 @@ public interface IPartyService
     /// Creates or updates a party record, verifying branch authorization.
     /// </summary>
     Task<Party> CreateAsync(Party party, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Recalculates the base locations for all parties based on historical sales.
+    /// </summary>
+    Task CalculateBaseLocationsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -70,5 +75,50 @@ public sealed class PartyService(IncentiveDbContext db, ICurrentUser currentUser
         db.Parties.Add(party);
         await db.SaveChangesAsync(cancellationToken);
         return party;
+    }
+
+    public async Task CalculateBaseLocationsAsync(CancellationToken cancellationToken = default)
+    {
+        // 1. Calculate sales sum per party and branch
+        var salesData = await db.SsIncentives
+            .Where(x => !x.IsDeleted && !string.IsNullOrEmpty(x.PartyCode) && !string.IsNullOrEmpty(x.SourceLocation))
+            .GroupBy(x => new { x.PartyCode, x.SourceLocation })
+            .Select(g => new
+            {
+                g.Key.PartyCode,
+                g.Key.SourceLocation,
+                TotalSales = g.Sum(x => x.SaleValue)
+            })
+            .ToListAsync(cancellationToken);
+
+        // 2. Find the highest sales location per party
+        var maxSalesLocations = salesData
+            .GroupBy(x => x.PartyCode)
+            .Select(g => g.OrderByDescending(x => x.TotalSales).First())
+            .ToList();
+
+        // 3. Get all branches mapping code -> id
+        var branchDict = await db.Branches
+            .Where(x => !x.IsDeleted)
+            .ToDictionaryAsync(x => x.Code, x => x.Id, cancellationToken);
+
+        // 4. Update the parties
+        var parties = await db.Parties.Where(x => !x.IsDeleted).ToListAsync(cancellationToken);
+        foreach (var p in parties)
+        {
+            var bestSales = maxSalesLocations.FirstOrDefault(x => x.PartyCode == p.PartyCode);
+            if (bestSales != null && branchDict.TryGetValue(bestSales.SourceLocation, out int autoBranchId))
+            {
+                p.AutoBaseBranchId = autoBranchId;
+                
+                // Effective mapping respects manual override
+                if (!p.IsManuallyMapped)
+                {
+                    p.BranchId = autoBranchId;
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
     }
 }

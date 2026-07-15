@@ -63,36 +63,19 @@ public sealed class ReportsController(
     [Authorize(Roles = "Super Admin,HO Finance,Auditor,Branch Manager")]
     public async Task<IActionResult> OutstandingAdjustment(CancellationToken cancellationToken)
     {
-        var query = db.SsIncentives.Where(x => !x.IsDeleted && (x.GrossIncentive - x.TdsAmount - x.NetTransferAmount) > 0m);
-        if (currentUser.BranchId.HasValue && !currentUser.IsInRole(AppRoles.SuperAdmin) && !currentUser.IsInRole(AppRoles.HOFinance) && !currentUser.IsInRole(AppRoles.Auditor))
-        {
-            var branchCode = await db.Branches
-                .Where(b => b.Id == currentUser.BranchId.Value)
-                .Select(b => b.Code)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (!string.IsNullOrEmpty(branchCode))
-            {
-                query = query.Where(x => x.SourceLocation == branchCode);
-            }
-        }
-
-        var incentives = await query.ToListAsync(cancellationToken);
-        var partyCodes = incentives.Select(x => x.PartyCode).Distinct().ToList();
-        var outstandings = await db.DealerOutstandings
-            .Where(o => !o.IsDeleted && partyCodes.Contains(o.PartyCode))
-            .ToListAsync(cancellationToken);
-
-        var result = incentives.Select(inc => {
-            var outs = outstandings.FirstOrDefault(o => o.Year == inc.Year && o.Month == inc.Month && o.PartyCode == inc.PartyCode);
-            return new OutstandingAdjustmentRow(
-                inc.PartyCode,
-                inc.PartyName,
-                inc.GrossIncentive,
-                inc.TdsAmount,
-                inc.NetTransferAmount,
-                outs?.Outstanding ?? 0m
-            );
-        }).ToList();
+        var result = await (from inc in db.SsIncentives
+                            where !inc.IsDeleted && (inc.GrossIncentive - inc.TdsAmount - inc.NetTransferAmount) > 0m
+                            join o in db.DealerOutstandings on new { inc.Year, inc.Month, inc.PartyCode } equals new { o.Year, o.Month, o.PartyCode } into oGroup
+                            from o in oGroup.DefaultIfEmpty()
+                            where o == null || !o.IsDeleted
+                            select new OutstandingAdjustmentRow(
+                                inc.PartyCode,
+                                inc.PartyName,
+                                inc.GrossIncentive,
+                                inc.TdsAmount,
+                                inc.NetTransferAmount,
+                                o != null ? o.Outstanding : 0m
+                            )).ToListAsync(cancellationToken);
 
         return View(result);
     }
@@ -584,7 +567,8 @@ public sealed class ReportsController(
 
         if (currentUser.BranchId.HasValue && !currentUser.IsInRole("Super Admin") && !currentUser.IsInRole("HO Finance") && !currentUser.IsInRole("Auditor"))
         {
-            query = query.Where(x => db.Parties.Any(p => p.PartyCode == x.OriginalCode && p.BranchId == currentUser.BranchId.Value));
+            var branchCode = db.Branches.Where(b => b.Id == currentUser.BranchId.Value).Select(b => b.Code).FirstOrDefault();
+            query = query.Where(x => x.Loc == branchCode);
         }
 
         if (!string.IsNullOrEmpty(quarters))

@@ -1,30 +1,59 @@
-/* ================================================================
-   SECURITY — CSRF Token Global AJAX Setup (Fix Issue 5)
-   Automatically injects RequestVerificationToken header into every
-   jQuery AJAX POST/PUT/PATCH/DELETE so MVC [ValidateAntiForgeryToken]
-   controllers accept the request without per-call boilerplate.
-   API endpoints with [IgnoreAntiforgeryToken] safely ignore the header.
- ================================================================ */
-(function () {
-    'use strict';
-    var tokenEl = document.querySelector('meta[name="csrf-token"]')
-                  || document.querySelector('input[name="__RequestVerificationToken"]');
-    var token   = tokenEl
-        ? (tokenEl.tagName === 'META' ? tokenEl.getAttribute('content') : tokenEl.value)
-        : null;
+window.ThessBuddy = window.ThessBuddy || {};
 
-    if (token && typeof $ !== 'undefined') {
-        $.ajaxSetup({
-            beforeSend: function (xhr, settings) {
-                // Only add for state-changing methods; never on GET / HEAD / OPTIONS
-                var method = (settings.type || 'GET').toUpperCase();
-                if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-                    xhr.setRequestHeader('RequestVerificationToken', token);
+/* ================================================================
+   SECURITY — CSRF Token Global AJAX Setup
+ ================================================================ */
+ThessBuddy.Security = (function () {
+    'use strict';
+    function init() {
+        var tokenEl = document.querySelector('meta[name="csrf-token"]')
+                      || document.querySelector('input[name="__RequestVerificationToken"]');
+        var token   = tokenEl
+            ? (tokenEl.tagName === 'META' ? tokenEl.getAttribute('content') : tokenEl.value)
+            : null;
+
+        if (token && typeof $ !== 'undefined') {
+            $.ajaxSetup({
+                beforeSend: function (xhr, settings) {
+                    var method = (settings.type || 'GET').toUpperCase();
+                    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                        xhr.setRequestHeader('RequestVerificationToken', token);
+                    }
                 }
-            }
-        });
+            });
+        }
     }
+    return { init: init };
 })();
+
+/* ================================================================
+   DATATABLE GLOBAL DEFAULTS (Sprint 17 Optimization)
+ ================================================================ */
+ThessBuddy.DataTables = (function() {
+    function init() {
+        if (typeof $.fn.dataTable !== 'undefined') {
+            $.extend(true, $.fn.dataTable.defaults, {
+                deferRender: true,
+                searchDelay: 500,
+                processing: true,
+                language: {
+                    processing: '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Loading Data...',
+                    search: "🔍 Quick Search:",
+                    searchPlaceholder: "Search records..."
+                },
+                dom: '<"d-flex flex-wrap align-items-center justify-content-between p-3 border-bottom border-light bg-light"f<"d-flex gap-2"l>>t<"d-flex flex-wrap align-items-center justify-content-between p-3 bg-light border-top border-light"ip>'
+            });
+        }
+    }
+    return { init: init };
+})();
+
+// Bootstrap Core Modules
+$(document).ready(function() {
+    ThessBuddy.Security.init();
+    ThessBuddy.DataTables.init();
+});
+
 
 /* ================================================================
    SIDEBAR TOGGLE SYSTEM

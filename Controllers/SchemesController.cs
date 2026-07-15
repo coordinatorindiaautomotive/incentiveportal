@@ -12,7 +12,7 @@ namespace IncentivePortal.Controllers;
 public sealed class SchemesController(IncentiveDbContext db, ISchemeService schemeService) : Controller
 {
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
-        => View(await db.IncentiveSchemes.Include(x => x.Details).OrderByDescending(x => x.SchemeYear).ThenByDescending(x => x.SchemeMonth).ToListAsync(cancellationToken));
+        => View(await db.IncentiveSchemes.Include(x => x.Details).AsSplitQuery().OrderByDescending(x => x.SchemeYear).ThenByDescending(x => x.SchemeMonth).ToListAsync(cancellationToken));
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] SchemeRequest request, CancellationToken cancellationToken)
@@ -32,7 +32,7 @@ public sealed class SchemesController(IncentiveDbContext db, ISchemeService sche
     [HttpPost]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        var existing = await db.IncentiveSchemes.Include(x => x.Details).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var existing = await db.IncentiveSchemes.Include(x => x.Details).AsSplitQuery().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (existing == null) return NotFound(new { message = "Scheme not found." });
 
         existing.IsDeleted = true;

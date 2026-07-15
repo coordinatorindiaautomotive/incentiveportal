@@ -8,6 +8,10 @@ using IncentivePortal.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using IncentivePortal.Helpers;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Net.Http.Headers;
+using System.Text;
 
 namespace IncentivePortal.Controllers;
 
@@ -137,17 +141,63 @@ public sealed class EngineController(
     // DYNAMIC UPLOAD ENGINE API
     // =========================================================
     [HttpPost("upload/preview")]
+    [DisableFormValueModelBinding]
     [DisableRequestSizeLimit]
-    public async Task<IActionResult> PreviewUpload(IFormFile file, [FromForm] string templateCode, CancellationToken cancellationToken)
+    public async Task<IActionResult> PreviewUpload(CancellationToken cancellationToken)
     {
         try
         {
-            if (file == null || file.Length == 0)
+            if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
+                return BadRequest(new { success = false, message = "Not a multipart request." });
+
+            var boundary = MultipartRequestHelper.GetBoundary(MediaTypeHeaderValue.Parse(Request.ContentType), 100);
+            var reader = new MultipartReader(boundary, HttpContext.Request.Body);
+            
+            string templateCode = string.Empty;
+            string tempFilePath = Path.GetTempFileName();
+            bool hasFile = false;
+
+            var section = await reader.ReadNextSectionAsync(cancellationToken);
+            while (section != null)
+            {
+                var hasContentDisposition = ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition);
+                if (hasContentDisposition)
+                {
+                    if (MultipartRequestHelper.HasFormDataContentDisposition(contentDisposition!))
+                    {
+                        var key = HeaderUtilities.RemoveQuotes(contentDisposition!.Name).Value;
+                        using var streamReader = new StreamReader(section.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+                        var value = await streamReader.ReadToEndAsync(cancellationToken);
+                        if (string.Equals(key, "templateCode", StringComparison.OrdinalIgnoreCase))
+                        {
+                            templateCode = value;
+                        }
+                    }
+                    else if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition!))
+                    {
+                        hasFile = true;
+                        using (var targetStream = System.IO.File.Create(tempFilePath))
+                        {
+                            await section.Body.CopyToAsync(targetStream, cancellationToken);
+                        }
+                    }
+                }
+                section = await reader.ReadNextSectionAsync(cancellationToken);
+            }
+
+            if (!hasFile)
                 return BadRequest(new { success = false, message = "Please select a valid Excel file." });
 
-            using var stream = file.OpenReadStream();
-            var preview = await uploadEngine.PreviewAsync(stream, templateCode, cancellationToken);
-            return Ok(new { success = preview.IsValid, totalRows = preview.Rows.Count, errors = preview.Errors, rows = preview.Rows });
+            try
+            {
+                using var stream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
+                var preview = await uploadEngine.PreviewAsync(stream, templateCode, cancellationToken);
+                return Ok(new { success = preview.IsValid, totalRows = preview.Rows.Count, errors = preview.Errors, rows = preview.Rows });
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tempFilePath)) System.IO.File.Delete(tempFilePath);
+            }
         }
         catch (Exception ex)
         {
@@ -156,29 +206,77 @@ public sealed class EngineController(
     }
 
     [HttpPost("upload/commit")]
+    [DisableFormValueModelBinding]
     [DisableRequestSizeLimit]
-    public async Task<IActionResult> CommitUpload(IFormFile file, [FromForm] string templateCode, CancellationToken cancellationToken)
+    public async Task<IActionResult> CommitUpload(CancellationToken cancellationToken)
     {
         try
         {
-            if (file == null || file.Length == 0)
+            if (!MultipartRequestHelper.IsMultipartContentType(Request.ContentType))
+                return BadRequest(new { success = false, message = "Not a multipart request." });
+
+            var boundary = MultipartRequestHelper.GetBoundary(MediaTypeHeaderValue.Parse(Request.ContentType), 100);
+            var reader = new MultipartReader(boundary, HttpContext.Request.Body);
+            
+            string templateCode = string.Empty;
+            string tempFilePath = Path.GetTempFileName();
+            bool hasFile = false;
+
+            var section = await reader.ReadNextSectionAsync(cancellationToken);
+            while (section != null)
+            {
+                var hasContentDisposition = ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var contentDisposition);
+                if (hasContentDisposition)
+                {
+                    if (MultipartRequestHelper.HasFormDataContentDisposition(contentDisposition!))
+                    {
+                        var key = HeaderUtilities.RemoveQuotes(contentDisposition!.Name).Value;
+                        using var streamReader = new StreamReader(section.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+                        var value = await streamReader.ReadToEndAsync(cancellationToken);
+                        if (string.Equals(key, "templateCode", StringComparison.OrdinalIgnoreCase))
+                        {
+                            templateCode = value;
+                        }
+                    }
+                    else if (MultipartRequestHelper.HasFileContentDisposition(contentDisposition!))
+                    {
+                        hasFile = true;
+                        using (var targetStream = System.IO.File.Create(tempFilePath))
+                        {
+                            await section.Body.CopyToAsync(targetStream, cancellationToken);
+                        }
+                    }
+                }
+                section = await reader.ReadNextSectionAsync(cancellationToken);
+            }
+
+            if (!hasFile)
                 return BadRequest(new { success = false, message = "Please select a valid Excel file." });
 
             var username = User.Identity?.Name ?? "system";
-            using var stream = file.OpenReadStream();
-            var commit = await uploadEngine.CommitAsync(stream, templateCode, username, cancellationToken);
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
 
-            await auditEngine.LogActionAsync(
-                "CommitUpload",
-                "ImportTemplate",
-                templateCode,
-                "{}",
-                System.Text.Json.JsonSerializer.Serialize(commit),
-                username,
-                HttpContext.Connection.RemoteIpAddress?.ToString()
-            );
+            try
+            {
+                using var stream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read);
+                var commit = await uploadEngine.CommitAsync(stream, templateCode, username, cancellationToken);
+                
+                await auditEngine.LogActionAsync(
+                    "CommitUpload",
+                    "ImportTemplate",
+                    templateCode,
+                    "{}",
+                    System.Text.Json.JsonSerializer.Serialize(commit),
+                    username,
+                    ipAddress
+                );
 
-            return Ok(commit);
+                return Ok(commit);
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tempFilePath)) System.IO.File.Delete(tempFilePath);
+            }
         }
         catch (Exception ex)
         {

@@ -5,19 +5,28 @@ using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using IncentivePortal.Helpers;
 
 namespace IncentivePortal.Controllers;
 
 [Authorize]
-public sealed class PartiesController(IPartyService partyService, IncentiveDbContext db) : Controller
+public sealed class PartiesController(IPartyService partyService, IncentiveDbContext db, IDistributedCache cache, IncentivePortal.Infrastructure.Cache.ILookupCacheService lookupCache) : Controller
 {
+    private const string BranchesCacheKey = "masterdata_branches";
     // =========================================================
     // PARTIES LIST / REGISTRY
     // =========================================================
     [Authorize(Roles = AppRoles.SuperAdmin)]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        ViewBag.Branches = await db.Branches.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var branches = await cache.GetRecordAsync<List<Branch>>(BranchesCacheKey, cancellationToken);
+        if (branches == null)
+        {
+            branches = await db.Branches.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+            await cache.SetRecordAsync(BranchesCacheKey, branches, TimeSpan.FromHours(2), null, cancellationToken);
+        }
+        ViewBag.Branches = branches;
         var query = partyService.QueryForCurrentUser()
             .Where(x => x.DealerType == "Fixed Incentive");
         return View(await query.OrderBy(x => x.PartyName).Take(500).ToListAsync(cancellationToken));
@@ -39,7 +48,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
         else
         {
             db.Parties.Update(party);
-            await db.SaveChangesAsync(cancellationToken);
+            await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         }
         return Json(new { ok = true, message = "Party saved." });
     }
@@ -54,8 +63,44 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
         existing.IsDeleted = true;
         existing.UpdatedAt = DateTime.UtcNow;
         existing.UpdatedBy = User.Identity?.Name ?? "system";
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         return Json(new { ok = true, message = "Party deleted successfully." });
+    }
+
+    [Authorize(Roles = AppRoles.SuperAdmin)]
+    [HttpPost]
+    public async Task<IActionResult> CalculateBaseLocations(CancellationToken cancellationToken)
+    {
+        await partyService.CalculateBaseLocationsAsync(cancellationToken);
+        return Json(new { ok = true, message = "Base locations recalculated successfully." });
+    }
+
+    [Authorize(Roles = AppRoles.SuperAdmin)]
+    [HttpPost]
+    public async Task<IActionResult> UpdateMapping(int id, int? branchId, bool isManual, CancellationToken cancellationToken)
+    {
+        var existing = await db.Parties.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (existing == null) return NotFound(new { message = "Party not found." });
+
+        if (isManual && branchId.HasValue)
+        {
+            existing.BranchId = branchId.Value;
+            existing.IsManuallyMapped = true;
+        }
+        else
+        {
+            existing.IsManuallyMapped = false;
+            // Revert to AutoBaseBranchId if it exists
+            if (existing.AutoBaseBranchId.HasValue)
+            {
+                existing.BranchId = existing.AutoBaseBranchId.Value;
+            }
+        }
+
+        existing.UpdatedAt = DateTime.UtcNow;
+        existing.UpdatedBy = User.Identity?.Name ?? "system";
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
+        return Json(new { ok = true, message = "Party mapping updated successfully." });
     }
 
     // =========================================================
@@ -64,7 +109,13 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
     [Authorize(Roles = AppRoles.SuperAdmin)]
     public async Task<IActionResult> AlternateMappings(CancellationToken cancellationToken)
     {
-        ViewBag.Branches = await db.Branches.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var branches = await cache.GetRecordAsync<List<Branch>>(BranchesCacheKey, cancellationToken);
+        if (branches == null)
+        {
+            branches = await db.Branches.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+            await cache.SetRecordAsync(BranchesCacheKey, branches, TimeSpan.FromHours(2), null, cancellationToken);
+        }
+        ViewBag.Branches = branches;
         var mappings = await db.Parties
             .Include(x => x.Branch)
             .Where(x => !string.IsNullOrEmpty(x.OriginalPartyCode) && !x.IsDeleted)
@@ -97,7 +148,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
             existing.UpdatedBy = User.Identity?.Name ?? "system";
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         return Json(new { ok = true, message = "Alternate mapping saved successfully." });
     }
 
@@ -112,7 +163,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
         existing.OriginalPartyCode = string.Empty;
         existing.UpdatedAt = DateTime.UtcNow;
         existing.UpdatedBy = User.Identity?.Name ?? "system";
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         return Json(new { ok = true, message = "Alternate mapping removed." });
     }
 
@@ -180,7 +231,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
             successCount++;
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         return Json(new { ok = true, message = $"Successfully imported {successCount} alternate mappings." });
     }
 
@@ -296,7 +347,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
             existing.UpdatedBy = User.Identity?.Name ?? "system";
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         return Json(new { ok = true, message = "Bank detail saved successfully." });
     }
 
@@ -310,7 +361,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
         existing.IsDeleted = true;
         existing.UpdatedAt = DateTime.UtcNow;
         existing.UpdatedBy = User.Identity?.Name ?? "system";
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         return Json(new { ok = true, message = "Bank record deleted." });
     }
 
@@ -415,7 +466,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
             successCount++;
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
 
         var msg = $"Successfully imported {successCount} bank records.";
         if (notFoundCount > 0) msg += $" {notFoundCount} skipped because dealer codes were not registered.";
@@ -569,7 +620,7 @@ public sealed class PartiesController(IPartyService partyService, IncentiveDbCon
             successCount++;
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken); await lookupCache.InvalidatePartiesCacheAsync(cancellationToken);
         return Json(new { ok = true, message = $"Successfully imported {successCount} fixed incentive parties." });
     }
 
@@ -629,3 +680,4 @@ public sealed class PartyImportItem
     public string? Address { get; set; }
     public string? OriginalPartyCode { get; set; }
 }
+

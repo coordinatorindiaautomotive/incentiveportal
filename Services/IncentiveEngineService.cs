@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using IncentivePortal.Data;
 using IncentivePortal.Models;
+using IncentivePortal.Infrastructure.Cache;
 
 namespace IncentivePortal.Services;
 
@@ -16,7 +17,8 @@ public interface IIncentiveEngineService
 public sealed class IncentiveEngineService(
     IRuleEngineService ruleEngine,
     IFormulaEngineService formulaEngine,
-    IncentiveDbContext db
+    IncentiveDbContext db,
+    ILookupCacheService cache
 ) : IIncentiveEngineService
 {
     public async Task<decimal> CalculateGrossIncentiveAsync(SsIncentive sale, DateTime targetDate, Dictionary<string, decimal> additionalContext)
@@ -29,14 +31,14 @@ public sealed class IncentiveEngineService(
                                                         v.RuleMaster.RuleType.Equals("Bonus", StringComparison.OrdinalIgnoreCase)).ToList();
 
         // ── Phase 5: Resolve enriched parameter context ─────────────────
-        var party = await db.Parties.AsNoTracking().FirstOrDefaultAsync(p => p.PartyCode == sale.PartyCode);
+        var party = await cache.GetPartyByCodeAsync(sale.PartyCode);
         var dealerCategory = party?.DealerType ?? string.Empty;
         var productGroup = sale.PartCategoryCode ?? string.Empty;
         var branchCode = sale.SourceLocation ?? string.Empty;
 
         // Resolve Branch region
         var branch = !string.IsNullOrEmpty(branchCode)
-            ? await db.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.Code == branchCode)
+            ? await cache.GetBranchByCodeAsync(branchCode)
             : null;
         var region = branch?.Region ?? string.Empty;
 
